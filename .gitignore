@@ -1,0 +1,30 @@
+# Local work, original artifacts, and the relocation recovery copy
+/work/
+/outputs/
+/.relocation-recovery/
+
+# Python environments and generated files
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.test-artifacts/
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+dist-*/
+*.spec
+
+# Packaged applications belong in GitHub Releases
+*.exe
+*.zip
+*.whl
+*.tar.gz
+
+# Local credentials and provider caches
+.env
+.env.*
+*.pem
+*.key
+.dem_cache/

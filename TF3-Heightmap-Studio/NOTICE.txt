@@ -1,0 +1,27 @@
+TF3 Heightmap Studio is an independent GPL-3.0 companion application.
+It is not affiliated with Urban Games. No Transport Fever game assets or
+resources are redistributed. Transport Fever is a trademark of its owner.
+
+The vendored OSM converter is the standalone vanilla rebuild distributed
+with this project. It acknowledges VacuumTube's GPL OSM-TPF2-Importer 1.5
+for the original project concept. The original TF2 mod is not required.
+
+OSM: OpenStreetMap contributors, ODbL.
+https://www.openstreetmap.org/copyright
+Public elevation: Mapzen Terrain Tiles / Skadi, public AWS bucket.
+https://registry.opendata.aws/terrain-tiles/
+https://github.com/tilezen/joerd/blob/master/docs/formats.md
+Regional provider credits are in third-party/Mapzen-provider-attribution.md.
+Local elevation licences and provider credits depend on the user's files.
+
+Included runtime libraries: Python (PSF), Tcl/Tk (BSD), NumPy (BSD),
+SciPy (BSD, includes bundled numerical-library notices), Pillow (MIT-CMU),
+Rasterio (BSD, includes bundled GDAL/PROJ notices), affine (BSD), attrs (MIT),
+click (BSD), pyparsing (MIT), certifi (MPL). Bundled licence files are retained
+in third-party/. PyInstaller has its own licence and bootloader exception.
+
+Additional provider support: Copernicus GLO-30/GLO-90 public AWS bucket
+(licence linked in source credits; GLO-30 licence bundled in third-party),
+OpenTopography APIs (user-supplied session key), and user-provided public
+GeoTIFF URLs. Provider data is downloaded to the local cache on demand.
+No public DEM data is included in the distribution; the example is synthetic.

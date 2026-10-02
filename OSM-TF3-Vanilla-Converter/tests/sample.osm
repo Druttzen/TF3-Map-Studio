@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="OSM Vanilla test fixture">
+  <meta osm_base="2026-10-02T00:00:00Z"/>
+  <bounds minlat="0" minlon="0" maxlat="0.01" maxlon="0.01"/>
+  <node id="1" lat="0.005" lon="0.004"/>
+  <node id="2" lat="0.005" lon="0.005"/>
+  <node id="3" lat="0.005" lon="0.006"/>
+  <node id="4" lat="0.004" lon="0.005"/>
+  <node id="5" lat="0.003" lon="0.005"/>
+  <node id="6" lat="0.002" lon="0.007"/>
+  <node id="7" lat="0.003" lon="0.007"/>
+  <node id="8" lat="0.004" lon="0.007"><tag k="railway" v="signal"/><tag k="railway:signal:direction" v="forward"/></node>
+  <node id="9" lat="0.006" lon="0.002"/>
+  <node id="10" lat="0.006" lon="0.004"/>
+  <node id="11" lat="0.008" lon="0.004"/>
+  <node id="12" lat="0.008" lon="0.002"/>
+  <node id="13" lat="0.0032" lon="0.0032"><tag k="amenity" v="fountain"/></node>
+  <node id="14" lat="0.0035" lon="0.0035"><tag k="advertising" v="column"/></node>
+  <node id="15" lat="0.0065" lon="0.005"><tag k="barrier" v="bollard"/></node>
+  <node id="16" lat="0.002" lon="0.001"/>
+  <node id="17" lat="0.002" lon="0.003"/>
+  <node id="18" lat="0.004" lon="0.003"/>
+  <node id="19" lat="0.004" lon="0.001"/>
+  <node id="20" lat="0.0067" lon="0.0027"/>
+  <node id="21" lat="0.0067" lon="0.0033"/>
+  <node id="22" lat="0.0073" lon="0.0033"/>
+  <node id="23" lat="0.0073" lon="0.0027"/>
+  <node id="24" lat="0.0045" lon="0.0035"><tag k="place" v="village"/><tag k="name" v="OSM test village"/></node>
+  <way id="101"><nd ref="1"/><nd ref="2"/><nd ref="3"/><tag k="highway" v="residential"/><tag k="lanes" v="2"/><tag k="maxspeed" v="30"/></way>
+  <way id="102"><nd ref="2"/><nd ref="4"/><nd ref="5"/><tag k="highway" v="residential"/><tag k="lanes" v="1"/><tag k="oneway" v="-1"/></way>
+  <way id="103"><nd ref="6"/><nd ref="7"/><nd ref="8"/><tag k="railway" v="rail"/><tag k="gauge" v="1435"/><tag k="electrified" v="contact_line"/></way>
+  <way id="110"><nd ref="9"/><nd ref="10"/><nd ref="11"/></way>
+  <way id="111"><nd ref="9"/><nd ref="12"/><nd ref="11"/></way>
+  <way id="112"><nd ref="20"/><nd ref="21"/><nd ref="22"/><nd ref="23"/><nd ref="20"/></way>
+  <way id="120"><nd ref="16"/><nd ref="17"/><nd ref="18"/><nd ref="19"/><nd ref="16"/><tag k="surface" v="asphalt"/></way>
+  <relation id="200"><member type="way" ref="111" role="outer"/><member type="way" ref="110" role="outer"/><member type="way" ref="112" role="inner"/><tag k="type" v="multipolygon"/><tag k="landuse" v="forest"/></relation>
+</osm>

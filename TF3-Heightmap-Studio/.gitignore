@@ -1,0 +1,13 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.test-artifacts/
+build/
+dist/
+dist-*/
+*.spec
+outputs/
+examples/heightmap.*
+examples/synthetic-biomes-heightmap.*

@@ -1,0 +1,21 @@
+OSM TF3 Vanilla, GPL-3.0
+
+This standalone rebuild is inspired by VacuumTube's OSM-TPF2-Importer 1.5.
+The original GPL-3.0 license is retained. The original F: source directory
+was not modified. New preprocessing, desktop UI and TF3 integration are
+included as editable source under the same license.
+
+Transport Fever 3 vanilla assets are referenced by resource names. No game
+models, textures, audio, API source files or game executables are distributed.
+
+The example OSM file is fictional test data. For real OpenStreetMap data,
+provide attribution to OpenStreetMap contributors and respect ODbL.
+https://www.openstreetmap.org/copyright
+
+The desktop map picker uses Pillow 12.3.0 for map tile display. Its licence
+and bundled imaging-library notices are included in third-party/Pillow-LICENSE.txt.
+Displayed map tiles and downloaded OSM extracts are retrieved on demand and
+are not redistributed in this application package.
+
+Preview: native TF3 engine execution has not yet been verified. Refer to
+README.txt and validation.json for the exact scope of completed checks.

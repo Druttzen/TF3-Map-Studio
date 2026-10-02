@@ -1,0 +1,4 @@
+include desktop_launcher.py
+recursive-include scripts *.py
+recursive-include examples *.lua *.txt
+recursive-include .github *.yml

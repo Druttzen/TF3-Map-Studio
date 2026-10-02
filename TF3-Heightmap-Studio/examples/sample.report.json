@@ -1,0 +1,89 @@
+{
+  "dataset": "76a5810e7ccd78f05729c3df",
+  "input": "sample.osm",
+  "bounds": [
+    0.0,
+    0.0,
+    0.01,
+    0.01
+  ],
+  "mapSize": [
+    1024,
+    1024
+  ],
+  "edges": 10,
+  "sceneryItems": 115,
+  "placeLabels": 1,
+  "warnings": [
+    "Railway signals require placement with the vanilla signal tool after import. Automatic TF3 signal placement is not enabled.",
+    "Place names become named vanilla marker constructions, not simulated towns. Select a marker to read its name.",
+    "Vanilla road/track profiles approximate OSM lane counts, widths and speed limits; original tag values are retained in the dataset."
+  ],
+  "settings": {
+    "features": {
+      "roads": true,
+      "railways": true,
+      "footpaths": true,
+      "disused_tracks": true,
+      "bridges": true,
+      "tunnels": true,
+      "forests": true,
+      "shrubs": true,
+      "tree_nodes": true,
+      "surfaces": true,
+      "fountains": true,
+      "bollards": true,
+      "advertising_columns": true,
+      "place_markers": true
+    },
+    "forest_spacing": 18.0,
+    "shrub_spacing": 14.4,
+    "max_generated_trees": 100000,
+    "tree_jitter": 0.3,
+    "seed": "",
+    "broadleaf_species": [
+      "Oak",
+      "Linden",
+      "Maple"
+    ],
+    "conifer_species": [
+      "Fir",
+      "Pine"
+    ],
+    "shrub_species": [
+      "Hazel",
+      "Azalea"
+    ],
+    "road_style": "Automatic",
+    "rail_profile": "Automatic",
+    "electrification": "Automatic",
+    "high_speed_threshold": 160.0,
+    "road_segment_length": 80.0,
+    "rail_segment_length": 120.0,
+    "tunnel_depth": 8.0,
+    "object_rotation": 0.0,
+    "object_models": {
+      "tree": "Oak",
+      "fountain": "Fountain",
+      "bollard": "Mooring bollard",
+      "advertising_column": "Advertising column"
+    },
+    "surface_materials": {
+      "asphalt": "Asphalt",
+      "dirt": "Dirt",
+      "grass": "Cut grass"
+    },
+    "import_batch_size": 100,
+    "import_delay": 0.0
+  },
+  "output": "sample.lua",
+  "report": "sample.report.json",
+  "sourceSha256": "bfb0d9846d7b73ae889ff4b319ee649386a4372a926de4a385e14f1a713476e4",
+  "alignment": {
+    "projection": "EPSG:3857 scaled to map size",
+    "origin": "centre",
+    "north": "positiveY",
+    "pngRows": "north to south"
+  },
+  "luaSha256": "1aca499a056c865ddb9d953148aadcb99d02eba4c76ded6ff905331abbfe2d6c"
+}

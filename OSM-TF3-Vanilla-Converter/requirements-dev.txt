@@ -1,0 +1,4 @@
+# Runtime dependencies plus optional development/test/build dependencies.
+-r requirements.txt
+lupa==2.8
+pyinstaller==6.22.3

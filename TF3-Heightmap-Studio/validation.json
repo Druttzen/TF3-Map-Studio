@@ -1,0 +1,243 @@
+{
+  "version": "0.6-preview",
+  "automatedTerrainTests": {
+    "passed": 132,
+    "failed": 0
+  },
+  "converterModTests": {
+    "passed": 73,
+    "failed": 0
+  },
+  "windowsExecutable": {
+    "build": "passed",
+    "nativeLocalDemBuildExport": "passed on 0.4 with a 140 MB Lua; float64 export and transform match engine exactly",
+    "brushStampAndUndo": "passed; exported float64 values match the original terrain exactly",
+    "publicTerrainCacheBuildExport": "passed; exported float64 values match engine output exactly",
+    "highDpiLayout": "passed at 150% scaling",
+    "sha256": "661b495bbcc19aa524406ef1a7fad6f745de7343c87eea73f71b2543a2477bca"
+  },
+  "publicDownload": {
+    "provider": "Mapzen Skadi / AWS",
+    "liveDownload": "passed",
+    "tile": "N45E006.hgt.gz",
+    "pixels": [
+      1025,
+      513
+    ],
+    "sourceCellMetres": [
+      21.64940392575412,
+      30.887522287591107
+    ],
+    "elevationRangeMetres": [
+      1542.9999999990323,
+      4795.956184729122
+    ],
+    "synthetic": false
+  },
+  "multipleSources": {
+    "CopernicusGLO30": "live download, engine export and native EXE build/export passed",
+    "CopernicusGLO90": "live download and engine export passed",
+    "directGeoTIFF": "live download and engine export passed",
+    "OpenTopography": "mocked requests/GeoTIFF responses passed for COP30, SRTMGL1 and USGS10m; no live account-key test",
+    "downloadPlanUI": "passed; correct WGS84 bounds and TF3 size",
+    "apiKeyPersistence": "not saved to projects, reports or cache metadata"
+  },
+  "coordinateTests": {
+    "chosenSizesMetres": [
+      [
+        256,
+        128
+      ],
+      [
+        1024,
+        2048
+      ],
+      [
+        8192,
+        4096
+      ]
+    ],
+    "vertexPlaneAlignment": "passed",
+    "projectedUtmPlaneExactTransform": "passed to 1e-8 m numerical tolerance on analytical fixture",
+    "warpApproximationTolerance": 0,
+    "pointResamplingKernel": "fixed when downsizing"
+  },
+  "formats": [
+    "GeoTIFF DEM",
+    "ASCII grid",
+    "HGT",
+    "HGT.GZ"
+  ],
+  "exports": [
+    "16-bit grayscale PNG",
+    "float64 GeoTIFF",
+    "preview PNG",
+    "quality report",
+    "project",
+    "import instructions",
+    "attribution",
+    "optional native biome PNG",
+    "optional biome colour preview",
+    "optional biome ID GeoTIFF"
+  ],
+  "biomes": {
+    "climates": [
+      "Temperate",
+      "Dry",
+      "Tropical",
+      "Subarctic"
+    ],
+    "regionIds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "modes": [
+      "Height, slope and OSM",
+      "Height and slope",
+      "Single biome",
+      "Import biome PNG"
+    ],
+    "adjustableHeightSlopeAndLandCoverRules": true,
+    "paintUndoAndProjectReplay": true,
+    "coordinatesAndSize": "identical to the heightmap and converter Lua/report",
+    "sourceFormatVerification": {
+      "vanillaClimates": [
+        {
+          "climate": "temperate",
+          "resource": "climates/temperate/temperate.clima.lua",
+          "sha256": "7329326edc6b1cb9ab29540091aacf8ebb43ac342e45ff6617bc006b07ec6353",
+          "ids": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "climate": "dry",
+          "resource": "climates/dry/dry.clima.lua",
+          "sha256": "5070cc7539a06c0370ad4102a8cad343c2b3cf60142891d269a5f760bef80063",
+          "ids": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "climate": "tropical",
+          "resource": "climates/tropical/tropical.clima.lua",
+          "sha256": "c52d2ca1a792f45f8aee7997e189a4962e0245115ea70d52aafdf01d8b6ba97c",
+          "ids": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "climate": "subarctic",
+          "resource": "climates/subarctic/subarctic.clima.lua",
+          "sha256": "2a0b84cf90d66a45cb94bd4e1df03254cfb37d0e3fdb3ae1f09fab4d1338d2f5",
+          "ids": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ],
+      "existingNativeBiomePng": {
+        "file": "test_biomes.png",
+        "sha256": "0d20df00090b0524068996e273a00185ed2989bc8b5f7247164b6c57ee009a47",
+        "mode": "L",
+        "pixels": [
+          4097,
+          4097
+        ],
+        "codes": [
+          0,
+          63,
+          127,
+          191,
+          255
+        ]
+      },
+      "assetsBundled": false
+    },
+    "nativeWindowsValidation": {
+      "buildPreviewPaintUndoSaveAndExport": "passed through Windows UI at 150% scaling",
+      "nativePaintProjectReplay": "exact match",
+      "nativeBiomePng": {
+        "mode": "L",
+        "pixels": [
+          257,
+          257
+        ],
+        "encodingCodes": [
+          0,
+          63,
+          127,
+          191,
+          255
+        ],
+        "engineReplay": "exact match",
+        "sha256": "cb3c5cfe662005a74d2c882c001470c5da26d2f1df9a6d695ba09a94309ecc27"
+      },
+      "nativeIdGeoTiffAndTransform": "exact match",
+      "nativeElevationAndTransform": "exact match; biome painting leaves elevations unchanged",
+      "nativeTF3BiomeImportVerified": false
+    }
+  },
+  "precision": {
+    "elevationAccuracy": "depends on source measurements; no improvement claimed from interpolation",
+    "workingType": "float64",
+    "mapAlignment": "scaled Web Mercator matching converter; north-up and exact corner vertices",
+    "nativeSpacingInspectedMetres": 4,
+    "nativeHeightStepInspectedMetres": 0.05
+  },
+  "convertedLua": {
+    "fixedFileSizeLimit": null,
+    "streamingReader": "64 KB chunks; scenery and labels discarded after validation/counting",
+    "largeFileTest": {
+      "bytes": 146805362,
+      "sceneryItems": 965794,
+      "roadSegments": 8,
+      "railSegments": 2,
+      "checksumVerified": true,
+      "elapsedSeconds": 37.73,
+      "passed": true,
+      "nativeExecutableBuildExport": "passed",
+      "nativeCancellationDuringLuaLoading": "passed",
+      "float64TerrainEqualsReference": true
+    },
+    "boundaryAndCancellationTests": "passed",
+    "safeDataParser": "passed; executable Lua rejected without execution",
+    "reportMatch": "dataset, bounds, size, settings and counts verified",
+    "luaChecksum": "converter 0.5 SHA-256 verified; older report limitation disclosed",
+    "geometry": "exported nodes and edges used for road/rail guides; subdivisions joined; branch/structure boundaries preserved",
+    "projectChecksum": "saved and checked on reload",
+    "modifiedRoadAndBridgeTests": "passed",
+    "nativeBuildExport": "passed; 8 road and 2 rail segments, 3 joined corridors; checksum verified; float64 export exactly matches engine"
+  },
+  "nativeMapSizes": {
+    "sizes": 8,
+    "formats": 5,
+    "fourMetreGridsValidated": 40,
+    "maximumWorkingVertices": 53000000,
+    "largestNativeGridVertices": 52444161,
+    "nativeWindowsReportLoad": "0.5 passed: Gigantomaniac 1:5 locks 12800 x 64000 metres and 3201 x 16001 vertices at 4 m; Lua automatically located",
+    "converterLuaAndLogHandoff": "size, bounds and SHA-256 verified on native converter output",
+    "largestExtentRasterExportVerified": false
+  },
+  "nativeTF3ImportVerified": false,
+  "gameAssetsRedistributed": false,
+  "externalGameModDependencies": []
+}

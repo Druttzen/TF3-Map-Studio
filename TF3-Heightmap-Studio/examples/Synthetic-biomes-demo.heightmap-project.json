@@ -1,0 +1,77 @@
+{
+  "format": "TF3-Heightmap-Studio",
+  "version": 1,
+  "converterReport": "sample.report.json",
+  "osmFile": "sample.osm",
+  "converterDataset": "76a5810e7ccd78f05729c3df",
+  "osmSha256": "bfb0d9846d7b73ae889ff4b319ee649386a4372a926de4a385e14f1a713476e4",
+  "bounds": [
+    0.0,
+    0.0,
+    0.01,
+    0.01
+  ],
+  "mapSize": [
+    1024,
+    1024
+  ],
+  "elevationFiles": [
+    "synthetic-elevation.tif"
+  ],
+  "options": {
+    "source_mode": "Local elevation files",
+    "grid": "Match TF3 (4 m)",
+    "pixels_x": 1025,
+    "pixels_y": 1025,
+    "resampling": "Bilinear",
+    "band": 1,
+    "source_units": "Auto / metres",
+    "crs_override": "",
+    "missing_data": "Stop at gaps",
+    "max_gap_m": 100.0,
+    "vertical_scale": 1.0,
+    "height_offset": 0.0,
+    "smoothing_m": 0.0,
+    "water_level": 40,
+    "lakes": false,
+    "lake_depth": 5.0,
+    "lake_feather": 8.0,
+    "rivers": false,
+    "river_width": 20.0,
+    "river_depth": 4.0,
+    "river_smoothing": 20.0,
+    "roads": false,
+    "road_width": 14.0,
+    "road_blend": 20.0,
+    "road_smoothing": 30.0,
+    "road_grade": 8.0,
+    "railways": false,
+    "rail_width": 10.0,
+    "rail_blend": 15.0,
+    "rail_smoothing": 50.0,
+    "rail_grade": 3.0,
+    "range_mode": "Automatic (preserve all heights)",
+    "range_min": -100.0,
+    "range_max": 1000.0,
+    "clip_heights": false,
+    "public_max_tiles": 16,
+    "source_credit": "",
+    "vertical_datum": "Unknown / unchanged",
+    "biomes": true,
+    "biome_climate": "Temperate",
+    "biome_highland_m": 80,
+    "biome_alpine_m": 150
+  },
+  "brushStrokes": [],
+  "output": "synthetic-biomes-heightmap.png",
+  "convertedLua": "sample.lua",
+  "luaSha256": "1aca499a056c865ddb9d953148aadcb99d02eba4c76ded6ff905331abbfe2d6c",
+  "biomeStrokes": [
+    {
+      "x": -200,
+      "y": -340,
+      "radius": 80,
+      "biome": 1
+    }
+  ]
+}

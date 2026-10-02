@@ -1,0 +1,259 @@
+{
+  "version": "0.9-preview",
+  "gameBuildInspected": "25533170",
+  "automatedTests": {
+    "passed": 102,
+    "failed": 0,
+    "scope": [
+      "OSM XML conversion",
+      "polygon holes",
+      "reversed one-way roads",
+      "tram profiles",
+      "Lua syntax",
+      "Lua script persistence with simulated TF3 API",
+      "failure, retry, skip and pause/resume",
+      "native panel recipe callbacks with simulated TF3 UI",
+      "category filtering",
+      "settings validation, persistence and locking",
+      "changing batch size during a paused import",
+      "simulation-time pacing",
+      "read-only UI snapshot",
+      "desktop feature switches",
+      "network profiles and electrification",
+      "vanilla mappings",
+      "deterministic species and density",
+      "standalone Lua and mod creation",
+      "progress and cancellation at every stage",
+      "output rollback on failed report commit",
+      "portable settings profiles",
+      "all 40 native TF3 map size/format combinations",
+      "Lua/report map dimensions and bounds",
+      "preset profile validation and legacy compatibility",
+      "selected-area ground scale and map aspect for all 40 presets at four latitudes",
+      "yellow-frame coordinate lock, unlock and size changes",
+      "OSM XML extraction and converter bounds handoff",
+      "full geometry preservation and exact XML selection bounds",
+      "cancellation while waiting, receiving and validating",
+      "download/log atomic rollback and retained recovery backups",
+      "XML integrity, error remarks, DTD rejection and truncation",
+      "visible-only tile requests, application identity, cache and conditional revalidation",
+      "overview PNG georeferencing, yellow frame, attribution and checksum",
+      "three-file commit rollback, incomplete map rejection and overview cancellation"
+    ]
+  },
+  "vanillaResourceAudit": {
+    "checkedVanillaResources": 37,
+    "missing": [],
+    "externalModDependencies": [],
+    "resourceNames": [
+      "::/assets/buildings/com/advertisements/column_c_01.mdl",
+      "::/assets/landmarks/msc/fountain.mdl",
+      "::/assets/markers/marker_locate.mdl",
+      "::/assets/stations/water/mooring_bollard_passengers.mdl",
+      "::/assets/vegetation/trees/azalea_01/azalea_01.mdl",
+      "::/assets/vegetation/trees/confr_01/confr_01.mdl",
+      "::/assets/vegetation/trees/eu_lnd_01/eu_lnd_01.mdl",
+      "::/assets/vegetation/trees/hzl_01/hzl_01.mdl",
+      "::/assets/vegetation/trees/sct_pn_01/sct_pn_01.mdl",
+      "::/assets/vegetation/trees/sgr_mpl_01/sgr_mpl_01.mdl",
+      "::/assets/vegetation/trees/shgl_oak_01/shgl_oak_01.mdl",
+      "::/infrastructure/bridge/steel.bridge",
+      "::/infrastructure/street/country/country_new_large.street_template",
+      "::/infrastructure/street/country/country_new_medium.street_template",
+      "::/infrastructure/street/country/country_new_small.street_template",
+      "::/infrastructure/street/town/town_new_large.street_template",
+      "::/infrastructure/street/town/town_new_large_tram_electrified.street_template",
+      "::/infrastructure/street/town/town_new_medium.street_template",
+      "::/infrastructure/street/town/town_new_medium_tram_electrified.street_template",
+      "::/infrastructure/street/town/town_new_one_way_medium.street_template",
+      "::/infrastructure/street/town/town_new_one_way_medium_tram_electrified.street_template",
+      "::/infrastructure/street/town/town_new_one_way_small.street_template",
+      "::/infrastructure/street/town/town_new_one_way_small_tram_electrified.street_template",
+      "::/infrastructure/street/town/town_new_one_way_xsmall.street_template",
+      "::/infrastructure/street/town/town_new_small.street_template",
+      "::/infrastructure/street/town/town_new_small_tram_electrified.street_template",
+      "::/infrastructure/street/town/town_new_xsmall.street_template",
+      "::/infrastructure/track/high_speed/high_speed.street_template",
+      "::/infrastructure/track/high_speed/high_speed_catenary.street_template",
+      "::/infrastructure/track/simple/simple.street_template",
+      "::/infrastructure/track/simple/simple_catenary.street_template",
+      "::/infrastructure/track/standard/standard.street_template",
+      "::/infrastructure/track/standard/standard_catenary.street_template",
+      "::/infrastructure/tunnel/tunnel_c.tunnel",
+      "::/terrain/materials/asphalt_01/asphalt_01.gtex",
+      "::/terrain/materials/dirt/dirt.gtex",
+      "::/terrain/materials/grass_cutted_01/grass_cutted_01.gtex"
+    ],
+    "checkedUiModules": 6,
+    "uiMissing": [],
+    "uiModules": [
+      "::/gui/main/react.lua",
+      "::/gui/main/builtin.lua",
+      "::/gui/main/main_mod_button_area.tl",
+      "::/gui/main/game_react_globals.tl",
+      "::/gui/main/engine_react_util.tl",
+      "::/gui/main/stylesheetutil.lua"
+    ]
+  },
+  "mapSizes": {
+    "source": "installed TF3 build 25533170: base/mod.json and getNumTiles()",
+    "sizes": [
+      "Tiny",
+      "Small",
+      "Medium",
+      "Large",
+      "Very Large",
+      "Huge",
+      "Megalomaniac",
+      "Gigantomaniac"
+    ],
+    "formats": [
+      "1:1",
+      "1:2",
+      "1:3",
+      "1:4",
+      "1:5"
+    ],
+    "combinationsCheckedAgainstGameSource": 40,
+    "tileSizeMetres": 256,
+    "LuaAndReportDimensions": "all 40 passed",
+    "customDimensions": true,
+    "profiles": "preset names preserved, mismatches rejected, old profiles supported"
+  },
+  "windowsExecutable": {
+    "build": "passed",
+    "nativeUIConversion": "0.7: all size/format choices displayed; Gigantomaniac 1:5 exported at 12800 x 64000 metres; manual edit selects Custom; legacy profile loaded successfully",
+    "standaloneLuaExport": "passed with native Windows UI",
+    "newStandaloneModCreation": "passed with bundled scripts and custom settings",
+    "settingsSaveLoad": "passed; exact JSON profile round trip",
+    "cancellation": "passed during million-tree conversion; existing Lua and report unchanged",
+    "scrollableSettings": "passed at 150% Windows display scaling",
+    "exampleEdges": 10,
+    "exampleSceneryItems": 117,
+    "exampleNamedMarkers": 1,
+    "sha256": "af07a55801cd743c6a6bea7bd2734a1a2bd4c1bc1e76d0ca495fdd9ea12daf40",
+    "nativeMapDownload": {
+      "liveNativeWindowsMapDownload": "passed",
+      "displayScaling": "150%",
+      "yellowFrameClickLock": "passed",
+      "lockedPanZoomAndFit": "same displayed coordinates retained",
+      "openstreetmapTiles": "live visible map tiles loaded with attribution",
+      "dataEndpoint": "https://overpass-api.de/api/interpreter",
+      "savedOsmXml": "valid OSM 0.6 with exact locked bounds",
+      "fullWayAndRelationReferences": "all present",
+      "downloadedCounts": {
+        "nodes": 316924,
+        "ways": 16416,
+        "relations": 533
+      },
+      "fileBytes": 42302111,
+      "osmSha256": "fec3b9463bc2b28de2565122d6a42f0d79f4d132733d0f013b3a5ce9cb93b01d",
+      "nativeConversionAndHandoff": "passed; exact bounds, size and checksums match",
+      "mapSize": [
+        1000.0,
+        1000.0
+      ],
+      "convertedEdges": 4085,
+      "convertedScenery": 4419,
+      "nativeTF3EngineImportVerified": false,
+      "heightmapStudioLuaAndLogAlignment": "passed: identical locked bounds and TF3 size; source/Lua checksums verified",
+      "nativeMapSizes": "all eight sizes and five formats displayed; Tiny 1:1 and 1:5 update dimensions and frame; selecting a new size unlocks the area",
+      "finalWindowsBuildAndLayout": "passed; cached tiles display and yellow frame label stays readable at 150% scaling"
+    },
+    "nativeOverviewDownload": {
+      "nativeExeVersion": "0.9-preview",
+      "downloadedViaNativeUI": true,
+      "publicOverpassRequest": true,
+      "osmBytes": 43080889,
+      "pngBytes": 398308,
+      "pixels": [
+        750,
+        521
+      ],
+      "counts": {
+        "nodes": 320224,
+        "ways": 16762,
+        "relations": 548
+      },
+      "bounds": [
+        59.32474245289905,
+        18.059966446510916,
+        59.33372560575721,
+        18.077576876242965
+      ],
+      "mapSize": [
+        1000.0,
+        1000.0
+      ],
+      "xmlLogAndPngBoundsMatch": true,
+      "checksumsMatch": true,
+      "yellowFramePixelAndProjectionChecks": "passed",
+      "offscreenLockedSelectionAutomaticallyFitted": true,
+      "overviewVisuallyInspected": true,
+      "tf3EngineImportVerified": false
+    }
+  },
+  "nativeTF3EngineImport": {
+    "verified": false,
+    "status": "pending temporary-map test"
+  },
+  "scriptResourceEntrypoints": {
+    "globalDataFunctions": "panel, importer, GUI bridge and scenery corrected",
+    "isolatedResourceLoaderTests": "passed",
+    "callbackReferences": "all six passed",
+    "reportedStartupError": "function data() not defined addressed",
+    "nativeRestartVerification": false
+  },
+  "nativeTF3Panel": {
+    "implemented": true,
+    "renderingVerified": false,
+    "scrollingVerified": false,
+    "commands": [
+      "validate",
+      "start",
+      "pause",
+      "resume",
+      "retry",
+      "skip",
+      "status",
+      "mapSize"
+    ],
+    "settings": [
+      "roads",
+      "railways",
+      "vegetation",
+      "surfaces",
+      "objects",
+      "places",
+      "batchSize",
+      "interval"
+    ]
+  },
+  "externalGameModDependencies": [],
+  "gameAssetsRedistributed": false,
+  "remainingWork": [
+    "Verify native OSM Import button placement, window rendering and scrolling in TF3.",
+    "Import demonstration in TF3 with no other mods enabled; inspect rendering, ownership and road/rail connectivity.",
+    "Check pause/retry in the game, save and reload completed import.",
+    "Native automatic railway signal placement is not implemented.",
+    "Place markers are implemented; functioning town generation is not implemented."
+  ],
+  "osmDownload": {
+    "implemented": true,
+    "overviewPng": "automatically saved alongside OSM; fitted visible viewport with yellow frame, WGS84 bounds, TF3 dimensions and attribution; checksum in log",
+    "yellowFrame": "moves with pointer; click locks coordinates; drag pans; zoom preserves locked bounds",
+    "allTF3SizesAndFormats": true,
+    "mapSizeGroundScale": "at selection centre, adjustable coverage multiplier",
+    "lockedBounds": "embedded in XML, download log, converter custom bounds, converted Lua and report",
+    "mapTiles": "OpenStreetMap raster tiles, visible viewport only",
+    "tileCache": "minimum 7 days; conditional HTTP revalidation",
+    "applicationUserAgent": "Druttzen-OSM-TF3-Converter/0.9 (+https://github.com/Druttzen/TRF3-mod-converter)",
+    "dataService": "single Overpass request for selected nodes, ways, relations and descendants",
+    "customHttpsOverpassEndpoint": true,
+    "fixedClientFileSizeCap": null,
+    "cancelAndRollback": "passed",
+    "openstreetmapAccountRequired": false,
+    "providerRateAndResourceLimits": "public service limits apply; busy/failed/incomplete responses reported and previous files preserved",
+    "attribution": "\u00a9 OpenStreetMap contributors / ODbL 1.0"
+  }
+}

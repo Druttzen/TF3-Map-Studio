@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trf3-mod-converter"
+version = "0.2.0"
+description = "Convert older Transport Fever mods to Transport Fever 3 format"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Druttzen" }]
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = ["luaparser>=4.2.0,<5"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "build>=1,<2", "pyinstaller>=6.22,<7"]
+
+[project.scripts]
+trf3-mod-converter = "trf3_mod_converter.cli:main"
+
+[project.gui-scripts]
+trf3-mod-converter-gui = "trf3_mod_converter.gui:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
