@@ -1,0 +1,24 @@
+TF3-OSM-Importer-Mod, GPL-3.0
+
+This standalone in-game package is copied from the current Preview 0.9
+OSM-TF3-Vanilla-Converter mod template. Its modId remains
+druttzen_osm_vanilla, revision 3. Its Lua runtime, metadata and fictional
+sample dataset are unchanged. Install one copy of this mod only.
+
+The TF3 rebuild is inspired by VacuumTube's OSM-TPF2-Importer 1.5.
+The original GPL-3.0 license and VacuumTube/Druttzen attribution are retained.
+The original TF2 source and suite tools 1-3 are not changed by this package.
+
+Transport Fever 3 vanilla assets are referenced by resource name. No game
+models, textures, audio, API source files or game executables are distributed.
+
+The sample dataset is fictional. Real OpenStreetMap data requires
+attribution to OpenStreetMap contributors and compliance with ODbL.
+https://www.openstreetmap.org/copyright
+
+The desktop converter and Pillow belong to companion tool 1 and are not
+bundled here. The installable mod's NOTICE is focused on this game component.
+The optional automated Lua tests use Lupa as a development dependency.
+
+Preview: native TF3 engine execution and panel rendering remain unverified.
+See README.md and validation.json for completed checks and remaining work.

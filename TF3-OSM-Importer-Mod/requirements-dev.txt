@@ -1,0 +1,2 @@
+# Development only; the in-game mod has no Python runtime dependency.
+lupa==2.8

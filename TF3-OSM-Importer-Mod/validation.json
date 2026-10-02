@@ -1,0 +1,67 @@
+{
+  "component": "TF3-OSM-Importer-Mod",
+  "validationDate": "2026-10-02",
+  "provenance": {
+    "source": "OSM-TF3-Vanilla-Converter/mod/druttzen_osm_vanilla",
+    "companionVersion": "0.9-preview",
+    "modId": "druttzen_osm_vanilla",
+    "modRevision": 3,
+    "runtimeMetadataAndSampleDatasetUnchanged": true,
+    "previousResourceAuditGameBuild": "25533170",
+    "changeScope": "Standalone packaging, focused documentation, independently runnable tests and resource audit"
+  },
+  "automatedTests": {
+    "passed": 34,
+    "failed": 0,
+    "luaAndStateMachine": 19,
+    "panelAndResourceEntrypoints": 9,
+    "packaging": 3,
+    "resourceInventoryInvariants": 3,
+    "scope": [
+      "Lua syntax and isolated global data() callback entry points",
+      "Simulation of import persistence, positive node reuse and duplicate start prevention",
+      "Pause/resume, rejected proposals, retry, skip and dataset identity changes",
+      "Category filtering, settings validation, locking and simulation pacing",
+      "Panel recipe callbacks, command state and read-only GUI snapshots",
+      "ZIP installation layout, exact source bytes and independence from current working directory",
+      "Resource-manifest coverage and loose/archive namespace handling"
+    ]
+  },
+  "freshVanillaResourceAudit": {
+    "run": true,
+    "resultFile": "resource-audit.json",
+    "checkedVanillaResources": 37,
+    "missing": [],
+    "checkedUiModules": 6,
+    "uiMissing": [],
+    "externalModDependencies": [],
+    "scope": "Read-only inventory of installed TF3 base/content file and ZIP names, with no copied assets or engine execution"
+  },
+  "scriptResourceEntrypoints": {
+    "existingStartupFixPreserved": true,
+    "referencedCallbacksResolved": 6,
+    "nativeRestartVerification": false
+  },
+  "sample": {
+    "fictional": true,
+    "mapSizeMetres": [1000, 1000],
+    "roadRailSegments": 10,
+    "sceneryItems": 117,
+    "namedMarkers": 1
+  },
+  "nativeTF3EngineImport": {
+    "verified": false,
+    "status": "Pending temporary-map import, inspection, pause/retry and save/reload"
+  },
+  "nativeTF3Panel": {
+    "implemented": true,
+    "renderingVerified": false,
+    "scrollingVerified": false
+  },
+  "gameAssetsRedistributed": false,
+  "remainingWork": [
+    "Verify button placement, panel rendering and scrolling in TF3.",
+    "Import the fictional sample with only this mod enabled and inspect proposal acceptance, ownership and road/rail connectivity.",
+    "Test pause/retry and save/reload on a temporary game map."
+  ]
+}
