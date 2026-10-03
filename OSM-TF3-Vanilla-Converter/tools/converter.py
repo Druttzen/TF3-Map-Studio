@@ -425,9 +425,9 @@ def convert(path,bounds,size,spacing=18,max_trees=100000,*,options=None,progress
         warn('OSM building footprints are not imported. Add vanilla buildings and functioning towns with the game tools.')
     if any(e['bridge'] or e['tunnel'] for e in data['edges']):
         warn('Bridge/tunnel heights are estimated from terrain at endpoints; inspect grades and clearances after import.')
-    if features['waterways']:
-        prepare_water(data,ways,relations,positions,members_for,join_rings,triangulate,
-                      clip_polygon,signed_area,job,warn,options['waterway_width'],inside)
+    prepare_water(data,nodes,ways,relations,positions,members_for,join_rings,triangulate,
+                  clip_polygon,signed_area,job,warn,options['waterway_width'],inside,
+                  build_geometry=features['waterways'])
     if any(tags.get('railway')=='signal' for _,_,tags in nodes.values()):
         warn('Railway signals require placement with the vanilla signal tool after import. Automatic TF3 signal placement is not enabled.')
     if data['edges']:
@@ -479,6 +479,7 @@ def write_outputs(source,data_path,report_path,bounds,size,spacing,max_trees,opt
     report={'dataset':data['id'],'input':source.name,'bounds':data['bounds'],'mapSize':data['size'],
             'edges':len(data['edges']),'sceneryItems':len(data['scenery']),'placeLabels':len(data['labels']),
             'waterFeatures':len(data.get('waterFeatures',[])),
+            'waterMetadata':{**data['waterMetadata'],'features':data['waterFeatures']},
             'warnings':data['warnings'],'settings':data['conversionSettings'],'output':str(data_path),
             'report':str(report_path),'sourceSha256':job.source_sha256,
             'alignment':{'projection':'EPSG:3857 scaled to map size','origin':'centre',

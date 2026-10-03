@@ -2,7 +2,7 @@
   "version": "0.12-preview",
   "gameBuildInspected": "25533170",
   "automatedTests": {
-    "passed": 208,
+    "passed": 220,
     "failed": 0,
     "scope": [
       "OSM XML conversion",
@@ -64,16 +64,19 @@
       "Read-only global water/area checks, native parameter-copy semantics, queued water proposals and network protection",
       "Accepted water ownership retry without rebuilding, retained independent patch heights, overlap prevention and settings locks",
       "OSM pond/waterway preparation with islands, width provenance, network corridors, geometry budget and complete-feature omission",
-      "Saved 0.5 m shallow-bed samples, Water Dirty resource, read-only height/depth audit and existing network protection"
+      "Saved 0.5 m shallow-bed samples, Water Dirty resource, read-only height/depth audit and existing network protection",
+      "OSM water source graph retained independently of geometry selection; raw tags, WGS84 coordinates, node order, member roles and nested relation topology",
+      "Water metadata roundtrip through downloaded XML, persisted Lua and JSON report; original height/datum tags and matching checksums",
+      "Missing references, untyped water, dam/weir and point metadata; broken multipolygon outer suppression, shared/nested members and deeply nested or cyclic source retention"
     ],
     "subtestsPassed": 190,
     "modules": {
       "test_converter": 23,
       "test_desktop": 17,
       "test_game_scripts": 55,
-      "test_hydrology": 11,
+      "test_hydrology": 22,
       "test_map_sizes": 5,
-      "test_osm_download": 29,
+      "test_osm_download": 30,
       "test_panel": 21,
       "test_shallow_water": 6,
       "test_water": 17,
@@ -253,7 +256,9 @@
     "build": "passed",
     "nativeUIThisVersionVerified": false,
     "nativeUIScope": "Current executable UI has not been tested. Historical UI evidence remains separate.",
-    "sha256": "d664fd5d645af03b48912cd6e4df89ca1470aa334138cd5e9a7a3840e09a0764"
+    "sha256": "22ba061afc0c9808d17b4b5fe336cf42d7069da4d0b0b830a877093fb0e00bd1",
+    "embeddedConverterMatchesSource": true,
+    "embeddedHydrologyMatchesSource": true
   },
   "nativeTF3EngineImport": {
     "verified": true,
@@ -424,5 +429,22 @@
     },
     "shipNavigationEstablished": false,
     "partilleModifiedByTheseTests": false
+  },
+  "waterMetadataExport": {
+    "schema": 1,
+    "exportedWhenWaterGeometryDisabled": true,
+    "luaSourceGraph": "waterMetadata",
+    "luaFeatureRecords": "waterFeatures",
+    "jsonSourceGraph": "waterMetadata",
+    "jsonFeatureRecords": "waterMetadata.features",
+    "heightPolicy": "Raw OSM tags preserved; missing elevation is unknown; no game height conversion",
+    "fictionalExample": {
+      "waterFeatures": 3,
+      "referencedNodes": 11,
+      "referencedWays": 3,
+      "dataset": "2985a41dea0d4ca89ed57e2d",
+      "sourceSha256": "8aaa930f79833090fc9322beb9851834840c42a35639ebe96beed29c88ba9341",
+      "luaSha256": "a552aa2e9918920eb608f9ebf7921bda3cc0ce5889e48105a6f06f32652429db"
+    }
   }
 }

@@ -184,9 +184,9 @@ class App(tk.Tk):
         self.map_hint.set(text+' Bounds fill this rectangle. Dimensions also go into the Lua and report for Heightmap Studio. Editing width or height selects Custom dimensions.')
 
     def build_features(self):
-        f=self.pages['Features']; self.note(f,'Choose what appears in the exported Lua map. Disabled bridges and tunnels are excluded entirely.',0)
+        f=self.pages['Features']; self.note(f,'Choose what appears in the exported Lua map. Water metadata is always saved in the Lua map and report, including when small mapped waters are deselected. Disabled bridges and tunnels are excluded entirely.',0)
         for row,(key,label) in enumerate(FEATURES.items(),1): ttk.Checkbutton(f,text=label,variable=self.features[key]).grid(row=row,column=0,columnspan=3,sticky='w',pady=4)
-        self.note(f,'Footpaths use the smallest vanilla road. Place markers carry names; they do not create functioning towns. Building footprints, rivers and signal placement are outside this converter’s current support.',len(FEATURES)+1)
+        self.note(f,'Footpaths use the smallest vanilla road. Place markers carry names; they do not create functioning towns. Small-water excavation and paint are experimental. Lakes retain their boundaries and original height tags; automatic lake flooding is unsupported. Building footprints and signal placement are not imported.',len(FEATURES)+1)
 
     def build_networks(self):
         f=self.pages['Networks']; self.note(f,'Automatic follows OSM tags. Vanilla profiles approximate lane counts, widths and speeds. One-way and tram roads keep suitable vanilla profiles.',0)
@@ -374,7 +374,7 @@ class App(tk.Tk):
             self.busy=False
             if kind=='ok':
                 self.result=result; self.progress['value']=100; self.percent.set('100%'); self.status.set('Map exported successfully')
-                self.show(f"{result['edges']:,} road / rail segments\n{result['sceneryItems']:,} scenery items\n{result['placeLabels']:,} named markers\n\nSaved Lua:\n{result['output']}\n\nSaved report:\n{result['report']}\n\nDataset: {result['dataset']}\n\n"+('Notes:\n'+'\n\n'.join(result['warnings']) if result['warnings'] else 'No conversion warnings.'))
+                self.show(f"{result['edges']:,} road / rail segments\n{result['sceneryItems']:,} scenery items\n{result['placeLabels']:,} named markers\n{result['waterFeatures']:,} mapped water records with source metadata\n\nSaved Lua:\n{result['output']}\n\nSaved report:\n{result['report']}\n\nDataset: {result['dataset']}\n\n"+('Notes:\n'+'\n\n'.join(result['warnings']) if result['warnings'] else 'No conversion warnings.'))
                 self.draw_preview()
             else:
                 self.status.set('Conversion cancelled' if kind=='cancelled' else 'Conversion failed — check the report')

@@ -104,6 +104,36 @@ class DownloadTests(unittest.TestCase):
             with self.assertRaises((ValueError,ET.ParseError)):self.run_download(payload)
             self.assertEqual({p.name:p.read_bytes() for p in self.folder.iterdir()},old)
 
+    def test_download_to_export_keeps_lake_and_waterway_source_metadata(self):
+        payload=b'''<osm version="0.6">
+          <node id="1" lat="0.004" lon="0.004"><tag k="ele" v="72.1"/></node>
+          <node id="2" lat="0.004" lon="0.006"/>
+          <node id="3" lat="0.006" lon="0.006"/>
+          <node id="4" lat="0.006" lon="0.004"/>
+          <way id="11"><nd ref="1"/><nd ref="2"/><nd ref="3"/><nd ref="4"/><nd ref="1"/>
+            <tag k="water" v="lake"/><tag k="source" v="survey"/></way>
+          <way id="12"><nd ref="2"/><nd ref="3"/><tag k="waterway" v="stream"/>
+            <tag k="width" v="3"/><tag k="intermittent" v="yes"/></way>
+          <relation id="20"><member type="way" ref="11" role="outer"/>
+            <tag k="type" v="multipolygon"/><tag k="natural" v="water"/>
+            <tag k="water" v="lake"/><tag k="name" v="Test lake"/><tag k="ele" v="72.4"/>
+          </relation></osm>'''
+        downloaded=self.run_download(payload)
+        exported=export_file(downloaded['output'],self.folder/'map.lua',downloaded['bounds'],
+                             downloaded['mapSize'],options={'features':{'waterways':False}})
+        report=json.loads(Path(exported['report']).read_text(encoding='utf-8'))
+        metadata=report['waterMetadata']
+        self.assertEqual(report['waterFeatures'],2)
+        self.assertEqual(metadata['relations']['20']['tags']['ele'],'72.4')
+        self.assertEqual(metadata['relations']['20']['members'],[{'type':'way','ref':'11','role':'outer'}])
+        self.assertEqual(metadata['ways']['11']['tags']['source'],'survey')
+        self.assertEqual(metadata['ways']['12']['tags']['width'],'3')
+        self.assertEqual(metadata['ways']['12']['tags']['intermittent'],'yes')
+        self.assertEqual(metadata['nodes']['1']['tags']['ele'],'72.1')
+        self.assertEqual(metadata['nodes']['1']['lat'],.004)
+        self.assertEqual(metadata['nodes']['1']['lon'],.004)
+        self.assertEqual(report['sceneryItems'],0)
+
     def test_xml_declarations_are_rejected(self):
         payload=b'<!DOCTYPE osm [<!ENTITY x "test">]><osm version="0.6"><node id="1" lat="0" lon="0"/></osm>'
         with self.assertRaises(ValueError):self.run_download(payload)

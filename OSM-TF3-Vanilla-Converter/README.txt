@@ -335,3 +335,19 @@ Lake boundaries and raw elevations are retained without automatic flooding.
 No supported command for per-lake sea level was found; global water is unchanged.
 The separate rectangular elevated model-water test does not shape terrain.
 Raised basin mode is disabled after native terrain spikes.
+
+WATER SOURCE METADATA - PREVIEW 0.12
+Every export keeps mapped water source metadata in both Lua and its JSON
+report, even if Small mapped waters is deselected or a boundary is incomplete.
+All original water tags are kept, including name, type, width, depth, ele,
+intermittent and supplied datum/source tags. Geographic coordinates, ordered
+node references, relation member roles, islands and nested relations survive.
+Missing nodes are listed; missing heights stay missing. No source height is
+silently treated as a calibrated game height. Unspecified water types, dams,
+weirs and water points are retained without inventing a water surface.
+Lua waterFeatures contains projected feature geometry and preparation status.
+Lua waterMetadata contains the versioned source graph and coordinate rules.
+The JSON report includes that graph plus its feature records at
+waterMetadata.features; waterFeatures remains a numeric count in the report.
+Reconvert original OSM/XML to add metadata to an older export. Do not replace
+the dataset of an import that has already started in the game.
