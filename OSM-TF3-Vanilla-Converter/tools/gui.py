@@ -15,6 +15,7 @@ from job import Cancelled
 from map_sizes import CUSTOM, SIZES, FORMATS, dimensions, experimental, matching_preset, validate_preset
 
 MODES=['Save Lua map file','Update installed mod','Create standalone mod folder']
+APP_VERSION='0.10-preview'
 LABELS={
     'forest_spacing':'Forest spacing (m)', 'shrub_spacing':'Shrub spacing (m)',
     'max_generated_trees':'Maximum generated trees / shrubs', 'tree_jitter':'Position variation (0–0.49)',
@@ -47,7 +48,7 @@ def validate_profile(profile):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title('OSM → Lua Map · Transport Fever 3')
+        self.title(f'OSM → Lua Map · Transport Fever 3 · {APP_VERSION}')
         self.geometry('1080x670'); self.minsize(960,600)
         self.configure(bg='#edf2f4')
         self.events=queue.Queue(); self.busy=False; self.cancel_event=threading.Event()
@@ -64,7 +65,7 @@ class App(tk.Tk):
         style.configure('Horizontal.TProgressbar',background='#087c83',troughcolor='#d6e3e7')
         header=tk.Frame(self,bg='#163b46',padx=22,pady=13); header.pack(fill='x')
         tk.Label(header,text='OSM → LUA MAP',bg='#163b46',fg='white',font=('Segoe UI',21,'bold')).pack(side='left')
-        tk.Label(header,text='TRANSPORT FEVER 3\nVanilla objects · standalone converter',bg='#163b46',fg='#b9dce1',font=('Segoe UI',10),justify='right').pack(side='right')
+        tk.Label(header,text='TRANSPORT FEVER 3 · PREVIEW 0.10\nVanilla objects · standalone converter',bg='#163b46',fg='#b9dce1',font=('Segoe UI',10),justify='right').pack(side='right')
         body=ttk.Frame(self,padding=(16,12)); body.pack(fill='both',expand=True)
         body.columnconfigure(0,weight=3); body.columnconfigure(1,weight=2); body.rowconfigure(0,weight=1)
         self.book=ttk.Notebook(body); self.book.grid(row=0,column=0,sticky='nsew',padx=(0,12))
@@ -94,7 +95,7 @@ class App(tk.Tk):
         self.output=tk.Text(report,wrap='word',bg='white',fg='#18333c',font=('Segoe UI',10),relief='flat',padx=12,pady=12,width=30)
         scrollbar=ttk.Scrollbar(report,command=self.output.yview); self.output.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side='right',fill='y'); self.output.pack(fill='both',expand=True)
-        self.show('Choose an OSM XML file and your exact TF3 map dimensions. Adjust the tabs, then convert.\n\nSave a Lua dataset directly, update the installed importer, or create a complete standalone mod folder.\n\nOnly vanilla resource references are used. No game assets are bundled.\n\nOSM buildings, functioning towns, rivers and automatic railway signals still require the game tools. PBF files must first be converted to OSM XML.\n\nThe TF3 engine and in-game panel still need verification in a running game.')
+        self.show('Choose an OSM XML file and your exact TF3 map dimensions. Adjust the tabs, then convert.\n\nSave a Lua dataset directly, update the installed importer, or create a complete standalone mod folder.\n\nOnly vanilla resource references are used. No game assets are bundled.\n\nOSM buildings, functioning towns, rivers and automatic railway signals still require the game tools. PBF files must first be converted to OSM XML.\n\nUse Verify built objects in the game after importing to inspect saved roads, rails and scenery. The fictional sample imports in TF3 build 40408. Large real maps and actual vehicle routes still need testing.')
         footer=ttk.Frame(self,padding=(18,8,18,14)); footer.pack(side='bottom',fill='x',before=body)
         line=ttk.Frame(footer); line.pack(fill='x',pady=(0,8))
         self.status=tk.StringVar(value='Ready to convert'); self.percent=tk.StringVar(value='0%'); self.elapsed=tk.StringVar(value='')
@@ -213,7 +214,7 @@ class App(tk.Tk):
     def build_game(self):
         f=self.pages['In game']; self.note(f,'These defaults travel with the dataset and appear in the in-game OSM Import panel. The panel lets you change batch size and pace during an import.',0)
         for row,key in enumerate(['import_batch_size','import_delay'],1): self.field(f,row,LABELS[key],self.values[key])
-        self.note(f,'After conversion: enable the standalone mod on a new map, then click OSM Import in the game’s mod button area. Its scroll list contains Validate, Start, Pause, Resume, Retry, Skip, Status and map-size commands.\n\nSave Lua mode exports an importer dataset, not a heightmap or a saved game. Copy it to content/osm/dataset.lua in the mod, or use Update installed mod.\n\nThe native TF3 panel and world import have not yet been verified in a running game.',3)
+        self.note(f,'After conversion: enable the standalone mod on a new map, then click OSM Import in the game’s mod button area. Its scroll list contains Check map and resources, Start, Pause, Resume, Retry, Skip, Show progress, Verify built objects, Show place names and Read map size.\n\nVerify built objects reads the saved roads, rails, scenery and markers without building anything. Show place names displays recorded marker names and coordinates. Ground paint appearance and actual vehicle routes still need a map check.\n\nSave Lua mode exports an importer dataset, not a heightmap or a saved game. Copy it to content/osm/dataset.lua in the mod, or use Update installed mod.\n\nThe fictional sample imports in TF3 build 40408. Large real maps and actual vehicle routes still need testing.',3)
 
     @staticmethod
     def default_target():

@@ -1,5 +1,5 @@
 TF3-OSM-IMPORTER-MOD
-Extracted from companion Preview 0.9 | Mod revision 3 | GPL-3.0
+Companion Preview 0.10 | Mod revision 4 | GPL-3.0 | 3 October 2026
 
 INSTALL
 Copy this druttzen_osm_vanilla folder into:
@@ -32,9 +32,17 @@ the panel. No debug mode or console is required for these controls.
 - Check map and resources checks without building anything.
 - Start import builds the selected dataset categories.
 - Pause import keeps the current position; Resume import continues it.
-- Retry failed step repeats the rejected proposal.
+- Retry failed step repeats a rejected proposal, or completes ownership and
+  naming for an accepted object without rebuilding it. An accepted object
+  cannot be skipped.
 - Skip failed step omits the whole proposal, possibly a scenery batch.
 - Show progress refreshes the message and writes it to the game log.
+- Verify built objects reads live road/rail nodes, profiles, ownership,
+  vehicle-compatible lanes and connections. It checks optimized models by
+  live resource ID and transform; retained constructions by saved items.
+- Show place names displays twenty recorded names and map coordinates per
+  page. Click again for the next page. TF3 may optimize marker models into
+  unnamed asset groups; ordinary game windows may not show their names.
 - Read map size shows width and height for the companion converter.
 
 Before starting, choose roads/tram streets, railways, trees/shrubs, ground
@@ -58,7 +66,7 @@ The console shortcut can vary with game build and keyboard layout.
 ug_require("druttzen_osm_vanilla::/osm/console.lua").start()
 
 The helper also supports .validate(), .status(), .pause(), .resume(),
-.retry(), .skip(), .configure(options), and .mapSize().
+.retry(), .skip(), .verify(), .placeNames(), .configure(options), and .mapSize().
 
 LIMITS
 Vanilla assets only; no workshop dependency or bundled game assets.
@@ -66,7 +74,7 @@ Road/rail widths, speeds and lanes follow their chosen native profiles.
 Footpaths/cycleways/steps are small roads with road traffic semantics.
 Narrow gauge is approximated with standard gauge. Trees, shrubs and
 ground surfaces use vanilla resources; bollards use a mooring bollard.
-Named markers are not functioning towns. Bridge/tunnel heights are
+Place markers and their recorded names are not functioning towns. Bridge/tunnel heights are
 estimated from terrain endpoints: inspect grades and clearances.
 Signals, buildings, stations, depots, functioning towns and water features
 require the game tools. Terrain comes from a separate heightmap.
@@ -77,11 +85,21 @@ Lua/state-machine and panel callback tests simulate TF3 boundaries.
 The existing startup fix is preserved: script resources expose global
 data() functions; helpers and datasets remain normal Lua table modules.
 Restart TF3 completely after updating, rather than using Reload UI on a
-failed startup. Automated checks do not verify native proposal acceptance,
-ownership, connectivity, panel placement, rendering or scrolling.
-Actual in-game validation is pending: import the sample with this mod
-alone, inspect the result, test pause/retry and save/reload the map.
+failed startup. The fictional sample completed in TF3 Windows build 40408
+(Steam build 25533170): 10 road/rail segments, 117 scenery items and one
+marker. Read validation.json in the source package for exact native checks.
+Ground appearance and actual vehicle routes need inspection in the game.
+Large real maps, terrain slopes, bridges and tunnels remain preview work.
+Older saves without scenery entity records may report missing unnamed
+objects because they cannot be reliably identified.
 See the source package's validation.json for exact completed checks.
+
+UPGRADING
+Close TF3 and back up the installed mod. Replace runtime files while
+preserving content/osm/dataset.lua and import-report.json for a custom map.
+The release ZIP contains a fictional dataset. Update installed mod in the
+desktop converter updates only the dataset/report, not the runtime.
+Restart TF3 completely after installing the new runtime.
 
 ATTRIBUTION
 Original concept/mod: VacuumTube, OSM-TPF2-Importer, GPL-3.0.

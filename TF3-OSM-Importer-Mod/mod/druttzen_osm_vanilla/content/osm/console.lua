@@ -9,6 +9,8 @@ function helper.resume() send("osm.resume") end
 function helper.retry() send("osm.retry") end
 function helper.skip() send("osm.skip") end
 function helper.status() send("osm.status") end
+function helper.verify() send("osm.verify") end
+function helper.placeNames() send("osm.placeNames") end
 function helper.validate() send("osm.validate") end
 function helper.configure(options) send("osm.configure",options) end
 function helper.mapSize()

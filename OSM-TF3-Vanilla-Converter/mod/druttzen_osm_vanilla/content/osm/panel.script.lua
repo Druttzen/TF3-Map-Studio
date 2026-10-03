@@ -5,6 +5,7 @@ local mainButtons=ug_require "::/gui/main/main_mod_button_area.tl"
 local windows=ug_require "::/gui/main/game_react_globals.tl"
 local polling=ug_require "::/gui/main/engine_react_util.tl"
 local controls=ug_require "druttzen_osm_vanilla::/osm/controls.lua"
+local uiSnapshot=ug_require "druttzen_osm_vanilla::/osm/ui_snapshot.lua"
 local panelId="druttzen-osm-import-panel"
 local result={}
 
@@ -22,9 +23,16 @@ local function close()
   if windowApi then windowApi.removeAllWindows(result.OsmImportPanel) end
 end
 
-result.OsmImportPanel=react.RegisterRecipe("OsmImportPanel",function()
+-- WindowContainer needs the native Window identity, supplied by a wrapper recipe.
+result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Window,function()
   local snapshot=polling.useStepStateTimer(function()
-    return api.gui.fireGuiScriptEvent("druttzen_osm_vanilla","osm.ui.snapshot",{})
+    -- React recipes run with a read-only API. Native GUI scripts read a
+    -- GameScript component directly instead of firing a GUI script event.
+    local entity=api.engine.system.gameScriptSystem.getEntityForGameScript("druttzen_osm_vanilla::/osm/importer.gs")
+    if not entity then return nil end
+    local gameScript=api.engine.getComponent(entity,api.type.ComponentType.GAME_SCRIPT)
+    if not gameScript then return nil end
+    return uiSnapshot.fromState(gameScript.state,api.engine.terrain.getBoundingBox())
   end,0.25):old()
   if type(snapshot)~="table" or not snapshot.options then
     return builtin.Window{
@@ -32,7 +40,7 @@ result.OsmImportPanel=react.RegisterRecipe("OsmImportPanel",function()
       onClose=close,content=text("Waiting for the importer to initialise. Close and reopen the panel if needed."),
     }
   end
-  local ruleState={phase=snapshot.phase,datasetId=snapshot.started and snapshot.datasetId or nil}
+  local ruleState={phase=snapshot.phase,datasetId=snapshot.started and snapshot.datasetId or nil,labels=snapshot.labels}
   local rows={text("Commands","font-scale-headline")}
   for _,command in ipairs(controls.commands) do
     local key=command.key
@@ -83,7 +91,7 @@ result.OsmImportPanel=react.RegisterRecipe("OsmImportPanel",function()
   rows[#rows+1]=text("Prepared area: "..tostring(snapshot.datasetWidth).." × "..tostring(snapshot.datasetHeight).." m")
   rows[#rows+1]=text(string.format("Current map: %.0f × %.0f m",snapshot.mapWidth,snapshot.mapHeight))
   rows[#rows+1]=text("Prepare or replace OSM data with the desktop converter while TF3 is closed.")
-  rows[#rows+1]=text("Signals and functioning towns use the vanilla game tools. Place names use markers.")
+  rows[#rows+1]=text("Signals and functioning towns use the vanilla game tools. Read marker names with Show place names.")
   if #snapshot.warnings>0 then
     rows[#rows+1]=text("Conversion notes","font-scale-headline")
     for i,warning in ipairs(snapshot.warnings) do
@@ -104,7 +112,12 @@ result.OsmImportPanel=react.RegisterRecipe("OsmImportPanel",function()
     content=builtin.BoxLayout{
       orientation=builtin.type.Orientation.Vertical,
       children={
-        builtin.Component{meta={class="osm-import-status"},layout=builtin.BoxLayout{children=header}},
+        builtin.ScrollArea{
+          meta={id="druttzen-osm-status-scroll",class="osm-import-status-scroll"},
+          horizontalPolicy=builtin.type.ScrollBarPolicy.AlwaysOff,verticalPolicy=builtin.type.ScrollBarPolicy.AsNeeded,
+          content=builtin.Component{meta={class="osm-import-status"},layout=builtin.BoxLayout{
+            orientation=builtin.type.Orientation.Vertical,children=header}},
+        },
         builtin.ScrollArea{
           meta={id="druttzen-osm-scroll",class="osm-import-scroll"},
           horizontalPolicy=builtin.type.ScrollBarPolicy.AlwaysOff,verticalPolicy=builtin.type.ScrollBarPolicy.AsNeeded,
@@ -117,15 +130,19 @@ result.OsmImportPanel=react.RegisterRecipe("OsmImportPanel",function()
 end)
 
 result.OsmImportButton=react.RegisterPluginRecipe(mainButtons.MainModButtonAreaExtension,"OsmImportButton",function()
-  return builtin.Button{
-    meta={id="druttzen-osm-open",class="osm-import-open",tooltip="Open OSM import commands, progress and settings"},
-    content=text("OSM Import"),
-    onClick=function()
-      local windowApi=windows.getDefaultWindowApi()
-      if not windowApi then return end
-      if api.gui.byId.isVisible(panelId) then close()
-      else windowApi.addSingletonWindow(result.OsmImportPanel,{}) end
-    end,
+  -- MainModButtonArea inserts plugin recipes into a layout; recipe roots must
+  -- be layouts too, otherwise TF3 rejects the entire native interface.
+  return builtin.BoxLayout{
+    children={builtin.Button{
+      meta={id="druttzen-osm-open",class="osm-import-open",tooltip="Open OSM import commands, progress and settings"},
+      content=text("OSM Import"),
+      onClick=function()
+        local windowApi=windows.getDefaultWindowApi()
+        if not windowApi then return end
+        if api.gui.byId.isVisible(panelId) then close()
+        else windowApi.addSingletonWindow(result.OsmImportPanel,{}) end
+      end,
+    }},
   }
 end)
 -- TF3 .script resources expose callbacks through data(), not a module return.

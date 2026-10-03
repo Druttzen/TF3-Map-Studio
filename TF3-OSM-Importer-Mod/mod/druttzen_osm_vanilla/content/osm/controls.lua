@@ -16,6 +16,8 @@ controls.commands={
   {key="retry",label="Retry failed step",help="Try the rejected build proposal again."},
   {key="skip",label="Skip failed step",help="Omit the failed proposal. A scenery step can contain an entire batch."},
   {key="status",label="Show progress",help="Refresh the progress message and write it to the game log."},
+  {key="verify",label="Verify built objects",help="Compare completed import records with live map nodes, roads, tracks and scenery. Ground appearance needs a visual check."},
+  {key="placeNames",label="Show place names",help="Show recorded place names and map coordinates, twenty at a time. Click again for the next page."},
   {key="mapSize",label="Read map size",help="Show the map width and height to enter in the desktop converter."},
 }
 
@@ -63,7 +65,37 @@ function controls.enabled(command,value)
   if command=="pause" then return phase=="scenery" or phase=="edges" or phase=="labels" end
   if command=="resume" then return phase=="paused" end
   if command=="retry" or command=="skip" then return phase=="error" end
+  if command=="verify" then return phase=="finished" end
+  if command=="placeNames" then return (value.labels or 0)>0 end
   return command=="validate" or command=="status" or command=="mapSize"
+end
+
+function controls.placeNames(dataset,value)
+  if value.datasetId~=dataset.id then return "Dataset changed; restore the original dataset to read place coordinates.",0 end
+  local entries={}
+  for _,record in ipairs(value.sceneryRecords or {}) do
+    local source=record.phase=="labels" and dataset.labels[record.first]
+    if source then
+      entries[#entries+1]=string.format("%s (x %.0f m, y %.0f m)",record.name,source.pos[1],source.pos[2])
+    end
+  end
+  if #entries==0 then return "No recorded place markers. Older saves may need their original dataset for names.",0 end
+  local pages=math.ceil(#entries/20)
+  local page=(value.placeNamesPage or 0)%pages
+  local shown={}
+  for index=page*20+1,math.min(#entries,(page+1)*20) do shown[#shown+1]=entries[index] end
+  return string.format("Recorded place names, page %d/%d: %s. Coordinates are metres from the map centre.",page+1,pages,table.concat(shown,"; ")),(page+1)%pages
+end
+
+function controls.warnings(dataset)
+  local result={}
+  for _,warning in ipairs(dataset.warnings or {}) do
+    if warning:find("Place names become named vanilla marker constructions",1,true) then
+      warning="Place markers are decorative models, not simulated towns. Read their recorded names and coordinates with Show place names."
+    end
+    result[#result+1]=warning
+  end
+  return result
 end
 
 local totalsCache={}

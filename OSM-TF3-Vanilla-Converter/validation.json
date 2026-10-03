@@ -1,8 +1,8 @@
 {
-  "version": "0.9-preview",
+  "version": "0.10-preview",
   "gameBuildInspected": "25533170",
   "automatedTests": {
-    "passed": 102,
+    "passed": 147,
     "failed": 0,
     "scope": [
       "OSM XML conversion",
@@ -38,8 +38,15 @@
       "XML integrity, error remarks, DTD rejection and truncation",
       "visible-only tile requests, application identity, cache and conditional revalidation",
       "overview PNG georeferencing, yellow frame, attribution and checksum",
-      "three-file commit rollback, incomplete map rejection and overview cancellation"
-    ]
+      "three-file commit rollback, incomplete map rejection and overview cancellation",
+      "String ground-texture resource identifiers and selected-only preflight checks",
+      "Build scheduling, native ownership commands and accepted-step retry without duplicates",
+      "Read-only component polling under restricted rendering APIs",
+      "Live node/edge ownership, native vehicle lanes, road/rail graph and bridge/tunnel resource checks",
+      "Journalled native asset groups, model IDs, float transforms and zero-based matrix columns",
+      "Paginated recorded place names and legacy warning presentation without changing the dataset"
+    ],
+    "subtestsPassed": 163
   },
   "vanillaResourceAudit": {
     "checkedVanillaResources": 37,
@@ -121,93 +128,149 @@
     "profiles": "preset names preserved, mismatches rejected, old profiles supported"
   },
   "windowsExecutable": {
+    "version": "0.10-preview",
     "build": "passed",
-    "nativeUIConversion": "0.7: all size/format choices displayed; Gigantomaniac 1:5 exported at 12800 x 64000 metres; manual edit selects Custom; legacy profile loaded successfully",
-    "standaloneLuaExport": "passed with native Windows UI",
-    "newStandaloneModCreation": "passed with bundled scripts and custom settings",
-    "settingsSaveLoad": "passed; exact JSON profile round trip",
-    "cancellation": "passed during million-tree conversion; existing Lua and report unchanged",
-    "scrollableSettings": "passed at 150% Windows display scaling",
-    "exampleEdges": 10,
-    "exampleSceneryItems": 117,
-    "exampleNamedMarkers": 1,
-    "sha256": "af07a55801cd743c6a6bea7bd2734a1a2bd4c1bc1e76d0ca495fdd9ea12daf40",
-    "nativeMapDownload": {
-      "liveNativeWindowsMapDownload": "passed",
-      "displayScaling": "150%",
-      "yellowFrameClickLock": "passed",
-      "lockedPanZoomAndFit": "same displayed coordinates retained",
-      "openstreetmapTiles": "live visible map tiles loaded with attribution",
-      "dataEndpoint": "https://overpass-api.de/api/interpreter",
-      "savedOsmXml": "valid OSM 0.6 with exact locked bounds",
-      "fullWayAndRelationReferences": "all present",
-      "downloadedCounts": {
-        "nodes": 316924,
-        "ways": 16416,
-        "relations": 533
-      },
-      "fileBytes": 42302111,
-      "osmSha256": "fec3b9463bc2b28de2565122d6a42f0d79f4d132733d0f013b3a5ce9cb93b01d",
-      "nativeConversionAndHandoff": "passed; exact bounds, size and checksums match",
-      "mapSize": [
-        1000.0,
-        1000.0
-      ],
-      "convertedEdges": 4085,
-      "convertedScenery": 4419,
-      "nativeTF3EngineImportVerified": false,
-      "heightmapStudioLuaAndLogAlignment": "passed: identical locked bounds and TF3 size; source/Lua checksums verified",
-      "nativeMapSizes": "all eight sizes and five formats displayed; Tiny 1:1 and 1:5 update dimensions and frame; selecting a new size unlocks the area",
-      "finalWindowsBuildAndLayout": "passed; cached tiles display and yellow frame label stays readable at 150% scaling"
+    "nativeUIThisVersionVerified": true,
+    "historicalPreviews": {
+      "evidenceVersion": "0.9-preview and earlier",
+      "checks": {
+        "build": "passed",
+        "nativeUIConversion": "0.7: all size/format choices displayed; Gigantomaniac 1:5 exported at 12800 x 64000 metres; manual edit selects Custom; legacy profile loaded successfully",
+        "standaloneLuaExport": "passed with native Windows UI",
+        "newStandaloneModCreation": "passed with bundled scripts and custom settings",
+        "settingsSaveLoad": "passed; exact JSON profile round trip",
+        "cancellation": "passed during million-tree conversion; existing Lua and report unchanged",
+        "scrollableSettings": "passed at 150% Windows display scaling",
+        "exampleEdges": 10,
+        "exampleSceneryItems": 117,
+        "exampleNamedMarkers": 1,
+        "sha256": "af07a55801cd743c6a6bea7bd2734a1a2bd4c1bc1e76d0ca495fdd9ea12daf40",
+        "nativeMapDownload": {
+          "liveNativeWindowsMapDownload": "passed",
+          "displayScaling": "150%",
+          "yellowFrameClickLock": "passed",
+          "lockedPanZoomAndFit": "same displayed coordinates retained",
+          "openstreetmapTiles": "live visible map tiles loaded with attribution",
+          "dataEndpoint": "https://overpass-api.de/api/interpreter",
+          "savedOsmXml": "valid OSM 0.6 with exact locked bounds",
+          "fullWayAndRelationReferences": "all present",
+          "downloadedCounts": {
+            "nodes": 316924,
+            "ways": 16416,
+            "relations": 533
+          },
+          "fileBytes": 42302111,
+          "osmSha256": "fec3b9463bc2b28de2565122d6a42f0d79f4d132733d0f013b3a5ce9cb93b01d",
+          "nativeConversionAndHandoff": "passed; exact bounds, size and checksums match",
+          "mapSize": [
+            1000.0,
+            1000.0
+          ],
+          "convertedEdges": 4085,
+          "convertedScenery": 4419,
+          "nativeTF3EngineImportVerified": false,
+          "heightmapStudioLuaAndLogAlignment": "passed: identical locked bounds and TF3 size; source/Lua checksums verified",
+          "nativeMapSizes": "all eight sizes and five formats displayed; Tiny 1:1 and 1:5 update dimensions and frame; selecting a new size unlocks the area",
+          "finalWindowsBuildAndLayout": "passed; cached tiles display and yellow frame label stays readable at 150% scaling"
+        },
+        "nativeOverviewDownload": {
+          "nativeExeVersion": "0.9-preview",
+          "downloadedViaNativeUI": true,
+          "publicOverpassRequest": true,
+          "osmBytes": 43080889,
+          "pngBytes": 398308,
+          "pixels": [
+            750,
+            521
+          ],
+          "counts": {
+            "nodes": 320224,
+            "ways": 16762,
+            "relations": 548
+          },
+          "bounds": [
+            59.32474245289905,
+            18.059966446510916,
+            59.33372560575721,
+            18.077576876242965
+          ],
+          "mapSize": [
+            1000.0,
+            1000.0
+          ],
+          "xmlLogAndPngBoundsMatch": true,
+          "checksumsMatch": true,
+          "yellowFramePixelAndProjectionChecks": "passed",
+          "offscreenLockedSelectionAutomaticallyFitted": true,
+          "overviewVisuallyInspected": true,
+          "tf3EngineImportVerified": false
+        }
+      }
     },
-    "nativeOverviewDownload": {
-      "nativeExeVersion": "0.9-preview",
-      "downloadedViaNativeUI": true,
-      "publicOverpassRequest": true,
-      "osmBytes": 43080889,
-      "pngBytes": 398308,
-      "pixels": [
-        750,
-        521
-      ],
-      "counts": {
-        "nodes": 320224,
-        "ways": 16762,
-        "relations": 548
-      },
-      "bounds": [
-        59.32474245289905,
-        18.059966446510916,
-        59.33372560575721,
-        18.077576876242965
-      ],
-      "mapSize": [
-        1000.0,
-        1000.0
-      ],
-      "xmlLogAndPngBoundsMatch": true,
-      "checksumsMatch": true,
-      "yellowFramePixelAndProjectionChecks": "passed",
-      "offscreenLockedSelectionAutomaticallyFitted": true,
-      "overviewVisuallyInspected": true,
-      "tf3EngineImportVerified": false
-    }
+    "sha256": "c09fd7564f9737177acee664251945904eaf6212db50c8108e40e63e421d34f9",
+    "embeddedModTemplateBytesVerified": true,
+    "nativeUIScope": "Native Windows startup, Preview 0.10 header and updated In game instructions passed. This version did not repeat desktop conversion/download trials; earlier desktop preview evidence is retained under historicalPreviews."
   },
   "nativeTF3EngineImport": {
-    "verified": false,
-    "status": "pending temporary-map test"
+    "verified": true,
+    "scope": "Fictional sample on a new flat temperate Small 1:1 map in the native map editor; includes full restart and reload",
+    "gameBuild": 40408,
+    "steamBuildId": "25533170",
+    "activeMods": [
+      "druttzen_osm_vanilla revision 4",
+      "Official Deluxe Upgrade",
+      "Official Pre-Order Pack"
+    ],
+    "nativeCommandsAccepted": true,
+    "finished": true,
+    "skippedJobs": 0,
+    "liveAuditPassed": true,
+    "ownershipChecked": true,
+    "savedImportReloaded": true,
+    "actualVehicleRoutesTested": false,
+    "largeRealWorldMapsTested": false,
+    "nativePauseResumeTested": false,
+    "nativeRetry": "Earlier sample continued from the saved failed road step after the ownership fix; no restart of scenery",
+    "observedCounts": {
+      "nodes": 12,
+      "roads": 8,
+      "rails": 2,
+      "vehicleLaneEdges": 10,
+      "models": 115,
+      "groundItems": 2,
+      "markers": 1,
+      "connectedGroups": 2
+    },
+    "modelCheckScope": "100 optimized vegetation models and one marker checked by live model IDs/transforms; 15 retained models and two ground items checked by construction saved parameters",
+    "placeNames": "Name retained in importer journal and shown in native panel at x=-150 m, y=-50 m; native asset group has no NAME component",
+    "limitations": [
+      "Ground paint appearance requires visual inspection.",
+      "Vehicle-compatible lanes and graph connections do not establish successful vehicle routes.",
+      "Bridges, tunnels, large real-world maps and terrain slopes are not established by this sample.",
+      "Older saves without scenery entity records cannot reliably recover unnamed asset identity."
+    ],
+    "report": "NATIVE-VALIDATION.md",
+    "finalSavedProof": {
+      "file": "Codex-OSM-Rev4-Verified-20261003.sav",
+      "bytes": 591944,
+      "sha256": "490c56ab1c97fdffd46b939c03f5c8e1875dfb875868dbc334d225033c3e16c1",
+      "scope": "Final passed audit and recorded place name saved; restart/reload verification performed on earlier journal save"
+    }
   },
   "scriptResourceEntrypoints": {
     "globalDataFunctions": "panel, importer, GUI bridge and scenery corrected",
     "isolatedResourceLoaderTests": "passed",
     "callbackReferences": "all six passed",
     "reportedStartupError": "function data() not defined addressed",
-    "nativeRestartVerification": false
+    "nativeRestartVerification": true
   },
   "nativeTF3Panel": {
     "implemented": true,
-    "renderingVerified": false,
-    "scrollingVerified": false,
+    "renderingVerified": true,
+    "scrollingVerified": true,
+    "errorNoticesVerified": true,
+    "persistedStatePollingVerified": true,
+    "placeNamesVerified": true,
     "commands": [
       "validate",
       "start",
@@ -216,27 +279,18 @@
       "retry",
       "skip",
       "status",
+      "verify",
+      "placeNames",
       "mapSize"
-    ],
-    "settings": [
-      "roads",
-      "railways",
-      "vegetation",
-      "surfaces",
-      "objects",
-      "places",
-      "batchSize",
-      "interval"
     ]
   },
   "externalGameModDependencies": [],
   "gameAssetsRedistributed": false,
   "remainingWork": [
-    "Verify native OSM Import button placement, window rendering and scrolling in TF3.",
-    "Import demonstration in TF3 with no other mods enabled; inspect rendering, ownership and road/rail connectivity.",
-    "Check pause/retry in the game, save and reload completed import.",
-    "Native automatic railway signal placement is not implemented.",
-    "Place markers are implemented; functioning town generation is not implemented."
+    "Native pause/resume and changed pace across save/reload during an active large import.",
+    "Large real-world maps, non-flat terrain, bridges and tunnels.",
+    "Actual vehicle routes, stations and signals using the native game tools.",
+    "Visual inspection of ground paint and decorative object variants."
   ],
   "osmDownload": {
     "implemented": true,
@@ -247,13 +301,14 @@
     "lockedBounds": "embedded in XML, download log, converter custom bounds, converted Lua and report",
     "mapTiles": "OpenStreetMap raster tiles, visible viewport only",
     "tileCache": "minimum 7 days; conditional HTTP revalidation",
-    "applicationUserAgent": "Druttzen-OSM-TF3-Converter/0.9 (+https://github.com/Druttzen/TRF3-mod-converter)",
+    "applicationUserAgent": "Druttzen-OSM-TF3-Converter/0.10 (+https://github.com/Druttzen/TRF3-mod-converter)",
     "dataService": "single Overpass request for selected nodes, ways, relations and descendants",
     "customHttpsOverpassEndpoint": true,
     "fixedClientFileSizeCap": null,
     "cancelAndRollback": "passed",
     "openstreetmapAccountRequired": false,
     "providerRateAndResourceLimits": "public service limits apply; busy/failed/incomplete responses reported and previous files preserved",
-    "attribution": "\u00a9 OpenStreetMap contributors / ODbL 1.0"
-  }
+    "attribution": "© OpenStreetMap contributors / ODbL 1.0"
+  },
+  "validationDate": "2026-10-03"
 }

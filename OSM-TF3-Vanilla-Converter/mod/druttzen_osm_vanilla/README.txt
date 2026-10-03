@@ -1,7 +1,7 @@
-OSM IMPORTER â€” TRANSPORT FEVER 3 VANILLA
-Preview 0.9 | GPL-3.0 | 2 October 2026
+OSM IMPORTER - TRANSPORT FEVER 3 VANILLA
+Preview 0.10 | GPL-3.0 | 3 October 2026
 
-DOWNLOAD OPENSTREETMAP (0.9)
+DOWNLOAD OPENSTREETMAP (0.10)
 Project > Download OSM opens an interactive OpenStreetMap view. No OSM account
 or sign-in is needed. The app connects to public HTTPS services when this
 view opens or you request a download. It does not require firewall changes.
@@ -65,12 +65,13 @@ It uses TF3 scripts and references vanilla game resources only. No asset packs,
 third-party game mods, Python installation, or downloaded assets are required
 to use the Windows companion executable.
 
-The converter, Windows executable, Lua state-machine and panel callback tests
-passed (102 tests). All 37 vanilla visual/infrastructure resources and the six
-base UI helper modules exist in the installed TF3 build 25533170.
-An actual import in the TF3 engine has NOT yet been verified. This is a
-preview for testing, not a confirmed playable release. The new in-game panel's
-native rendering, placement and scrolling have not yet been verified in TF3.
+The desktop conversion, Lua state-machine, native panel contract and saved-world
+audit checks pass in automated tests. Preview 0.10 includes native runtime
+compatibility fixes and a read-only Verify built objects command. The fictional
+sample completed in TF3 Windows build 40408: 10 road/rail segments, 117 scenery
+items and one place marker. See validation.json for exact native checks and
+earlier desktop evidence. Large real-world imports, bridges, tunnels and
+actual vehicle routes remain preview work.
 
 INSTALL
 1. Extract the archive to a normal folder.
@@ -148,12 +149,28 @@ START AN IMPORT
 Click OSM Import in TF3's mod button area to open the movable control window.
 Scroll through the list to choose commands and settings. Check map and resources
 runs a check without building anything; Start import begins the selected import.
-The top of the window shows live progress, messages and errors.
+The top of the window shows live progress, wrapped messages and errors in its
+own scroll area. Commands and settings use a separate scroll area below it.
 
 Commands: Check map and resources, Start import, Pause import, Resume import,
-Retry failed step, Skip failed step, Show progress and Read map size.
+Retry failed step, Skip failed step, Show progress, Verify built objects,
+Show place names and
+Read map size.
 Command buttons are enabled only when the current import phase allows them.
 The OSM Import button toggles the window; its close button closes only the panel.
+
+After the import finishes, Verify built objects compares saved import records
+with live nodes, roads, tracks, scenery and markers without changing the map.
+It checks endpoint connections, templates, ownership, generated vehicle lanes,
+scenery items and connected groups, then reports any discrepancies. Read long
+reports by scrolling the status area. Ground paint appearance and actual vehicle
+routes still need a map check.
+
+Show place names cycles through twenty recorded names and map coordinates
+per page. Coordinates are metres from the map centre. TF3 can optimize
+marker models into unnamed asset groups; their ordinary game windows may
+not display the name. Names and entity references stay in the importer save.
+Older saves without those records cannot reliably identify unnamed models.
 
 Before starting, choose roads/tram streets, railways, trees/shrubs, ground
 surfaces, decorative objects and named place markers with the checkboxes.
@@ -184,11 +201,13 @@ objects or deliberately suppress build errors.
 
 CONTROLS
 Use the same console helper with .status(), .pause(), .resume(), .retry(),
-or .skip(). For example:
+.skip(), .verify(), or .placeNames(). For example:
 
 ug_require("druttzen_osm_vanilla::/osm/console.lua").status()
 
-Retry repeats the failed proposal. Skip omits that proposal; a scenery
+Retry repeats a rejected proposal. If geometry was accepted but ownership or
+naming failed, retry completes that step without rebuilding it; skip is refused
+for an accepted object. Skip omits a rejected proposal; a scenery
 proposal can contain up to 100 items. A finished/started dataset cannot be
 started again in the same save. Use a new map for a different dataset.
 Keep the original dataset file when resuming a saved import. Changing it
@@ -249,8 +268,9 @@ powershell -File build.ps1
 The Lua tests simulate the command boundary and UI recipes; they cannot prove
 native TF3 proposal acceptance, ownership conversion, construction loading,
 button placement, window rendering or scrolling.
-The next required check is a fresh game map, importing the sample, testing
-pause/retry and saving/reloading the result, with no other mods enabled.
+Full native verification is still in progress: import the sample on a fresh
+map, inspect road/rail ownership and connections, run Verify built objects,
+and check pause/retry and save/reload behavior with no other mods enabled.
 
 ATTRIBUTION
 Original concept/mod: VacuumTube, OSM-TPF2-Importer, GPL-3.0.

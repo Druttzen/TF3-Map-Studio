@@ -21,7 +21,7 @@ from PIL import Image
 from converter import validate_bounds
 from job import Cancelled
 
-USER_AGENT='Druttzen-OSM-TF3-Converter/0.9 (+https://github.com/Druttzen/TRF3-mod-converter)'
+USER_AGENT='Druttzen-OSM-TF3-Converter/0.10 (+https://github.com/Druttzen/TRF3-mod-converter)'
 OVERPASS='https://overpass-api.de/api/interpreter'
 TILES='https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 R=6378137.0

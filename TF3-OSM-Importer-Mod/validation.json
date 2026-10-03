@@ -1,20 +1,21 @@
 {
   "component": "TF3-OSM-Importer-Mod",
-  "validationDate": "2026-10-02",
+  "validationDate": "2026-10-03",
   "provenance": {
     "source": "OSM-TF3-Vanilla-Converter/mod/druttzen_osm_vanilla",
-    "companionVersion": "0.9-preview",
+    "companionVersion": "0.10-preview",
     "modId": "druttzen_osm_vanilla",
-    "modRevision": 3,
-    "runtimeMetadataAndSampleDatasetUnchanged": true,
+    "modRevision": 4,
+    "runtimeMetadataAndSampleDatasetUnchanged": false,
     "previousResourceAuditGameBuild": "25533170",
-    "changeScope": "Standalone packaging, focused documentation, independently runnable tests and resource audit"
+    "changeScope": "Native runtime and UI fixes, persistent scenery entity journal, read-only built-object verification and paginated place names",
+    "fictionalSampleDatasetUnchanged": true
   },
   "automatedTests": {
-    "passed": 34,
+    "passed": 79,
     "failed": 0,
-    "luaAndStateMachine": 19,
-    "panelAndResourceEntrypoints": 9,
+    "luaAndStateMachine": 34,
+    "panelAndResourceEntrypoints": 19,
     "packaging": 3,
     "resourceInventoryInvariants": 3,
     "scope": [
@@ -24,8 +25,16 @@
       "Category filtering, settings validation, locking and simulation pacing",
       "Panel recipe callbacks, command state and read-only GUI snapshots",
       "ZIP installation layout, exact source bytes and independence from current working directory",
-      "Resource-manifest coverage and loose/archive namespace handling"
-    ]
+      "Resource-manifest coverage and loose/archive namespace handling",
+      "String ground-texture resource identifiers and selected-only preflight checks",
+      "Build scheduling, native ownership commands and accepted-step retry without duplicates",
+      "Read-only component polling under restricted rendering APIs",
+      "Live node/edge ownership, native vehicle lanes, road/rail graph and bridge/tunnel resource checks",
+      "Journalled native asset groups, model IDs, float transforms and zero-based matrix columns",
+      "Paginated recorded place names and legacy warning presentation without changing the dataset"
+    ],
+    "worldAudit": 20,
+    "subtestsPassed": 58
   },
   "freshVanillaResourceAudit": {
     "run": true,
@@ -40,28 +49,77 @@
   "scriptResourceEntrypoints": {
     "existingStartupFixPreserved": true,
     "referencedCallbacksResolved": 6,
-    "nativeRestartVerification": false
+    "nativeRestartVerification": true
   },
   "sample": {
     "fictional": true,
-    "mapSizeMetres": [1000, 1000],
+    "mapSizeMetres": [
+      1000,
+      1000
+    ],
     "roadRailSegments": 10,
     "sceneryItems": 117,
     "namedMarkers": 1
   },
   "nativeTF3EngineImport": {
-    "verified": false,
-    "status": "Pending temporary-map import, inspection, pause/retry and save/reload"
+    "verified": true,
+    "scope": "Fictional sample on a new flat temperate Small 1:1 map in the native map editor; includes full restart and reload",
+    "gameBuild": 40408,
+    "steamBuildId": "25533170",
+    "activeMods": [
+      "druttzen_osm_vanilla revision 4",
+      "Official Deluxe Upgrade",
+      "Official Pre-Order Pack"
+    ],
+    "nativeCommandsAccepted": true,
+    "finished": true,
+    "skippedJobs": 0,
+    "liveAuditPassed": true,
+    "ownershipChecked": true,
+    "savedImportReloaded": true,
+    "actualVehicleRoutesTested": false,
+    "largeRealWorldMapsTested": false,
+    "nativePauseResumeTested": false,
+    "nativeRetry": "Earlier sample continued from the saved failed road step after the ownership fix; no restart of scenery",
+    "observedCounts": {
+      "nodes": 12,
+      "roads": 8,
+      "rails": 2,
+      "vehicleLaneEdges": 10,
+      "models": 115,
+      "groundItems": 2,
+      "markers": 1,
+      "connectedGroups": 2
+    },
+    "modelCheckScope": "100 optimized vegetation models and one marker checked by live model IDs/transforms; 15 retained models and two ground items checked by construction saved parameters",
+    "placeNames": "Name retained in importer journal and shown in native panel at x=-150 m, y=-50 m; native asset group has no NAME component",
+    "limitations": [
+      "Ground paint appearance requires visual inspection.",
+      "Vehicle-compatible lanes and graph connections do not establish successful vehicle routes.",
+      "Bridges, tunnels, large real-world maps and terrain slopes are not established by this sample.",
+      "Older saves without scenery entity records cannot reliably recover unnamed asset identity."
+    ],
+    "report": "NATIVE-VALIDATION.md",
+    "finalSavedProof": {
+      "file": "Codex-OSM-Rev4-Verified-20261003.sav",
+      "bytes": 591944,
+      "sha256": "490c56ab1c97fdffd46b939c03f5c8e1875dfb875868dbc334d225033c3e16c1",
+      "scope": "Final passed audit and recorded place name saved; restart/reload verification performed on earlier journal save"
+    }
   },
   "nativeTF3Panel": {
     "implemented": true,
-    "renderingVerified": false,
-    "scrollingVerified": false
+    "renderingVerified": true,
+    "scrollingVerified": true,
+    "errorNoticesVerified": true,
+    "persistedStatePollingVerified": true,
+    "placeNamesVerified": true
   },
   "gameAssetsRedistributed": false,
   "remainingWork": [
-    "Verify button placement, panel rendering and scrolling in TF3.",
-    "Import the fictional sample with only this mod enabled and inspect proposal acceptance, ownership and road/rail connectivity.",
-    "Test pause/retry and save/reload on a temporary game map."
+    "Native pause/resume and changed pace across save/reload during an active large import.",
+    "Large real-world maps, non-flat terrain, bridges and tunnels.",
+    "Actual vehicle routes, stations and signals using the native game tools.",
+    "Visual inspection of ground paint and decorative object variants."
   ]
 }

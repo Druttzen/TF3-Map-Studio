@@ -419,7 +419,7 @@ def convert(path,bounds,size,spacing=18,max_trees=100000,*,options=None,progress
         if features['place_markers'] and tags.get('place') in {'city','town','village','suburb','quarter','neighbourhood'} and tags.get('name'):
             data['labels'].append({'pos':list(p),'name':tags['name']})
     if data['labels']:
-        warn('Place names become named vanilla marker constructions, not simulated towns. Select a marker to read its name.')
+        warn('Place markers are decorative models, not simulated towns. Read their recorded names and coordinates with Show place names.')
     if any(tags.get('building') not in {None,'no'} for _,tags in ways.values()):
         warn('OSM building footprints are not imported. Add vanilla buildings and functioning towns with the game tools.')
     if any(e['bridge'] or e['tunnel'] for e in data['edges']):

@@ -13,7 +13,7 @@ Four Transport Fever 3 tools in one project. Each folder includes its source, te
 
 Download and extract the package for the tool you need, then open its `.exe`. The packages include the runtime, so a separate Python installation is not required.
 
-- [OSM-TF3-Vanilla-Converter — Preview 0.9](https://github.com/Druttzen/TF3-Map-Studio/releases/download/preview-2026-10-02/OSM-TF3-Vanilla-Preview-0.9-Windows.zip)
+- [OSM-TF3-Vanilla-Converter — Preview 0.10](https://github.com/Druttzen/TF3-Map-Studio/releases/download/importer-revision-4-2026-10-03/OSM-TF3-Vanilla-Preview-0.10-Windows.zip)
 - [TF3-Heightmap-Studio — Preview 0.6](https://github.com/Druttzen/TF3-Map-Studio/releases/download/preview-2026-10-02/TF3-Heightmap-Studio-Preview-0.6-Windows.zip)
 - [TRF3-Mod-Converter — 0.2.0](https://github.com/Druttzen/TF3-Map-Studio/releases/download/preview-2026-10-02/TRF3-Mod-Converter-Windows.zip)
 
@@ -21,11 +21,11 @@ The [preview release](https://github.com/Druttzen/TF3-Map-Studio/releases/tag/pr
 
 ## In-game importer mod — tool #4
 
-[Download TF3-OSM-Importer-Mod](https://github.com/Druttzen/TF3-Map-Studio/releases/download/importer-mod-preview-2026-10-02/TF3-OSM-Importer-Mod-Preview.zip), extract it, and copy the `druttzen_osm_vanilla` folder into TF3's local mods folder. Prepare custom OSM datasets with tool #1 and enable the importer in a fresh test map. The mod package contains Lua scripts, a fictional demonstration dataset, instructions, and license notices; Python is required only for development tests and packaging.
+[Download TF3-OSM-Importer-Mod revision 4](https://github.com/Druttzen/TF3-Map-Studio/releases/download/importer-revision-4-2026-10-03/TF3-OSM-Importer-Mod-Revision-4.zip), extract it, and copy the `druttzen_osm_vanilla` folder into TF3's local mods folder. Prepare custom OSM datasets with tool #1 and enable the importer in a fresh test map. The mod package contains Lua scripts, a fictional demonstration dataset, instructions, and license notices; Python is required only for development tests and packaging.
 
-The separate importer package preserves the mod ID used by the converter's bundled template. Keep one installed `druttzen_osm_vanilla` folder and preserve your custom dataset when updating. See [the importer instructions](TF3-OSM-Importer-Mod/README.md) and [its preview release and checksum](https://github.com/Druttzen/TF3-Map-Studio/releases/tag/importer-mod-preview-2026-10-02).
+The separate importer package preserves the mod ID used by the converter's bundled template. Keep one installed `druttzen_osm_vanilla` folder and preserve your custom dataset when updating. See [the importer instructions](TF3-OSM-Importer-Mod/README.md) and [the revision 4 release and checksums](https://github.com/Druttzen/TF3-Map-Studio/releases/tag/importer-revision-4-2026-10-03).
 
-These are preview tools. OSM's native TF3 import and Heightmap Studio's native TF3 terrain import still need in-game verification. The mod converter handles metadata and layout; gameplay APIs, models, materials, and translations may require manual porting. Read each tool's detailed instructions before using it on a real project.
+These are preview tools. The fictional OSM sample imports in TF3 Windows build 40408 and passes its built-object check after a full restart and save reload. Read [the native validation scope](TF3-OSM-Importer-Mod/NATIVE-VALIDATION.md): large real maps, bridges, tunnels and actual vehicle routes still need testing. Place names are stored by the importer and displayed in its panel. Heightmap Studio's native TF3 terrain import remains unverified. The mod converter handles metadata and layout; gameplay APIs, models, materials and translations may require manual porting.
 
 ## Development
 

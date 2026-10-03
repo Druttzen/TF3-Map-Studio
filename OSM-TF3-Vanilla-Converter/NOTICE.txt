@@ -17,5 +17,5 @@ and bundled imaging-library notices are included in third-party/Pillow-LICENSE.t
 Displayed map tiles and downloaded OSM extracts are retrieved on demand and
 are not redistributed in this application package.
 
-Preview: native TF3 engine execution has not yet been verified. Refer to
+Preview: the fictional sample imports in TF3 Windows build 40408. Refer to
 README.txt and validation.json for the exact scope of completed checks.

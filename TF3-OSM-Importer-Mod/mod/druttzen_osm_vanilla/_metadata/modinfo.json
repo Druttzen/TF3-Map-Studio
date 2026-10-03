@@ -1,9 +1,20 @@
 {
   "name": "OSM Importer TF3 Vanilla (Preview)",
   "summary": "Vanilla OSM importer with an in-game button, scrollable commands and adjustable settings.",
-  "description": "Preview standalone rebuild of VacuumTube's OSM Importer. No workshop dependencies. Prepare OSM XML with the companion converter, then click OSM Import in the game's mod button area for commands, category selection and adjustable import pace. References vanilla resources only. Native TF3 import and panel rendering are not yet verified. Signals and functioning towns require the game tools; place names use markers. See README.txt.",
-  "authors": [{"name": "VacuumTube", "role": "CREATOR"}, {"name": "Druttzen", "role": "CO_CREATOR"}],
-  "tags": ["Script Mod"],
+  "description": "Preview rebuild of VacuumTube's OSM Importer. The fictional sample imports in TF3 Windows build 40408. Prepare OSM XML with the companion converter, then use OSM Import for category selection, saved progress and adjustable pace. Verify built objects checks saved records against the live map. Show place names displays recorded marker names and coordinates; native asset windows may not show their names. Vanilla resources only; no workshop dependencies. Large real-world maps and actual vehicle routes remain unverified. Signals and functioning towns require the game tools. See README.txt.",
+  "authors": [
+    {
+      "name": "VacuumTube",
+      "role": "CREATOR"
+    },
+    {
+      "name": "Druttzen",
+      "role": "CO_CREATOR"
+    }
+  ],
+  "tags": [
+    "Script Mod"
+  ],
   "dependencies": [],
   "url": ""
 }

@@ -19,6 +19,9 @@ function script.updateFn(_captureParams, params)
   end
   return {
     cost = 0, maintenanceCost = 0, noCostAtAll = true,
+    -- Metadata annotates retained constructions; TF3 still optimizes model-only
+    -- batches into asset groups. Their IDs are kept in the importer journal.
+    metadata = {druttzenOsmImporter={schema=1}},
     subconstructions = {sub},
   }
 end
