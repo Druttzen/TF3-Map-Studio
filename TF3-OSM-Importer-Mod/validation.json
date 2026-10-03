@@ -2,14 +2,16 @@
   "component": "TF3-OSM-Importer-Mod",
   "validationDate": "2026-10-03",
   "provenance": {
-    "source": "TF3-OSM-Importer-Mod/mod/druttzen_osm_vanilla",
+    "source": "TF3-OSM-Importer-Mod/mod/tf3_osm_importer_mod",
     "companionVersion": "0.12-preview",
     "modId": "druttzen_osm_vanilla",
     "modRevision": 6,
     "runtimeMetadataAndSampleDatasetUnchanged": false,
     "previousResourceAuditGameBuild": "25533170",
     "changeScope": "Saved road/rail height references at construction time, accepted-height audit, experimental mapped shallow-water beds and independent decorative water patches; incremental preflight, automatic pause and boundary fix retained",
-    "fictionalSampleDatasetUnchanged": true
+    "fictionalSampleDatasetUnchanged": true,
+    "displayName": "TF3-OSM-Importer-Mod",
+    "installFolder": "tf3_osm_importer_mod"
   },
   "automatedTests": {
     "passed": 129,
@@ -44,7 +46,8 @@
       "Read-only global water/area checks, native parameter-copy semantics, queued water proposals and network protection",
       "Accepted water ownership retry without rebuilding, retained independent patch heights, overlap prevention and settings locks",
       "OSM pond/waterway preparation with islands, width provenance, network corridors, geometry budget and complete-feature omission",
-      "Saved 0.5 m shallow-bed samples, Water Dirty resource, read-only height/depth audit and existing network protection"
+      "Saved 0.5 m shallow-bed samples, Water Dirty resource, read-only height/depth audit and existing network protection",
+      "Display-name and installation-folder rename; original mod/resource identity preserved, archive layout and new/legacy folder dataset updates checked"
     ],
     "worldAudit": 24,
     "subtestsPassed": 85,
@@ -202,5 +205,15 @@
     },
     "shipNavigationEstablished": false,
     "partilleModifiedByTheseTests": false
+  },
+  "nameUpdate": {
+    "displayName": "TF3-OSM-Importer-Mod",
+    "folder": "tf3_osm_importer_mod",
+    "modId": "druttzen_osm_vanilla",
+    "resourceAndEventNamespaceChanged": false,
+    "installedFolderRenamedWhileTF3Closed": true,
+    "installedDatasetAndRuntimeUnchanged": true,
+    "nativeModBrowserNameVerified": false,
+    "definition": "https://wiki.transportfever3.com/doku.php?id=modding:general:moddefinition"
   }
 }

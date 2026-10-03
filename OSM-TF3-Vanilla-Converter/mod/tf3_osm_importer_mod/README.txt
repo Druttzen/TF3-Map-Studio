@@ -1,14 +1,15 @@
-TF3-OSM-IMPORTER-MOD
+TF3-OSM-Importer-Mod
 Companion Preview 0.12 | Mod revision 6 | GPL-3.0 | 3 October 2026
 
 INSTALL
-Copy this druttzen_osm_vanilla folder into:
+Copy this tf3_osm_importer_mod folder into:
 <Steam folder>/userdata/<your Steam user ID>/3493540/local/mods/
-The result must end in mods/druttzen_osm_vanilla/mod.json.
+The result must end in mods/tf3_osm_importer_mod/mod.json.
 
 This is the same mod bundled with OSM-TF3-Vanilla-Converter (tool 1).
-Install only one copy. Keep modId druttzen_osm_vanilla; do not rename a
-second copy and enable both. Do not put it in the original TF2 mods folder.
+The game displays TF3-OSM-Importer-Mod. The folder is tf3_osm_importer_mod.
+The internal modId remains druttzen_osm_vanilla for existing saves.
+Install only one copy; do not enable both old and renamed installations. Do not put it in the original TF2 mods folder.
 
 FIRST TEST
 Enable the mod on a fresh, flat test map. The included fictional dataset

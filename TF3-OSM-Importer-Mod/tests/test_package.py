@@ -1,5 +1,6 @@
 """Check the release ZIP's installation layout and bytes."""
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -18,12 +19,14 @@ class PackageTests(unittest.TestCase):
     def test_archive_contains_only_installable_files_with_identical_bytes(self):
         with TemporaryDirectory() as folder:
             output, count = packager.package(Path(folder) / "mod.zip")
-            source = {"druttzen_osm_vanilla/" + file.relative_to(packager.MOD).as_posix(): file
+            source = {"tf3_osm_importer_mod/" + file.relative_to(packager.MOD).as_posix(): file
                       for file in packager.MOD.rglob("*") if file.is_file()}
             with zipfile.ZipFile(output) as archive:
                 self.assertEqual(set(archive.namelist()), set(source))
                 self.assertEqual(count, len(source))
-                self.assertIn("druttzen_osm_vanilla/mod.json", archive.namelist())
+                self.assertIn("tf3_osm_importer_mod/mod.json", archive.namelist())
+                self.assertEqual(json.loads(archive.read('tf3_osm_importer_mod/mod.json'))['modId'],'druttzen_osm_vanilla')
+                self.assertEqual(json.loads(archive.read('tf3_osm_importer_mod/_metadata/modinfo.json'))['name'],'TF3-OSM-Importer-Mod')
                 for name, file in source.items():
                     self.assertEqual(archive.read(name), file.read_bytes(), name)
                 self.assertTrue(all(Path(name).suffix not in {".py", ".exe", ".pyc"} for name in archive.namelist()))

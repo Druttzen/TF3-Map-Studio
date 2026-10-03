@@ -14,7 +14,7 @@ class ResourceTests(unittest.TestCase):
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         names = set(manifest["resourceNames"] + manifest["uiModules"])
         references = set()
-        for file in (ROOT / "mod" / "druttzen_osm_vanilla" / "content").rglob("*"):
+        for file in (ROOT / "mod" / "tf3_osm_importer_mod" / "content").rglob("*"):
             if file.suffix not in {'.lua','.mdl','.msh'}: continue
             references.update(re.findall(r'(?<![\w])::/[^"\s]+\.(?:mdl|mtl|gtex|tmat|street_template|bridge|tunnel|lua|tl)', file.read_text(encoding="utf-8")))
         self.assertTrue(references)

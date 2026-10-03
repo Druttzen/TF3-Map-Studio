@@ -6,7 +6,7 @@ import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MOD = ROOT / "mod" / "druttzen_osm_vanilla"
+MOD = ROOT / "mod" / "tf3_osm_importer_mod"
 DEFAULT_OUTPUT = ROOT / "dist" / "TF3-OSM-Importer-Mod-Preview.zip"
 
 
@@ -28,7 +28,7 @@ def package(output=DEFAULT_OUTPUT):
     try:
         with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for file in files:
-                archive.write(file, "druttzen_osm_vanilla/" + file.relative_to(MOD).as_posix())
+                archive.write(file, MOD.name + "/" + file.relative_to(MOD).as_posix())
         temporary.replace(output)
     finally:
         if temporary.exists():

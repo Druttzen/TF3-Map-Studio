@@ -9,7 +9,7 @@ import unittest
 from lupa import LuaRuntime
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTENT = ROOT/'mod/druttzen_osm_vanilla/content/osm'
+CONTENT = ROOT/'mod/tf3_osm_importer_mod/content/osm'
 
 def load_script(lua,path):
     """Mirror TF3 resource loading in a fresh environment, then call data()."""

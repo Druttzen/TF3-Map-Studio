@@ -42,7 +42,7 @@ def check(game):
     ui_modules=['::/gui/main/react.lua','::/gui/main/builtin.lua','::/gui/main/main_mod_button_area.tl',
                 '::/gui/main/game_react_globals.tl','::/gui/main/engine_react_util.tl','::/gui/main/stylesheetutil.lua']
     ui_missing=[name for name in ui_modules if (name[:-4] if name.endswith('.lua') else name) not in available]
-    definition=json.loads((ROOT/'mod/druttzen_osm_vanilla/mod.json').read_text())
+    definition=json.loads((ROOT/'mod/tf3_osm_importer_mod/mod.json').read_text())
     assert not definition.get('dependencies'), 'External mod dependency'
     return {'checkedVanillaResources':len(required),'missing':missing,'externalModDependencies':definition.get('dependencies',[]),
             'resourceNames':sorted(required),'checkedUiModules':len(ui_modules),'uiMissing':ui_missing,'uiModules':ui_modules}

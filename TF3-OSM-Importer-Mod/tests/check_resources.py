@@ -36,7 +36,7 @@ def check(game):
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     required = manifest["resourceNames"]
     ui = manifest["uiModules"]
-    definition = json.loads((ROOT / "mod" / "druttzen_osm_vanilla" / "mod.json").read_text(encoding="utf-8"))
+    definition = json.loads((ROOT / "mod" / "tf3_osm_importer_mod" / "mod.json").read_text(encoding="utf-8"))
     dependencies = definition.get("dependencies", [])
     if dependencies:
         raise ValueError("The standalone mod declares external mod dependencies")

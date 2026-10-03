@@ -6,7 +6,7 @@ from lupa import LuaRuntime
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CONTENT = ROOT / "mod/druttzen_osm_vanilla/content/osm"
+CONTENT = ROOT / "mod/tf3_osm_importer_mod/content/osm"
 
 FIXTURE = r'''
 local T={BASE_NODE=1,BASE_EDGE=2,PLAYER_OWNED=3,CONSTRUCTION=4,NAME=5,TRANSPORT_NETWORK=6,ASSET_GROUP=7,MODEL_INSTANCE_LIST=8}

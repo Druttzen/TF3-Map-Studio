@@ -9,7 +9,7 @@ import threading
 import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from converter import export, export_file, export_new_mod, atomic_write, MOD_ID, validate_bounds
+from converter import export, export_file, export_new_mod, atomic_write, MOD_ID, MOD_FOLDER, validate_bounds
 from settings import DEFAULTS, FEATURES, CHOICES, SPECIES, MODELS, MATERIALS, normalize_options
 from job import Cancelled
 from map_sizes import CUSTOM, SIZES, FORMATS, dimensions, experimental, matching_preset, validate_preset
@@ -148,7 +148,7 @@ class App(tk.Tk):
         self.path(f,0,'OSM XML file (.osm)',self.source,self.choose_source,self.open_download)
         combo=self.field(f,2,'Output',self.mode,MODES); combo.bind('<<ComboboxSelected>>',self.mode_changed)
         self.path(f,3,'Output file or mod folder',self.target,self.choose_target)
-        self.note(f,'Save Lua: dataset + report. Update mod: choose its existing folder. New mod: choose a parent folder; the app creates druttzen_osm_vanilla. Close TF3 before updating its dataset.',5)
+        self.note(f,'Save Lua: dataset + report. Update mod: choose its existing folder. New mod: choose a parent folder; the app creates tf3_osm_importer_mod (TF3-OSM-Importer-Mod). Close TF3 before updating its dataset.',5)
         self.size_combo=self.field(f,6,'TF3 map size',self.map_size,[*SIZES,CUSTOM])
         self.size_combo.bind('<<ComboboxSelected>>',self.preset_changed)
         self.format_combo=self.field(f,7,'TF3 map format',self.map_format,FORMATS)
@@ -222,7 +222,7 @@ class App(tk.Tk):
         try:
             import winreg
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER,r'Software\Valve\Steam') as key: steam=Path(winreg.QueryValueEx(key,'SteamPath')[0])
-            choices=sorted((steam/'userdata').glob('*/3493540/local/mods/'+MOD_ID))
+            choices=sorted(path for folder in (MOD_FOLDER,MOD_ID) for path in (steam/'userdata').glob('*/3493540/local/mods/'+folder))
             if len(choices)==1: return str(choices[0])
         except (ImportError,OSError): pass
         return ''
@@ -262,7 +262,7 @@ class App(tk.Tk):
         if self.mode.get()==MODES[0]: path=filedialog.asksaveasfilename(parent=self,title='Save Lua map',defaultextension='.lua',filetypes=[('Lua map','*.lua')])
         else:
             path=filedialog.askdirectory(parent=self,title='Choose existing mod folder' if self.mode.get()==MODES[1] else 'Choose parent folder for the new mod')
-            if path and self.mode.get()==MODES[2]: path=str(Path(path)/MOD_ID)
+            if path and self.mode.get()==MODES[2]: path=str(Path(path)/MOD_FOLDER)
         if path: self.target.set(path)
 
     def mode_changed(self,event=None):

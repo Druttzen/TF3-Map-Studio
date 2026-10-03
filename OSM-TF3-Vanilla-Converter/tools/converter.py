@@ -20,6 +20,8 @@ from job import Job, Cancelled
 from hydrology import prepare as prepare_water
 
 MOD_ID = 'druttzen_osm_vanilla'
+MOD_FOLDER = 'tf3_osm_importer_mod'
+MOD_NAME = 'TF3-OSM-Importer-Mod'
 ROADS = {'motorway','motorway_link','trunk','trunk_link','primary','primary_link',
          'secondary','secondary_link','tertiary','tertiary_link','residential',
          'unclassified','service','living_street','pedestrian','footway','path',
@@ -541,9 +543,9 @@ def write_outputs(source,data_path,report_path,bounds,size,spacing,max_trees,opt
 
 def export(path,mod_folder,bounds,size,spacing=18,max_trees=100000,*,options=None,progress=None,cancel=None):
     target=Path(mod_folder).resolve()
-    if not (target/'mod.json').exists(): raise ValueError('Select the druttzen_osm_vanilla mod folder containing mod.json.')
+    if not (target/'mod.json').exists(): raise ValueError('Select the TF3-OSM-Importer-Mod folder containing mod.json.')
     definition=json.loads((target/'mod.json').read_text(encoding='utf-8-sig'))
-    if definition.get('modId')!=MOD_ID: raise ValueError('The selected folder is not the OSM TF3 Vanilla mod.')
+    if definition.get('modId')!=MOD_ID: raise ValueError('The selected folder is not TF3-OSM-Importer-Mod.')
     data_path=target/'content/osm/dataset.lua'
     report_path=target/'import-report.json'
     return write_outputs(path,data_path,report_path,bounds,size,spacing,max_trees,options,progress,cancel)
@@ -556,12 +558,12 @@ def export_file(path,output,bounds,size,spacing=18,max_trees=100000,*,options=No
 
 
 def template_folder():
-    return Path(sys._MEIPASS)/'mod_template' if getattr(sys,'frozen',False) else Path(__file__).resolve().parents[1]/'mod'/MOD_ID
+    return Path(sys._MEIPASS)/'mod_template' if getattr(sys,'frozen',False) else Path(__file__).resolve().parents[1]/'mod'/MOD_FOLDER
 
 
 def export_new_mod(path,mod_folder,bounds,size,spacing=18,max_trees=100000,*,options=None,progress=None,cancel=None):
     target=Path(mod_folder).resolve()
-    if target.name!=MOD_ID: raise ValueError('The new mod folder must be named '+MOD_ID+'.')
+    if target.name!=MOD_FOLDER: raise ValueError('The new mod folder must be named '+MOD_FOLDER+'.')
     if target.exists(): raise ValueError('That mod folder already exists. Choose Update installed mod to replace its dataset.')
     target.parent.mkdir(parents=True,exist_ok=True)
     staging=Path(tempfile.mkdtemp(prefix='.osm-tf3-create-',dir=target.parent)).resolve()
@@ -587,7 +589,7 @@ def main(argv=None):
     parser=argparse.ArgumentParser(description='Convert OSM XML for the standalone TF3 vanilla importer.')
     parser.add_argument('input',type=Path)
     destination=parser.add_mutually_exclusive_group(required=True)
-    destination.add_argument('--mod',type=Path,help='Installed druttzen_osm_vanilla folder')
+    destination.add_argument('--mod',type=Path,help='Installed TF3-OSM-Importer-Mod folder')
     destination.add_argument('--output',type=Path,help='Standalone Lua dataset file')
     destination.add_argument('--new-mod',type=Path,help='Create a complete standalone mod folder')
     parser.add_argument('--settings',type=Path,help='JSON conversion settings or app profile')

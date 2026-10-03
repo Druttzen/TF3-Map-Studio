@@ -123,8 +123,11 @@ class DesktopTests(unittest.TestCase):
 
     def test_new_mod_is_self_contained_and_does_not_overwrite(self):
         with tempfile.TemporaryDirectory() as folder:
-            target=Path(folder)/c.MOD_ID
+            target=Path(folder)/c.MOD_FOLDER
             report=c.export_new_mod(SAMPLE,target,None,[1000,1000])
+            self.assertEqual(target.name,'tf3_osm_importer_mod')
+            self.assertEqual(json.loads((target/'mod.json').read_text())['modId'],'druttzen_osm_vanilla')
+            self.assertEqual(json.loads((target/'_metadata/modinfo.json').read_text())['name'],'TF3-OSM-Importer-Mod')
             self.assertTrue((target/'content/osm/panel.res.lua').is_file()); self.assertTrue((target/'LICENSE').is_file())
             self.assertEqual(Path(report['output']),target/'content/osm/dataset.lua')
             self.assertEqual(json.loads((target/'import-report.json').read_text())['output'],report['output'])
@@ -133,11 +136,21 @@ class DesktopTests(unittest.TestCase):
 
     def test_cancel_new_mod_leaves_no_partial_mod(self):
         with tempfile.TemporaryDirectory() as folder:
-            target=Path(folder)/c.MOD_ID; event=threading.Event()
+            target=Path(folder)/c.MOD_FOLDER; event=threading.Event()
             def progress(pct,stage,detail):
                 if stage=='Generating scenery': event.set()
             with self.assertRaises(Cancelled): c.export_new_mod(SAMPLE,target,None,[1000,1000],cancel=event,progress=progress)
             self.assertFalse(target.exists()); self.assertEqual(list(Path(folder).iterdir()),[])
+
+    def test_existing_legacy_and_renamed_folders_accept_dataset_updates_by_mod_id(self):
+        import shutil
+        with tempfile.TemporaryDirectory() as folder:
+            for name in ('druttzen_osm_vanilla','tf3_osm_importer_mod'):
+                target=Path(folder)/name
+                shutil.copytree(c.template_folder(),target)
+                report=c.export(SAMPLE,target,None,[1000,1000])
+                self.assertEqual(Path(report['output']),target/'content/osm/dataset.lua')
+                self.assertEqual(json.loads((target/'mod.json').read_text())['modId'],'druttzen_osm_vanilla')
 
     def test_profile_roundtrip_preserves_all_options_and_bounds(self):
         profile={'version':1,'options':normalize_options({'tree_jitter':.1,'seed':'Sweden','features':{'roads':False},'import_batch_size':25}),

@@ -2,7 +2,7 @@
 
 Preview 0.12 converts OpenStreetMap XML to a Transport Fever 3 importer dataset using vanilla resource references. The desktop app can download a selected OSM area, save its overview PNG, export a Lua map, update an installed importer mod, or create a standalone mod folder.
 
-The `mod/druttzen_osm_vanilla` folder includes importer revision 6 and a fictional demonstration dataset. Its native panel has separate scrolling areas for progress/messages and commands. **Verify built objects** compares saved import records with live nodes, roads, rails and model groups without building anything. **Show place names** displays recorded marker names and coordinates; TF3 may remove model names when optimizing them into asset groups. The sample completed in TF3 Windows build 40408. Ground appearance, actual vehicle routes and large real-world imports still require testing.
+The `mod/tf3_osm_importer_mod` folder includes importer revision 6 and a fictional demonstration dataset. Its native panel has separate scrolling areas for progress/messages and commands. **Verify built objects** compares saved import records with live nodes, roads, rails and model groups without building anything. **Show place names** displays recorded marker names and coordinates; TF3 may remove model names when optimizing them into asset groups. The sample completed in TF3 Windows build 40408. Ground appearance, actual vehicle routes and large real-world imports still require testing.
 
 Revision 5 checks large datasets in blocks of at most 1000 items and rejects prepared dimensions larger than the game map before scanning geometry. **Automatic pause** stops each run after a chosen number of successful build steps. New large datasets default to 100 steps; one step is one segment, one scenery batch or one marker. Save and inspect each run before resuming. Matching map dimensions alone do not establish heightmap alignment.
 
@@ -44,3 +44,5 @@ powershell -File build.ps1
 `build.ps1` creates `dist/OSM-TF3-Vanilla-Converter.exe` and bundles the mod template and third-party notices. To use another Python interpreter, pass `-Python` to the build script. Tests use Lupa to simulate Lua and TF3 callbacks; they do not replace an actual in-game import test.
 
 The source is GPL-3.0. See [LICENSE](LICENSE), [NOTICE.txt](NOTICE.txt) and [Pillow's notices](third-party/Pillow-LICENSE.txt).
+
+The mod is displayed in TF3 as **TF3-OSM-Importer-Mod** and new exports create `tf3_osm_importer_mod`. Its internal ID stays `druttzen_osm_vanilla` for existing saves. Update installed mod also accepts the older folder name.

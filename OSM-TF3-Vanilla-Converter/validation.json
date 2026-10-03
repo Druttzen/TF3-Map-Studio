@@ -2,7 +2,7 @@
   "version": "0.12-preview",
   "gameBuildInspected": "25533170",
   "automatedTests": {
-    "passed": 220,
+    "passed": 221,
     "failed": 0,
     "scope": [
       "OSM XML conversion",
@@ -67,12 +67,13 @@
       "Saved 0.5 m shallow-bed samples, Water Dirty resource, read-only height/depth audit and existing network protection",
       "OSM water source graph retained independently of geometry selection; raw tags, WGS84 coordinates, node order, member roles and nested relation topology",
       "Water metadata roundtrip through downloaded XML, persisted Lua and JSON report; original height/datum tags and matching checksums",
-      "Missing references, untyped water, dam/weir and point metadata; broken multipolygon outer suppression, shared/nested members and deeply nested or cyclic source retention"
+      "Missing references, untyped water, dam/weir and point metadata; broken multipolygon outer suppression, shared/nested members and deeply nested or cyclic source retention",
+      "Display-name and installation-folder rename; original mod/resource identity preserved, archive layout and new/legacy folder dataset updates checked"
     ],
     "subtestsPassed": 190,
     "modules": {
       "test_converter": 23,
-      "test_desktop": 17,
+      "test_desktop": 18,
       "test_game_scripts": 55,
       "test_hydrology": 22,
       "test_map_sizes": 5,
@@ -256,7 +257,7 @@
     "build": "passed",
     "nativeUIThisVersionVerified": false,
     "nativeUIScope": "Current executable UI has not been tested. Historical UI evidence remains separate.",
-    "sha256": "22ba061afc0c9808d17b4b5fe336cf42d7069da4d0b0b830a877093fb0e00bd1",
+    "sha256": "ea6d19bd02bd98de60100c3cc9a74a321289523fddc5a75ea9f4f67ce2f775c3",
     "embeddedConverterMatchesSource": true,
     "embeddedHydrologyMatchesSource": true
   },
@@ -446,5 +447,15 @@
       "sourceSha256": "8aaa930f79833090fc9322beb9851834840c42a35639ebe96beed29c88ba9341",
       "luaSha256": "a552aa2e9918920eb608f9ebf7921bda3cc0ce5889e48105a6f06f32652429db"
     }
+  },
+  "nameUpdate": {
+    "displayName": "TF3-OSM-Importer-Mod",
+    "folder": "tf3_osm_importer_mod",
+    "modId": "druttzen_osm_vanilla",
+    "resourceAndEventNamespaceChanged": false,
+    "installedFolderRenamedWhileTF3Closed": true,
+    "installedDatasetAndRuntimeUnchanged": true,
+    "nativeModBrowserNameVerified": false,
+    "definition": "https://wiki.transportfever3.com/doku.php?id=modding:general:moddefinition"
   }
 }

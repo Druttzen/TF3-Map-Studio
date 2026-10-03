@@ -75,9 +75,9 @@ actual vehicle routes remain preview work.
 
 INSTALL
 1. Extract the archive to a normal folder.
-2. Copy mod\druttzen_osm_vanilla into the game's LOCAL mods folder:
+2. Copy mod\tf3_osm_importer_mod into the game's LOCAL mods folder:
    <Steam folder>\userdata\<your Steam user ID>\3493540\local\mods\
-   The result must be ...\mods\druttzen_osm_vanilla\mod.json.
+   The result must be ...\mods\tf3_osm_importer_mod\mod.json.
    Do not put it under TF2's mods folder or overwrite the original TF2 mod.
 3. Launch OSM-TF3-Vanilla-Converter.exe. It needs no Python installation.
    The exe includes the standalone mod scripts and can create a new mod itself.
@@ -86,10 +86,10 @@ INSTALL
    - Save Lua map file: exports your chosen .lua file and a .report.json beside it.
      No game or installed mod is required. This is an importer dataset, not a
      heightmap or a game save. To import, use it as content/osm/dataset.lua.
-   - Update installed mod: choose the existing druttzen_osm_vanilla folder.
+   - Update installed mod: choose the existing tf3_osm_importer_mod folder (the old folder is also accepted).
      Writes content/osm/dataset.lua and import-report.json. Other files stay.
    - Create standalone mod folder: choose a parent folder. The app creates
-     druttzen_osm_vanilla with the importer, panel, dataset and license.
+     tf3_osm_importer_mod with the importer, panel, dataset and license.
      An existing mod folder is never replaced by this mode.
 6. Choose TF3 map size and format, or enter custom width and height in metres.
    All eight sizes are available: Tiny, Small, Medium, Large, Very Large,
@@ -255,7 +255,7 @@ Or use the command-line converter:
 
 python tools/converter.py examples/sample.osm --output map.lua --size 1000 1000
 
-Or use --mod <installed-folder> or --new-mod <new-druttzen_osm_vanilla-folder>.
+Or use --mod <installed-folder> or --new-mod <new-tf3_osm_importer_mod-folder>.
 --settings <profile.json> applies saved desktop options; --bounds overrides XML.
 
 Development checks/build use the optional requirements-dev.txt dependencies:
@@ -351,3 +351,9 @@ The JSON report includes that graph plus its feature records at
 waterMetadata.features; waterFeatures remains a numeric count in the report.
 Reconvert original OSM/XML to add metadata to an older export. Do not replace
 the dataset of an import that has already started in the game.
+
+MOD NAME
+The game displays TF3-OSM-Importer-Mod. New mod folders are named
+tf3_osm_importer_mod. The internal ID remains druttzen_osm_vanilla
+for existing saves; update either old or renamed folders by selecting
+the existing installation. Install only one copy.

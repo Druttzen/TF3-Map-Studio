@@ -7,7 +7,7 @@ import unittest
 from lupa import LuaRuntime
 from test_game_scripts import MOCK,load_script
 
-CONTENT=Path(__file__).resolve().parents[1]/'mod/druttzen_osm_vanilla/content/osm'
+CONTENT=Path(__file__).resolve().parents[1]/'mod/tf3_osm_importer_mod/content/osm'
 
 UI_MOCK=r'''
 recipes={}; recipeContracts={}; emitted={}; added=0; removed=0; visible=false
