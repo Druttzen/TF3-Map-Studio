@@ -128,6 +128,30 @@ def test_actual_unit_and_node_migration_preserves_input():
     assert nodes[2]['animations']['front_forward_parts_on']['params']['id'].endswith('front_forward_parts_on.ani')
 
 
+def test_empty_blinking_lists_are_safe_but_active_blinking_is_blocked():
+    d=model()
+    for key in ('blinkingLights0','blinkingLights1'):
+        d['metadata']['railVehicle']['configs'][0][key]=[]
+    before=deepcopy(d)
+    assert port_model(d,lambda ref,kind:ref,Native())['version']==2
+    assert d==before
+    d['metadata']['railVehicle']['configs'][0]['blinkingLights1']=[1]
+    with pytest.raises(ValueError,match='Non-empty blinkingLights1'):
+        port_model(d,lambda ref,kind:ref,Native())
+
+
+def test_empty_old_compartment_schema_retains_load_config_structure():
+    d=model();t=d['metadata']['transportVehicle']
+    del t['compartmentsList'];t['compartments']=[[[],[]],[[]]]
+    result=port_model(d,lambda ref,kind:ref,Native())
+    compartments=result['metadata']['transportVehicle']['compartments']
+    assert [len(c['loadConfigs']) for c in compartments]==[2,1]
+    assert all(load['cargoEntry']['capacity']==0 for c in compartments for load in c['loadConfigs'])
+    t['compartments']=[[{'capacity':10}]]
+    with pytest.raises(ValueError,match='capacity/load port'):
+        port_model(d,lambda ref,kind:ref,Native())
+
+
 @pytest.mark.parametrize('kind',['unknown_metadata','capacity','node','hidden_node','emissions','diesel'])
 def test_unsupported_behavior_is_blocked(kind):
     d=model(); m=d['metadata']

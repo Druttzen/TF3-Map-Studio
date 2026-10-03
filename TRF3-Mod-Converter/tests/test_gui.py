@@ -69,7 +69,7 @@ def test_edit_requires_fresh_preview(app, tmp_path):
 
 def test_unsupported_callback_shown_and_convert_disabled(app, tmp_path):
     path = tmp_path / "mod.lua"
-    path.write_text('return {info={name="Callbacks"},runFn=function() end}')
+    path.write_text('return {info={name="Callbacks"},runFn=function() print("run") end}')
     app._set_source(str(path))
     app.inspect()
     wait_for_work(app)

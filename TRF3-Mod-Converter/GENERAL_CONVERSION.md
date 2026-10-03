@@ -27,6 +27,8 @@ Steps 1–6 describe the complete intended pipeline. Version 0.5 implements cate
 
 ## Category-specific logic
 
+Version 0.6 implements a separate, reusable sound adapter for recognized TF2 update expressions. It emits static TF3 sound definitions using the installed native update script, preserves custom audio, checks base-audio targets and migrates clip paths and reference-weight units. It does not execute or translate arbitrary source scripts. Integration into complete packages currently uses the electric-locomotive exporter; other vehicle exporters still need implementation. Legacy inspection now distinguishes TF2 resource-type lookup from native TF3 relative lookup.
+
 | Content | Required adapter work |
 |---|---|
 | Road vehicles: buses, trucks, cars and horse vehicles | Land dynamics, wheels/steering, capacities, doors, lights and traffic/depot behavior. |

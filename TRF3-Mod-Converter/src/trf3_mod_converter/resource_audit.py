@@ -172,6 +172,24 @@ def audit_resources(root: Path, mod_id: str, *, source_id: str | None = None,
             issue(f"Cannot change modId: content/{relative} still references {old_id}::; migrate it explicitly.")
     result["unverified"].append("Computed references, external/base-game resources, binary formats and gameplay APIs require TF3 testing.")
 
+    legacy_origins = set()
+    if content.name == 'res':
+        for origin, tree in trees.items():
+            if not origin.startswith(('models/model/','models/material/')):
+                continue
+            native_material = any(isinstance(n,nodes.Field) and isinstance(n.key,nodes.Name)
+                                  and n.key.id in {'fragmentSamplers','fragmentProperties','vertexProperties'}
+                                  for n in ast.walk(tree))
+            definitions = [n for n in tree.body.body if isinstance(n,nodes.Function)
+                           and isinstance(n.name,nodes.Name) and n.name.id == 'data']
+            returns = [n for n in definitions[0].body.body if isinstance(n,nodes.Return)] if len(definitions)==1 else []
+            table = returns[0].values[0] if len(returns)==1 and len(returns[0].values)==1 else None
+            version_one = isinstance(table,nodes.Table) and any(
+                isinstance(f.key,nodes.Name) and not f.between_brackets and f.key.id=='version'
+                and type(v := _value(f.value)) in (int,float) and v==1 for f in table.fields)
+            if origin.endswith('.mdl') and version_one or origin.endswith('.mtl') and not native_material:
+                legacy_origins.add(origin)
+
     def check(origin: str, reference: str, module: bool = False, force: bool = False) -> None:
         if not reference or not (force or module or "::" in reference or reference.split("@", 1)[0].endswith(ASSET_ENDINGS)):
             return
@@ -187,6 +205,31 @@ def audit_resources(root: Path, mod_id: str, *, source_id: str | None = None,
             namespace, ref = ref.split("::", 1)
         row = {"source": origin or "mod.json", "reference": reference}
         result["references"].append(row)
+        legacy_root = None
+        if origin.startswith('config/sound_set/') and reference.endswith(('.wav','.ogg')):
+            legacy_root = 'audio/effects'
+        elif origin in legacy_origins:
+            legacy_root = next((prefix for ending,prefix in (
+                ('.dds','textures'),('.tga','textures'),('.hdr','textures'),
+                ('.msh','models/mesh'),('.mtl','models/material'),('.mdl','models/model'),
+                ('.ani','models/animation'),('.wav','audio/effects'),('.ogg','audio/effects'))
+                if reference.endswith(ending)),None)
+        if legacy_root and '::' not in reference and not module:
+            # TF2 uses resource-type roots with a base-game/mod fallback,
+            # whereas TF3 references are relative to the containing resource.
+            if '\\' in reference or reference.startswith('/') or '..' in PurePosixPath(reference).parts:
+                row['status'] = 'invalid'
+                issue(f"{origin}: unsafe TF2 resource reference {reference!r}.")
+                return
+            target = legacy_root+'/'+reference
+            row['status'] = 'legacy_local' if target in files else 'legacy_base_or_missing'
+            if target in files: row['target'] = content.name+'/'+target
+            else: result['unverified'].append(f"{origin}: TF2 resource {reference!r} may come from the TF2 base game or another mod; its availability needs separate verification.")
+            if origin.startswith('config/sound_set/'):
+                issue(f"{origin}: TF2 sound set needs migration to a TF3 .snd resource and updateScript; use the supported vehicle port, not metadata-only conversion.")
+            else:
+                issue(f"{origin}: TF2 resource references need explicit TF3 migration; metadata-only conversion cannot rewrite their resource-type roots.")
+            return
         if "\\" in ref or ".." in PurePosixPath(ref).parts or not re.fullmatch(r"/?[a-z0-9_./@-]+", ref):
             row["status"] = "invalid"
             issue(f"{row['source']}: invalid TF3 resource reference {reference!r}.")

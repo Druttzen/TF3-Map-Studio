@@ -20,6 +20,7 @@ from luaparser import ast, astnodes as lua
 
 from .converter import _check_paths, _copy_files, _linked, convert_mod, prepare_mod
 from .lua_metadata import UnsupportedValue, load_lua_table
+from .tf2_sound_port import port_sound_set
 
 
 def literal(value: Any, where: str = "data") -> Any:
@@ -93,7 +94,11 @@ class NativeInventory:
         with zipfile.ZipFile(f) as z: return z.read(n)
 
     def reference(self, path: str) -> str:
-        self.read(path + '.lua' if path.endswith(('.snd', '.trf')) else path)
+        resource = path.split('@', 1)[0]
+        candidates = [resource+'.lua',resource+'.tl'] if resource.endswith(('.snd','.trf','.script')) else [resource]
+        found = next((p for p in candidates if p in self.files), None)
+        if found is None: raise ValueError(f"Installed TF3 resource missing: {resource}")
+        self.read(found)
         self.references.add(path)
         return '::/' + path
 
@@ -150,7 +155,10 @@ def port_model(data: dict, resolve, native: NativeInventory) -> dict:
     bogies = []
     for li, (lod, config) in enumerate(zip(result['lods'], configs)):
         reject_unknown(lod, {'node','static','visibleFrom','visibleTo'}, 'LOD')
-        reject_unknown(config, {'axles','fakeBogies','frontForwardParts','frontBackwardParts','backForwardParts','backBackwardParts','innerForwardParts','innerBackwardParts'}, 'rail config')
+        reject_unknown(config, {'axles','fakeBogies','frontForwardParts','frontBackwardParts','backForwardParts','backBackwardParts','innerForwardParts','innerBackwardParts','blinkingLights0','blinkingLights1'}, 'rail config')
+        for key in ('blinkingLights0','blinkingLights1'):
+            if key in config and config[key] != []:
+                raise ValueError(f'Non-empty {key} requires a separate animation port')
         nodes = list(flatten(lod['node']))
         names = set()
         for i, node in enumerate(nodes):
@@ -192,7 +200,7 @@ def port_model(data: dict, resolve, native: NativeInventory) -> dict:
     m['landVehicle'] = {'engines':rail['engines'], 'topSpeed':rail['topSpeed'], 'weightEmpty':rail['weight']*1000, 'weightMaxPayload':0}
     sound = rail.get('soundSet', {})
     reject_unknown(sound, {'name','horn'}, 'soundSet')
-    m['soundConfig'] = {'soundSet':{'name':native.reference(f"vehicle/train/shared/sound/{sound['name']}.snd")}}
+    m['soundConfig'] = {'soundSet':{'name':resolve(sound['name'], 'sound_set')}}
     if sound.get('horn'): m['soundConfig']['effects'] = {'horn':[resolve(sound['horn'], 'audio')]}
     m['railVehicle'] = {'config': {'axles':wheel_names, 'fakeBogies':bogies}}
     m['transformatorConfig'] = {'transformator':{'name':native.reference('vehicle/train/shared/default_train.trf')}}
@@ -209,10 +217,18 @@ def port_model(data: dict, resolve, native: NativeInventory) -> dict:
         if type(index) is not int or not 0 <= index < len(all_nodes[0]): raise ValueError("Invalid crew seat node")
         s['group'] = all_nodes[0][index]['name']
     t = m['transportVehicle']
-    reject_unknown(t, {'carrier','compartmentsList','groupFileName','loadSpeed','multipleUnitOnly','reversible'}, 'transportVehicle')
+    reject_unknown(t, {'carrier','compartmentsList','compartments','groupFileName','loadSpeed','multipleUnitOnly','reversible'}, 'transportVehicle')
     if t['carrier'] != 'RAIL': raise ValueError("Only rail transport supported")
     t.update(transportModes=['TRAIN','ELECTRIC_TRAIN'], engineTransportModes=['ELECTRIC_TRAIN'], comfortFactor=0, filterTags=[] if t.pop('multipleUnitOnly', False) else ['default'])
-    compartments = t.pop('compartmentsList', [])
+    if 'compartments' in t and 'compartmentsList' in t:
+        raise ValueError('Conflicting TF2 compartment schemas need manual review')
+    if 'compartments' in t:
+        old_compartments = t.pop('compartments')
+        if not isinstance(old_compartments,list) or any(not isinstance(c,list) or any(load != [] for load in c) for c in old_compartments):
+            raise ValueError('Non-empty legacy TF2 compartments need a capacity/load port')
+        compartments = [{'loadConfigs':[{} for load in c]} for c in old_compartments]
+    else:
+        compartments = t.pop('compartmentsList', [])
     for compartment in compartments:
         for load in compartment.get('loadConfigs', []):
             if load.get('cargoEntries'): raise ValueError("Passenger/cargo capacities are not supported by this locomotive profile")
@@ -237,7 +253,7 @@ BASE_TEXTURES = {
     'default_metal_gloss_ao.tga':'vehicle/shared/mat/tex/default_metal_gloss_ao.dds',
 }
 ROOTS = {'model':'models/model', 'mesh':'models/mesh', 'material':'models/material',
-         'animation':'models/animation', 'texture':'textures', 'audio':'audio/effects'}
+         'animation':'models/animation', 'texture':'textures', 'audio':'audio/effects', 'sound_set':'config/sound_set'}
 
 
 def snapshot(root: Path) -> dict[str, str]:
@@ -279,10 +295,19 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
         raise ValueError('Repairs must map texture reference strings to source texture paths')
     mapping = {p.relative_to(root/'res').as_posix():checked_name(p.relative_to(root/'res').as_posix())
                for p in (root/'res').rglob('*') if p.is_file()}
+    sound_files = {old for old in mapping if old.startswith('config/sound_set/') and old.endswith('.lua')}
+    for old in sound_files:
+        mapping[old] = mapping[old][:-4]+'.snd.lua'
     if len(set(mapping.values())) != len(mapping): raise ValueError("Normalized resource filenames collide")
     external = set()
     used_repairs = set()
     def resolve(ref: str, kind: str) -> str:
+        if not isinstance(ref,str): raise ValueError(f"Invalid TF2 {kind} reference")
+        if kind == 'sound_set':
+            old = ROOTS[kind]+'/'+ref+'.lua'
+            if old in sound_files: return mod_id+'::/'+mapping[old][:-4]
+            checked_name(ref)
+            return native.reference(f'vehicle/train/shared/sound/{ref}.snd')
         if kind == 'texture' and ref in repairs:
             used_repairs.add(ref)
             ref = repairs[ref]
@@ -291,6 +316,14 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
         if kind == 'texture' and ref in BASE_TEXTURES:
             target = BASE_TEXTURES[ref]; external.add(target)
             return native.reference(target)
+        if kind == 'audio' and ref.startswith('vehicle/'):
+            checked_name(ref)
+            # TF3's native train sound sets use the former TF2 vehicle clips
+            # under this explicit root. Every referenced clip must exist.
+            target = 'vehicle/train/shared/sound/'+ref[len('vehicle/'):]
+            if target in native.files:
+                external.add(target)
+                return native.reference(target)
         raise ValueError(f"Unresolved TF2 {kind} reference: {ref}. Supply an explicit repair; no asset is guessed.")
     translations = literal(load_lua_table((root/'strings.lua').read_text(encoding='utf-8-sig'))) if (root/'strings.lua').exists() else {}
     if any(not isinstance(locale, dict) or any(not isinstance(k,str) or not isinstance(v,str) for k,v in locale.items()) for locale in translations.values()):
@@ -318,10 +351,15 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
     for old in sorted(mapping):
         p = root/'res'/old
         suffix = p.suffix.lower()
+        if old in sound_files:
+            transformed[mapping[old]] = emit(port_sound_set(p.read_text(encoding='utf-8-sig'), resolve, native))
+            originals[old] = p.read_bytes()
+            counts['soundSets'] = counts.get('soundSets',0)+1
+            continue
         if suffix in ('.lua', '.tl', '.script', '.con', '.trf', '.snd'):
             raise ValueError(f'Custom behavior resource needs a manual port: {old}')
         if suffix not in ('.mdl','.mtl','.msh','.ani'): continue
-        d = literal(load_lua_table(p.read_text(encoding='utf-8-sig')), old)
+        d = literal(load_lua_table(p.read_text(encoding='utf-8-sig'), constant_numbers=True), old)
         if suffix == '.mdl':
             d = port_model(d, resolve, native); counts['models'] += 1
             model_path = old[len('models/model/'):-4]
@@ -352,10 +390,17 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
     with tempfile.TemporaryDirectory(prefix='tf2_port_',dir=destination.parent) as tmp:
         stage = Path(tmp)/'draft'; stage.mkdir()
         _copy_files(root,stage,{destination,Path(tmp)},notify)
+        # Build fresh directories: case-only file renames on Windows leave
+        # uppercase parent folders intact, which TF3 would still reject.
+        normalized = stage/'_normalized_content'; normalized.mkdir()
         for old, new in mapping.items():
-            if old != new:
-                target = stage/'content'/new; target.parent.mkdir(parents=True,exist_ok=True)
-                (stage/'content'/old).rename(target)
+            target = normalized/new; target.parent.mkdir(parents=True,exist_ok=True)
+            shutil.copy2(stage/'content'/old,target)
+        content = (stage/'content').resolve()
+        if content.parent != stage.resolve() or content.name != 'content':
+            raise ValueError('Unsafe staged content path')
+        shutil.rmtree(content)
+        normalized.rename(stage/'content')
         for relative,text in transformed.items(): (stage/'content'/relative).write_text(text,encoding='utf-8')
         for old,data in originals.items():
             target = stage/'_port_originals/res'/old;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(data)

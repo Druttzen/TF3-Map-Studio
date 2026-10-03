@@ -63,7 +63,11 @@ trf3-mod-converter port-tf2 "F:\TF2\mods\electric_locomotive" "F:\exports\electr
 
 `--repairs repairs.json` accepts explicit texture substitutions within the original mod, for example `{"missing.dds":"existing.dds"}`. Missing resources are never guessed. Unused repair entries are rejected. The report records every substitution. The port checks native material properties and base resources against the chosen installation; game assets are referenced rather than copied.
 
-This profile supports literal electric-locomotive resources with no passenger/cargo capacity, custom crew models, custom behavior resources, or meaningful lifecycle callbacks. Only provably empty lifecycle functions can be removed. Unsupported fields stop export. Other TF2 vehicle types need separate profiles.
+This profile supports literal electric-locomotive resources with no passenger/cargo capacity, custom crew models, arbitrary behavior resources, or meaningful lifecycle callbacks. Only provably empty lifecycle functions can be removed. Unsupported fields stop export. Other TF2 vehicle types need separate profiles.
+
+Version 0.6 also migrates custom TF2 sound sets with direct tracks/events tables and recognized update patterns: literal gain/pitch, speed01 sample curves (including constant audioutil.plotSqrt), squeal, brake and clacks. The independent sound adapter preserves order, distances and curves, converts clack reference weights from tonnes to kilograms, and uses the installed TF3 soundset_default script. Local clips retain their bytes and get namespaced lowercase paths. The known TF2 train base-audio root maps to the installed TF3 shared train sound directory; every target must exist. TF3 base clips can differ from TF2 clips. Arbitrary helpers, computed controls and side effects stop export. Original sound-set text is archived. This adapter is reusable across vehicle profiles; the current complete exporter remains electric-locomotive only.
+
+The vehicle exporter can fold finite constant arithmetic and math.pow in resource tables without running Lua. Shadowed math bindings, undefined calculations and other calls are rejected. Uppercase source directories are rebuilt with lowercase names in the staged output, including on Windows. Path collisions stop export.
 
 The output must be outside the source mod. SHA-256 hashes verify source preservation; changed model/material text, `mod.lua` and `strings.lua` are retained in `_port_originals/`. Meshes, blobs, textures, audio and animation files are retained byte for byte, with resource paths normalized. `pathMapping`, `explicitRepairs`, `baseGameResources` and `portCounts` describe the migration in `conversion-report.json`. Store previews reuse original thumbnails. Default metal/gloss/AO references and automatic emissions follow the installed TF3 defaults; inspect their appearance and balancing in the game.
 
@@ -86,6 +90,8 @@ An existing modId is preserved when changing the display name or installation fo
 ## Resource and script checks (0.3)
 
 Preview and final staged export scan Lua/JSON text resources, models, mesh indexes, materials and animations without executing them. They resolve literal local resource paths relative to their referring file, absolute paths in the mod, and qualified mod paths. Missing local targets, forbidden parent paths, invalid resource names, UTF-8 BOMs, unparsable Lua resources and missing mesh blobs block export.
+
+TF2 sound clips, version-1 models and flat materials in the legacy layout use resource-type roots with a base-game fallback. Inspection records local legacy targets and unverified base/other-mod targets instead of falsely calling them missing relative TF3 files. Their required migration still blocks metadata-only conversion. Empty inline lifecycle callbacks are omitted with a warning; callbacks with behavior still require migration.
 
 Referenced lifecycle and literal .script callbacks are checked against keys returned by global data(). A provably missing or non-callable callback blocks conversion. Computed data() tables and Teal callbacks remain explicitly unverified. Literal ug_require calls are checked too; computed references, external mods, base-game resources, binary formats and gameplay APIs require further checks in TF3.
 

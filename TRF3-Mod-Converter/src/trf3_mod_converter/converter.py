@@ -177,6 +177,9 @@ def _normalize_mod_descriptor(raw: dict[str, Any]) -> ModDescriptor:
 
     def read(key: str, default: Any) -> Any:
         value = raw.get(key, default)
+        if key in {"preRunScript", "runScript", "postRunScript"} and isinstance(value, UnsupportedValue) and value.empty_callback:
+            descriptor.warnings.append(f"{key}: empty inline callback has no behavior and is omitted from TF3 metadata; original metadata is retained.")
+            return None
         if reason := _unsupported(value):
             descriptor.blockers.append(f"{key} contains {reason}.")
             return default
@@ -333,7 +336,7 @@ def inspect_mod(source: str | Path) -> ModDescriptor:
                 raise ValueError(f"{candidate.name}: {error}") from error
             def archive(value):
                 if isinstance(value, UnsupportedValue):
-                    return {"unsupportedLuaValue": value.reason}
+                    return {"unsupportedLuaValue": value.reason, **({"emptyCallback": True} if value.empty_callback else {})}
                 if isinstance(value, dict):
                     return {str(k): archive(v) for k, v in value.items()}
                 if isinstance(value, list):
