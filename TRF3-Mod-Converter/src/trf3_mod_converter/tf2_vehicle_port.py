@@ -21,6 +21,7 @@ from luaparser import ast, astnodes as lua
 from .converter import _check_paths, _copy_files, _linked, convert_mod, prepare_mod
 from .lua_metadata import UnsupportedValue, load_lua_table
 from .tf2_sound_port import port_sound_set
+from .base_resources import BASE_TEXTURES, ROOTS, BaseResourceResolver, TF2Inventory, find_tf2_game, source_resource
 
 
 def literal(value: Any, where: str = "data") -> Any:
@@ -244,18 +245,6 @@ def port_model(data: dict, resolve, native: NativeInventory) -> dict:
     return result
 
 
-BASE_TEXTURES = {
-    'models/vehicle/dirt_albedo.dds':'vehicle/shared/mat/tex/dirt_albedo.dds',
-    'models/vehicle/dirt_normal.dds':'vehicle/shared/mat/tex/dirt_normal.dds',
-    'models/vehicle/rust_albedo.dds':'vehicle/shared/mat/tex/rust_albedo.dds',
-    'models/vehicle/rust_normal.dds':'vehicle/shared/mat/tex/rust_normal.dds',
-    'models/vehicle/train/emissive/train_all_lights.dds':'vehicle/train/emissive/tex/train_all_lights.dds',
-    'default_metal_gloss_ao.tga':'vehicle/shared/mat/tex/default_metal_gloss_ao.dds',
-}
-ROOTS = {'model':'models/model', 'mesh':'models/mesh', 'material':'models/material',
-         'animation':'models/animation', 'texture':'textures', 'audio':'audio/effects', 'sound_set':'config/sound_set'}
-
-
 def snapshot(root: Path) -> dict[str, str]:
     result = {}
     for p in sorted(root.rglob('*')):
@@ -270,7 +259,8 @@ def snapshot(root: Path) -> dict[str, str]:
 def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str | Path,
                  mod_id: str, name: str, repairs: dict[str, str] | None = None,
                  overwrite: bool = False, progress=None, author: str | None = None,
-                 revision: int | None = None, summary: str | None = None) -> dict:
+                 revision: int | None = None, summary: str | None = None,
+                 tf2_game: str | Path | None = None) -> dict:
     """Export a separate native-format draft; repairs must be explicitly supplied.
 
     The report never asserts native game compatibility. Installed game resources
@@ -289,6 +279,9 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
     for p in root.rglob('*'):
         if _linked(p): raise ValueError(f"Linked source is not supported: {p}")
     native = NativeInventory(Path(tf3_game))
+    tf2_path = Path(tf2_game) if tf2_game is not None else find_tf2_game(root, Path(tf3_game))
+    tf2 = TF2Inventory(tf2_path) if tf2_path is not None else None
+    base = BaseResourceResolver(native, tf2, family='train')
     before = snapshot(root)
     repairs = repairs or {}
     if not isinstance(repairs,dict) or any(not isinstance(k,str) or not isinstance(v,str) for k,v in repairs.items()):
@@ -299,32 +292,29 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
     for old in sound_files:
         mapping[old] = mapping[old][:-4]+'.snd.lua'
     if len(set(mapping.values())) != len(mapping): raise ValueError("Normalized resource filenames collide")
-    external = set()
     used_repairs = set()
+    omitted_borrowed = set()
+    borrowed_sound_sets = {}
+    for old in sorted(sound_files):
+        ref = old[len(ROOTS['sound_set'])+1:-4]
+        if base.is_borrowed('sound_set', ref, root/'res'/old):
+            borrowed_sound_sets[old] = base.resolve('sound_set', ref, bundled=True)
+            omitted_borrowed.add(old)
     def resolve(ref: str, kind: str) -> str:
-        if not isinstance(ref,str): raise ValueError(f"Invalid TF2 {kind} reference")
-        if kind == 'sound_set':
-            old = ROOTS[kind]+'/'+ref+'.lua'
-            if old in sound_files: return mod_id+'::/'+mapping[old][:-4]
-            checked_name(ref)
-            return native.reference(f'vehicle/train/shared/sound/{ref}.snd')
+        source_resource(kind, ref)  # Reject unsafe input before looking up local or base assets.
         if kind == 'texture' and ref in repairs:
             used_repairs.add(ref)
             ref = repairs[ref]
-        old = ROOTS[kind]+'/'+ref
-        if old in mapping: return mod_id+'::/'+mapping[old]
-        if kind == 'texture' and ref in BASE_TEXTURES:
-            target = BASE_TEXTURES[ref]; external.add(target)
-            return native.reference(target)
-        if kind == 'audio' and ref.startswith('vehicle/'):
-            checked_name(ref)
-            # TF3's native train sound sets use the former TF2 vehicle clips
-            # under this explicit root. Every referenced clip must exist.
-            target = 'vehicle/train/shared/sound/'+ref[len('vehicle/'):]
-            if target in native.files:
-                external.add(target)
-                return native.reference(target)
-        raise ValueError(f"Unresolved TF2 {kind} reference: {ref}. Supply an explicit repair; no asset is guessed.")
+        old = source_resource(kind, ref)
+        if old in borrowed_sound_sets:
+            return borrowed_sound_sets[old]
+        if old in mapping:
+            if kind != 'sound_set' and base.is_borrowed(kind, ref, root/'res'/old):
+                replacement = base.resolve(kind, ref, bundled=True)
+                omitted_borrowed.add(old)
+                return replacement
+            return mod_id+'::/'+(mapping[old][:-4] if kind == 'sound_set' else mapping[old])
+        return base.resolve(kind, ref)
     translations = literal(load_lua_table((root/'strings.lua').read_text(encoding='utf-8-sig'))) if (root/'strings.lua').exists() else {}
     if any(not isinstance(locale, dict) or any(not isinstance(k,str) or not isinstance(v,str) for k,v in locale.items()) for locale in translations.values()):
         raise ValueError("Expected literal language/key/text translation tables")
@@ -349,6 +339,8 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
     originals = {}
     counts = {'models':0,'materials':0,'meshes':0,'animations':0}
     for old in sorted(mapping):
+        if old in borrowed_sound_sets:
+            continue
         p = root/'res'/old
         suffix = p.suffix.lower()
         if old in sound_files:
@@ -394,6 +386,8 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
         # uppercase parent folders intact, which TF3 would still reject.
         normalized = stage/'_normalized_content'; normalized.mkdir()
         for old, new in mapping.items():
+            if old in omitted_borrowed:
+                continue
             target = normalized/new; target.parent.mkdir(parents=True,exist_ok=True)
             shutil.copy2(stage/'content'/old,target)
         content = (stage/'content').resolve()
@@ -414,8 +408,10 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
         if descriptor.blockers: raise ValueError('Port validation failed:\n'+'\n'.join(descriptor.blockers[:25]))
         if snapshot(root) != before: raise ValueError("Source changed during porting; export cancelled")
         port_report = dict(source=str(root), portProfile='tf2_electric_locomotive', sourceUnchanged=True,
-                  portCounts=counts, pathMapping=mapping, explicitRepairs=repairs,
-                  baseGameResources=sorted(external | native.references), nativeTest='not_run',
+                  portCounts=counts, pathMapping={old:new for old,new in mapping.items() if old not in omitted_borrowed}, explicitRepairs=repairs,
+                  baseGameResources=sorted(native.references), nativeTest='not_run',
+                  baseResourceReplacements=base.replacements, omittedBorrowedResources=sorted(omitted_borrowed),
+                  tf2BaseInventory=str(tf2_path) if tf2_path is not None else None,
                   limitations=['Electric locomotives with literal resources and no cargo only.',
                                'Appearance, animation, audio, purchasing and operation require native TF3 verification.',
                                'The store preview reuses the original small thumbnail; it is not a newly rendered 3D store image.',

@@ -278,7 +278,7 @@ class ConverterApp:
             return
         from .tf2_vehicle_port import port_tf2_mod
         self.status.set("Porting TF2 locomotive resources…")
-        self.note.set("Checking the installed TF3 formats. Unknown behavior or missing resources stop export.")
+        self.note.set("Replacing borrowed game resources with verified TF3 equivalents. Unknown behavior or missing equivalents stop export.")
         self._run(lambda: port_tf2_mod(source,destination,tf3_game=game,name=overrides['name'],
                                       mod_id=overrides['mod_id'],repairs=repairs,overwrite=overwrite,
                                       author=overrides['author'],revision=overrides['revision'],summary=overrides['summary']),"converted")

@@ -29,6 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
     port.add_argument("source")
     port.add_argument("destination")
     port.add_argument("--tf3-game", required=True, help="Installed TF3 folder; native assets are referenced, never copied")
+    port.add_argument("--tf2-game", help="Installed TF2 folder for identifying borrowed assets; detected from Steam paths when omitted")
     port.add_argument("--name", required=True)
     port.add_argument("--mod-id", required=True)
     port.add_argument("--author")
@@ -61,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("Repairs must be a JSON object of source texture references and replacement paths")
             result = port_tf2_mod(args.source,args.destination,tf3_game=args.tf3_game,name=args.name,mod_id=args.mod_id,
                                   repairs=repairs,overwrite=args.overwrite,author=args.author,
-                                  revision=args.revision,summary=args.summary)
+                                  revision=args.revision,summary=args.summary,tf2_game=args.tf2_game)
             print(json.dumps(result,ensure_ascii=False,indent=2))
             return 0
         overrides = {key: getattr(args, key) for key in ("name", "author", "mod_id", "revision", "summary")}
