@@ -23,6 +23,7 @@ def main() -> None:
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
         bundle.write(root / "dist" / "TRF3-Mod-Converter.exe", "TRF3-Mod-Converter.exe")
         bundle.write(root / "README.md", "README.md")
+        bundle.write(root / "VALIDATION.md", "VALIDATION.md")
         bundle.write(root / "LICENSE", "LICENSE")
         for path in (root / "examples").rglob("*"):
             if path.is_file():

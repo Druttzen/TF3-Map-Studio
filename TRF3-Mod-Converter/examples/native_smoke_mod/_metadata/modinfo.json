@@ -1,0 +1,7 @@
+{
+    "name": "MapStudio Converter Smoke 0.3",
+    "summary": "Harmless converter smoke test; prints callback and captured-parameter evidence.",
+    "description": "Own test scripts only. Enable on a separate empty test map. Does not change gameplay or terrain.",
+    "authors": [{"name": "Druttzen", "role": "CREATOR"}],
+    "tags": ["Script Mod"]
+}

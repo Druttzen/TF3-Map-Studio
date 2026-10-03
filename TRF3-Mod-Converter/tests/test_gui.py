@@ -95,3 +95,40 @@ def test_desktop_error_can_be_corrected(app, tmp_path):
     app.inspect()
     wait_for_work(app)
     assert app.preview.revision == 4
+
+
+def test_metadata_selection_default_output_is_outside_source_mod(app, tmp_path):
+    source = tmp_path / 'source'
+    metadata = source / '_metadata/modinfo.json'
+    metadata.parent.mkdir(parents=True)
+    metadata.write_text('{"name":"Browser"}')
+    (source / 'mod.json').write_text('{"modId":"existing","revision":8}')
+    app._set_source(str(metadata))
+    assert app.variables['destination'].get() == str(tmp_path / 'source_converted')
+    app.inspect()
+    wait_for_work(app)
+    assert app.preview.target_mod_id == 'existing'
+    assert app.preview.revision == 8
+    assert 'RESOURCE CHECKS' in app.details.get('1.0', 'end')
+
+
+def test_desktop_port_uses_explicit_choices_and_metadata_overrides(app,tmp_path,monkeypatch):
+    from trf3_mod_converter import gui,tf2_vehicle_port
+    source=tmp_path/'source'; source.mkdir()
+    (source/'mod.lua').write_text('function data() return {info={name="Original"}} end')
+    app._set_source(str(source))
+    app.variables['name'].set('Draft')
+    app.variables['mod_id'].set('draft_test')
+    app.variables['author'].set('Override')
+    app.variables['revision'].set('4')
+    monkeypatch.setattr(gui.filedialog,'askdirectory',lambda **kwargs:str(tmp_path/'game'))
+    monkeypatch.setattr(gui.filedialog,'askopenfilename',lambda **kwargs:'')
+    observed={}
+    def port(source,destination,**kwargs):
+        observed.update(kwargs)
+        return {'destination':destination,'nativeTest':'not_run'}
+    monkeypatch.setattr(tf2_vehicle_port,'port_tf2_mod',port)
+    app.port_tf2(); wait_for_work(app)
+    assert observed['mod_id']=='draft_test' and observed['repairs'] is None
+    assert observed['author']=='Override' and observed['revision']==4
+    assert app.report['nativeTest']=='not_run'

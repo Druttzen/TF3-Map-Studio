@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import shutil
 import tempfile
@@ -11,6 +12,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .lua_metadata import UnsupportedValue, load_lua_table
+from .filesystem import linked as _linked
+from .resource_audit import audit_resources
 
 _load_lua_table = load_lua_table
 Progress = Callable[[str], None]
@@ -53,6 +56,12 @@ class ModDescriptor:
     warnings: list[str] = field(default_factory=list)
     blockers: list[str] = field(default_factory=list)
     metadata_files: list[str] = field(default_factory=list)
+    script_configs: dict[str, dict] = field(default_factory=dict)
+    native_mod_fields: dict = field(default_factory=dict)
+    native_info_fields: dict = field(default_factory=dict)
+    source_metadata: dict = field(default_factory=dict)
+    source_id: str = ""
+    resource_audit: dict = field(default_factory=dict)
 
     @property
     def target_mod_id(self) -> str:
@@ -63,32 +72,34 @@ class ModDescriptor:
         return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "converted_mod"
 
     def as_mod_json(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {
+        payload: dict[str, Any] = {**deepcopy(self.native_mod_fields), **{
             "modId": self.target_mod_id,
             "revision": self.revision,
             "severityAdd": self.severity_add,
             "severityRemove": self.severity_remove,
             "visible": self.visible,
             "cosmetic": self.cosmetic,
-        }
+        }}
         for key in ("dependencies", "incompatibilities", "params"):
             value = getattr(self, key)
-            if value is not None:
+            if value is not None or key in payload:
                 payload[key] = deepcopy(value)
         for key, value in (("preRunScript", self.pre_run_script), ("runScript", self.run_script), ("postRunScript", self.post_run_script)):
-            if value:
-                payload[key] = {"fileName": value}
+            if value is not None:
+                payload[key] = {**deepcopy(self.script_configs.get(key, {})), "fileName": value}
+            elif key in payload:
+                payload[key] = None
         return payload
 
     def as_modinfo_json(self) -> dict[str, Any]:
-        payload = {
+        payload = {**deepcopy(self.native_info_fields), **{
             "authors": deepcopy(self.authors),
-            "description": self.description or self.summary,
+            "description": self.description,
             "name": self.name,
             "summary": self.summary,
             "tags": self.tags,
             "url": self.url,
-        }
+        }}
         if self.localization:
             payload["localization"] = deepcopy(self.localization)
         if self.modinfo_dependencies:
@@ -105,12 +116,17 @@ class ModDescriptor:
             "warnings": self.warnings,
             "blockers": self.blockers,
             "canConvert": not self.blockers,
+            "sourceModId": self.source_id or self.target_mod_id,
+            "resourceAudit": self.resource_audit,
+            "sourceMetadata": self.source_metadata,
         }
 
 
 def _read_json_file(path: Path) -> dict[str, Any]:
     try:
-        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        def reject_constant(value: str):
+            raise ValueError(f"Non-finite JSON value {value}")
+        payload = json.loads(path.read_text(encoding="utf-8-sig"), parse_constant=reject_constant)
     except (json.JSONDecodeError, UnicodeError) as error:
         raise ValueError(f"Invalid JSON in {path.name}: {error}") from error
     if not isinstance(payload, dict):
@@ -223,7 +239,7 @@ def _normalize_mod_descriptor(raw: dict[str, Any]) -> ModDescriptor:
         if value is not None and (not isinstance(value, list) or any(not isinstance(entry, dict) for entry in value)):
             descriptor.blockers.append(f"{key} must be a list of objects; migrate legacy entries manually.")
         else:
-            setattr(descriptor, key, value)
+            setattr(descriptor, key, deepcopy(value))
     if descriptor.options:
         descriptor.blockers.append("Legacy options require migration to TF3 params; they cannot be copied unchanged.")
 
@@ -242,7 +258,19 @@ def _normalize_mod_descriptor(raw: dict[str, Any]) -> ModDescriptor:
     for key, attr in (("preRunScript", "pre_run_script"), ("runScript", "run_script"), ("postRunScript", "post_run_script")):
         value = read(key, None)
         if isinstance(value, dict):
-            value = value.get("fileName") or value.get("filename")
+            descriptor.script_configs[key] = deepcopy(value)
+            if "fileName" in value:
+                value = value["fileName"]
+            elif "filename" in value:
+                value = value["filename"]
+                descriptor.script_configs[key].pop("filename")
+            else:
+                descriptor.blockers.append(f"{key} needs a fileName, including an empty string for a disabled script.")
+                value = None
+            if not isinstance(value, str):
+                descriptor.blockers.append(f"{key}.fileName must be text; an empty string disables the script.")
+            if descriptor.script_configs[key].get("params"):
+                descriptor.warnings.append(f"{key}.params is preserved, but TF3 mod lifecycle callbacks receive configDict/allModParams, not resource captureParams. Verify the script's argument contract in TF3.")
         if value is not None and not isinstance(value, str):
             descriptor.blockers.append(f"{key} must reference a TF3 script module.")
         else:
@@ -270,19 +298,29 @@ def inspect_mod(source: str | Path) -> ModDescriptor:
     source_path = Path(source).expanduser()
     if not source_path.exists():
         raise FileNotFoundError(f"Source does not exist: {source_path}")
-    if source_path.is_file():
+    root = _source_root(source_path)
+    filenames = ("modinfo.lua", "mod.lua", "modinfo.json", "info.json", "mod.json", "_metadata/modinfo.json")
+    recognized = source_path.is_file() and source_path.relative_to(root).as_posix() in filenames
+    if source_path.is_file() and not recognized:
         candidates = [source_path]
     else:
-        candidates = [source_path / filename for filename in (
-            "modinfo.lua", "mod.lua", "modinfo.json", "info.json", "mod.json", "_metadata/modinfo.json"
-        )]
+        candidates = [root / filename for filename in filenames]
     raw: dict[str, Any] = {}
+    source_metadata: dict = {}
+    native_mod_fields: dict = {}
+    native_info_fields: dict = {}
     files = []
     for candidate in candidates:
         if not candidate.is_file():
             continue
         if candidate.suffix.lower() == ".json":
-            layer = _canonicalize(_read_json_file(candidate))
+            original = _read_json_file(candidate)
+            source_metadata[candidate.relative_to(root).as_posix()] = deepcopy(original)
+            if candidate == root / "mod.json":
+                native_mod_fields = deepcopy(original)
+            elif candidate == root / "_metadata" / "modinfo.json":
+                native_info_fields = deepcopy(original)
+            layer = _canonicalize(original)
             if candidate.name == "modinfo.json" and "dependencies" in layer:
                 layer["_modinfoDependencies"] = layer.pop("dependencies")
         elif candidate.suffix.lower() == ".lua":
@@ -290,6 +328,15 @@ def inspect_mod(source: str | Path) -> ModDescriptor:
                 layer = _canonicalize(load_lua_table(candidate.read_text(encoding="utf-8-sig")))
             except (ValueError, UnicodeError) as error:
                 raise ValueError(f"{candidate.name}: {error}") from error
+            def archive(value):
+                if isinstance(value, UnsupportedValue):
+                    return {"unsupportedLuaValue": value.reason}
+                if isinstance(value, dict):
+                    return {str(k): archive(v) for k, v in value.items()}
+                if isinstance(value, list):
+                    return [archive(v) for v in value]
+                return value
+            source_metadata[candidate.relative_to(root).as_posix()] = archive(layer)
         else:
             raise ValueError("Select a mod folder or a .json/.lua metadata file")
         raw.update(layer)
@@ -297,10 +344,23 @@ def inspect_mod(source: str | Path) -> ModDescriptor:
     if not files:
         raise FileNotFoundError(f"No supported metadata found in {source_path}")
     descriptor = _normalize_mod_descriptor(raw)
+    # Known aliases are normalized; native extension fields are preserved in place.
+    aliases = {alias for entries in ALIASES.values() for alias in entries}
+    technical_keys = {"modId", "revision", "severityAdd", "severityRemove", "visible", "cosmetic",
+                      "dependencies", "incompatibilities", "params", "options",
+                      "preRunScript", "runScript", "postRunScript"}
+    browser_keys = {"name", "summary", "description", "authors", "tags", "url", "localization"}
+    descriptor.native_mod_fields = {k: v for k, v in native_mod_fields.items()
+                                    if k in technical_keys or k not in aliases | browser_keys | {"info", "data"}}
+    descriptor.native_info_fields = {k: v for k, v in native_info_fields.items()
+                                     if k in browser_keys | {"dependencies"} or k not in aliases | technical_keys | {"info", "data"}}
+    descriptor.source_metadata = source_metadata
+    unknown = set(raw) - technical_keys - browser_keys - {"_modinfoDependencies"}
+    if unknown:
+        descriptor.warnings.append("Additional metadata is archived in sourceMetadata; native extension fields are retained but not validated: " + ", ".join(sorted(unknown)))
     descriptor.metadata_files = files
     if not descriptor.authors:
         descriptor.warnings.append("No author was provided. Add the original creator before publishing.")
-    root = _source_root(source_path)
     if (root / "res").is_dir():
         descriptor.warnings.append("Legacy res files will move to content. Resource formats and game APIs still need testing in TF3.")
         if (root / "content").exists():
@@ -318,6 +378,15 @@ def _validate(descriptor: ModDescriptor, root: Path) -> list[str]:
         errors.append("Mod name must be at most 32 characters without line breaks.")
     if len(descriptor.summary) > 100 or "\n" in descriptor.summary or "\r" in descriptor.summary:
         errors.append("Summary must be at most 100 characters without line breaks.")
+    for language, entry in descriptor.localization.items():
+        if not isinstance(language, str) or not isinstance(entry, dict):
+            errors.append("Each localization entry must be a language object.")
+            continue
+        for key, limit in (("name", 32), ("summary", 100), ("description", None)):
+            if key in entry:
+                value = entry[key]
+                if not isinstance(value, str) or (limit is not None and (len(value) > limit or "\n" in value or "\r" in value)):
+                    errors.append(f"localization.{language}.{key} must be text" + (f" of at most {limit} characters without line breaks." if limit else "."))
     for key, reference in (("preRunScript", descriptor.pre_run_script), ("runScript", descriptor.run_script), ("postRunScript", descriptor.post_run_script)):
         if not reference:
             continue
@@ -336,7 +405,7 @@ def _validate(descriptor: ModDescriptor, root: Path) -> list[str]:
     for key in ("dependencies", "incompatibilities"):
         for entry in getattr(descriptor, key) or []:
             mod = entry.get("mod")
-            if not isinstance(mod, dict) or not re.fullmatch(r"[a-z0-9_]+", str(mod.get("modId", ""))):
+            if not isinstance(mod, dict) or not isinstance(mod.get("modId"), str) or not re.fullmatch(r"[a-z0-9_]+", mod["modId"]):
                 errors.append(f"{key}: each entry needs mod.modId with a valid TF3 id.")
     for entry in descriptor.params or []:
         if not isinstance(entry.get("key"), str) or entry.get("uiType") not in {"Button", "Slider", "ComboBox", "IconButton", "CheckBox"}:
@@ -347,7 +416,36 @@ def _validate(descriptor: ModDescriptor, root: Path) -> list[str]:
         index = entry.get("defaultIndex", 0)
         if type(index) is not int or index < 0 or (isinstance(values, list) and index >= len(values)):
             errors.append("Parameter defaultIndex must be a valid zero-based index into values.")
+        numbers = entry.get("numbers")
+        if numbers is not None:
+            try:
+                if not isinstance(numbers, list) or not isinstance(values, list) or len(numbers) != len(values):
+                    raise ValueError
+                if any(type(number) not in {int, float} or not math.isfinite(float(number)) for number in numbers):
+                    raise ValueError
+                # Build 40408 rejects integer JSON tokens for this double array.
+                entry["numbers"] = [float(number) for number in numbers]
+                descriptor.warnings.append("Parameter numbers are preserved as TF3 doubles. Verify selected values in game: build 40408 Map Editor supplied an option index in the native smoke test, not the configured numbers value.")
+            except (ValueError, OverflowError):
+                errors.append("Parameter numbers must be finite numbers, one per value; export writes TF3 doubles.")
     return list(dict.fromkeys(errors))
+
+
+def _audit(descriptor: ModDescriptor, root: Path) -> None:
+    extras = {k: v for k, v in descriptor.native_mod_fields.items()
+              if k not in {"preRunScript", "runScript", "postRunScript"}}
+    descriptor.resource_audit = audit_resources(root, descriptor.target_mod_id, source_id=descriptor.source_id,
+        lifecycle={"preRunScript": descriptor.pre_run_script, "runScript": descriptor.run_script,
+                   "postRunScript": descriptor.post_run_script}, metadata_extras={"mod": extras, "browser": descriptor.native_info_fields,
+                       "scriptConfig": {k: {field: value for field, value in config.items() if field != "fileName"}
+                                        for k, config in descriptor.script_configs.items()}})
+    if descriptor.source_id != descriptor.target_mod_id:
+        for entry in (descriptor.dependencies or []) + (descriptor.incompatibilities or []):
+            if isinstance(entry.get("mod"), dict) and entry["mod"].get("modId") == descriptor.source_id:
+                descriptor.resource_audit["blockers"].append("Cannot change modId: a technical dependency still names the original mod id; migrate it explicitly.")
+                descriptor.resource_audit["status"] = "blocked"
+    descriptor.blockers = list(dict.fromkeys([*descriptor.blockers, *descriptor.resource_audit["blockers"]]))
+    descriptor.warnings = list(dict.fromkeys([*descriptor.warnings, *descriptor.resource_audit["unverified"]]))
 
 
 def prepare_mod(source: str | Path, *, name: str | None = None, author: str | None = None,
@@ -355,8 +453,12 @@ def prepare_mod(source: str | Path, *, name: str | None = None, author: str | No
                 summary: str | None = None) -> ModDescriptor:
     descriptor = inspect_mod(source)
     original_id = descriptor.target_mod_id
+    descriptor.source_id = original_id
     if name is not None:
         descriptor.name = name.strip()
+        for entry in descriptor.localization.values():
+            if isinstance(entry, dict) and "name" in entry:
+                entry["name"] = descriptor.name
         descriptor.blockers = [error for error in descriptor.blockers if not error.startswith("name ")]
         if not descriptor.name:
             descriptor.blockers.append("Mod name cannot be blank.")
@@ -380,11 +482,8 @@ def prepare_mod(source: str | Path, *, name: str | None = None, author: str | No
         if reference and reference.startswith(original_id + "::"):
             setattr(descriptor, attr, descriptor.target_mod_id + reference[len(original_id):])
     descriptor.blockers = _validate(descriptor, _source_root(Path(source).expanduser()))
+    _audit(descriptor, _source_root(Path(source).expanduser()))
     return descriptor
-
-
-def _linked(path: Path) -> bool:
-    return path.is_symlink() or bool(getattr(path, "is_junction", lambda: False)())
 
 
 def _check_paths(source: Path, destination: Path, overwrite: bool) -> Path:
@@ -432,10 +531,15 @@ def _copy_files(root: Path, stage: Path, excluded: set[Path], progress: Progress
     return count
 
 
+def _backup_parent(destination: Path) -> Path:
+    return destination.parent.parent / "trf3_mod_backups" if destination.parent.name.lower() == "mods" else destination.parent
+
+
 def convert_mod(source: str | Path, destination: str | Path, *, name: str | None = None,
                 author: str | None = None, mod_id: str | None = None, revision: int | None = None,
                 summary: str | None = None, overwrite: bool = False,
-                progress: Progress | None = None) -> dict[str, Any]:
+                progress: Progress | None = None,
+                _report_fields: dict[str, Any] | None = None) -> dict[str, Any]:
     source_path = Path(source).expanduser()
     if not source_path.exists():
         raise FileNotFoundError(f"Source does not exist: {source_path}")
@@ -454,13 +558,21 @@ def convert_mod(source: str | Path, destination: str | Path, *, name: str | None
         "destination": str(destination_path), "modId": descriptor.target_mod_id,
         "name": descriptor.name, "revision": descriptor.revision,
         "warnings": list(dict.fromkeys(descriptor.warnings)),
-        "validation": "Metadata validated; game compatibility requires testing in Transport Fever 3.",
+        "sourceModId": descriptor.source_id,
+        "sourceMetadata": descriptor.source_metadata,
+        "idChange": {"changed": descriptor.source_id != descriptor.target_mod_id,
+                     "policy": "Keep existing id by default; refuse changes with retained old namespace references."},
+        "validation": "Metadata and static references checked; game compatibility requires testing in Transport Fever 3.",
     }
+    if _report_fields:
+        if set(_report_fields) & (set(report) - {'source'}):
+            raise ValueError('Port report fields cannot replace conversion validation fields')
+        report.update(_report_fields)
     with tempfile.TemporaryDirectory(prefix=".trf3-stage-", dir=destination_path.parent) as temporary:
         stage = Path(temporary) / "mod"
         excluded = {destination_path, Path(temporary).resolve()}
         # A nested output's previous backups must not be copied on the next run.
-        for previous in destination_path.parent.glob(destination_path.name + ".backup-*"):
+        for previous in _backup_parent(destination_path).glob(destination_path.name + ".backup-*"):
             previous_report = previous / "conversion-report.json"
             if previous.is_dir() and previous_report.is_file():
                 try:
@@ -473,9 +585,24 @@ def convert_mod(source: str | Path, destination: str | Path, *, name: str | None
         for path, payload in ((stage / "mod.json", descriptor.as_mod_json()),
                               (stage / "_metadata" / "modinfo.json", descriptor.as_modinfo_json())):
             path.write_text(json.dumps(payload, ensure_ascii=False, indent=4, allow_nan=False) + "\n", encoding="utf-8")
+        # Validate the actual staged resources before touching an existing output.
+        _audit(descriptor, stage)
+        if descriptor.blockers:
+            raise ValueError("Staged conversion needs manual changes:\n" + "\n".join(descriptor.blockers))
+        report["resourceAudit"] = descriptor.resource_audit
+        report["warnings"] = descriptor.warnings
         _check_paths(source_path, destination_path, overwrite)
         if destination_path.exists():
-            backup = destination_path.with_name(destination_path.name + ".backup-" + uuid.uuid4().hex[:12])
+            backup_name = destination_path.name + ".backup-" + uuid.uuid4().hex[:12]
+            backup_parent = _backup_parent(destination_path)
+            if backup_parent != destination_path.parent:
+                # TF3 discovers sibling backups as duplicate installed mods.
+                if any(_linked(path) for path in (backup_parent, *backup_parent.parents)):
+                    raise ValueError("Backup path cannot use symbolic links or directory junctions")
+                backup_parent.mkdir(exist_ok=True)
+                backup = backup_parent / backup_name
+            else:
+                backup = destination_path.with_name(backup_name)
             report["backup"] = str(backup)
         (stage / "conversion-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=4) + "\n", encoding="utf-8")
         notify("Metadata validated. Finalizing output…")

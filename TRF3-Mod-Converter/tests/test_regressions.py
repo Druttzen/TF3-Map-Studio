@@ -249,7 +249,7 @@ def test_native_script_reference_and_localization_preserved(tmp_path):
     json_mod(source, {"name": "Native", "modId": "native", "runScript": {"fileName": "native::mod.script@runFn"}, "cosmetic": True})
     content = source / "content"
     content.mkdir()
-    (content / "mod.script.lua").write_text("local function runFn(config, params) end\nreturn {runFn=runFn}")
+    (content / "mod.script.lua").write_text("local function runFn(config, params) end\nfunction data() return {runFn=runFn} end")
     (source / "_metadata").mkdir()
     (source / "_metadata" / "modinfo.json").write_text('{"localization":{"en":{"name":"Native"}},"dependencies":["12345"]}')
     preview = prepare_mod(source, mod_id="renamed")

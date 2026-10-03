@@ -1,4 +1,5 @@
 include desktop_launcher.py
+include VALIDATION.md
 recursive-include scripts *.py
-recursive-include examples *.lua *.txt
+recursive-include examples *.lua *.txt *.json
 recursive-include .github *.yml

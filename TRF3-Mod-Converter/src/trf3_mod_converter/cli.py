@@ -23,6 +23,17 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument("--mod-id", help="Mod id override (lowercase letters, digits, underscores)")
         sub.add_argument("--revision", type=int, help="Non-negative revision override")
         sub.add_argument("--summary", help="Summary override (100 characters maximum)")
+    port = commands.add_parser("port-tf2", help="Port supported TF2 electric locomotives to a separate TF3 draft")
+    port.add_argument("source")
+    port.add_argument("destination")
+    port.add_argument("--tf3-game", required=True, help="Installed TF3 folder; native assets are referenced, never copied")
+    port.add_argument("--name", required=True)
+    port.add_argument("--mod-id", required=True)
+    port.add_argument("--author")
+    port.add_argument("--revision", type=int)
+    port.add_argument("--summary")
+    port.add_argument("--repairs", help="JSON object mapping unresolved TF2 texture references to explicit source replacements")
+    port.add_argument("--overwrite", action="store_true")
     commands.add_parser("gui", help="Open the desktop app")
     return parser
 
@@ -34,8 +45,19 @@ def main(argv: list[str] | None = None) -> int:
         from .gui import main as open_gui
         open_gui()
         return 0
-    overrides = {key: getattr(args, key) for key in ("name", "author", "mod_id", "revision", "summary")}
     try:
+        if args.command == "port-tf2":
+            from pathlib import Path
+            from .tf2_vehicle_port import port_tf2_mod
+            repairs = json.loads(Path(args.repairs).read_text(encoding="utf-8")) if args.repairs else None
+            if repairs is not None and (not isinstance(repairs, dict) or any(not isinstance(k,str) or not isinstance(v,str) for k,v in repairs.items())):
+                raise ValueError("Repairs must be a JSON object of source texture references and replacement paths")
+            result = port_tf2_mod(args.source,args.destination,tf3_game=args.tf3_game,name=args.name,mod_id=args.mod_id,
+                                  repairs=repairs,overwrite=args.overwrite,author=args.author,
+                                  revision=args.revision,summary=args.summary)
+            print(json.dumps(result,ensure_ascii=False,indent=2))
+            return 0
+        overrides = {key: getattr(args, key) for key in ("name", "author", "mod_id", "revision", "summary")}
         if args.command == "inspect":
             descriptor = prepare_mod(args.source, **overrides)
             print(json.dumps(descriptor.as_inspection(), ensure_ascii=False, indent=4))

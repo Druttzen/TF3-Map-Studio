@@ -1,0 +1,20 @@
+{
+    "modId": "mapstudio_converter_smoke_030",
+    "revision": 1,
+    "severityAdd": "None",
+    "severityRemove": "None",
+    "params": [
+        {"key": "mode", "name": "Smoke test", "uiType": "ComboBox", "values": ["Preserved"], "numbers": [7], "defaultIndex": 0}
+    ],
+    "preRunScript": {
+        "fileName": "mapstudio_converter_smoke_030::/mod.script@preRunFn",
+        "params": {"mode": "preserved_params"}
+    },
+    "runScript": {
+        "fileName": "mapstudio_converter_smoke_030::/mod.script@runFn",
+        "params": {"mode": "preserved_params"}
+    },
+    "postRunScript": {
+        "fileName": "mapstudio_converter_smoke_030::/mod.script@postRunFn"
+    }
+}

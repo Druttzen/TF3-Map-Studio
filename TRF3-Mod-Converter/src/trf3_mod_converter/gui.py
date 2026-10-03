@@ -13,7 +13,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from . import __version__
-from .converter import ModDescriptor, convert_mod, prepare_mod
+from .converter import ModDescriptor, _source_root, convert_mod, prepare_mod
 
 
 class ConverterApp:
@@ -144,6 +144,8 @@ class ConverterApp:
         self.convert_button.pack(side="right")
         self.open_button = ttk.Button(right, text="Open converted folder", command=self.open_output, state="disabled")
         self.open_button.grid(row=6, column=0, sticky="w", pady=(12, 0))
+        self.port_button = self._button(right, "Port TF2 electric locomotive…", self.port_tf2)
+        self.port_button.grid(row=7, column=0, sticky="w", pady=(8, 0))
         ttk.Label(body, text="Metadata and folder conversion · Game compatibility is confirmed by testing the mod in TF3.", foreground="#637184").grid(row=1, column=0, columnspan=2, sticky="w", pady=(14, 0))
 
     def _label(self, parent: ttk.Frame, text: str, style: str, row: int, pady=(0, 0)) -> None:
@@ -174,7 +176,7 @@ class ConverterApp:
                 variable.set("")
         self.variables["source"].set(path)
         source = Path(path)
-        mod_root = source if source.is_dir() else source.parent
+        mod_root = _source_root(source)
         output_name = ModDescriptor._slugify_name(mod_root.name) + "_converted"
         self.variables["destination"].set(str(mod_root.with_name(output_name)))
         self.loading = False
@@ -256,6 +258,31 @@ class ConverterApp:
         self.note.set("Copying to a temporary folder before finalizing the output.")
         self._run(lambda: convert_mod(source, destination, overwrite=overwrite, progress=progress, **overrides), "converted")
 
+    def port_tf2(self) -> None:
+        if self.busy:
+            return
+        try:
+            source, overrides = self._arguments()
+            destination = self.variables['destination'].get().strip().strip('"')
+            if not destination or not overrides['name'] or not overrides['mod_id']:
+                raise ValueError("Fill in a separate output folder, a display name (up to 32 characters) and a Mod ID first.")
+            game = filedialog.askdirectory(parent=self.root,title="Choose installed Transport Fever 3 folder (contains base)")
+            if not game:
+                return
+            repair_file = filedialog.askopenfilename(parent=self.root,title="Optional texture repair JSON — Cancel if none",
+                                                     filetypes=[("Texture repairs", "*.json")])
+            repairs = json.loads(Path(repair_file).read_text(encoding='utf-8')) if repair_file else None
+            overwrite = self.overwrite.get()
+        except (ValueError, OSError) as error:
+            self._error(str(error))
+            return
+        from .tf2_vehicle_port import port_tf2_mod
+        self.status.set("Porting TF2 locomotive resources…")
+        self.note.set("Checking the installed TF3 formats. Unknown behavior or missing resources stop export.")
+        self._run(lambda: port_tf2_mod(source,destination,tf3_game=game,name=overrides['name'],
+                                      mod_id=overrides['mod_id'],repairs=repairs,overwrite=overwrite,
+                                      author=overrides['author'],revision=overrides['revision'],summary=overrides['summary']),"converted")
+
     def _poll(self) -> None:
         try:
             while True:
@@ -300,6 +327,11 @@ class ConverterApp:
             sections.append("REQUIRED CHANGES\n" + "\n\n".join(descriptor.blockers))
         if descriptor.warnings:
             sections.append("REVIEW NOTES\n" + "\n\n".join(descriptor.warnings))
+        audit = descriptor.resource_audit
+        references = audit.get("references", [])
+        sections.append(f"RESOURCE CHECKS\n{audit.get('filesScanned', 0)} text resources checked; {len(references)} literal references found.\n"
+                        "External resources and game compatibility still require TF3 testing.\n\n" +
+                        "\n".join(f"{item['status']}: {item['source']} → {item['reference']}" for item in references))
         sections.append("GENERATED MOD.JSON\n" + json.dumps(descriptor.as_mod_json(), ensure_ascii=False, indent=2))
         sections.append("GENERATED MODINFO.JSON\n" + json.dumps(descriptor.as_modinfo_json(), ensure_ascii=False, indent=2))
         self._set_details("\n\n".join(sections))
