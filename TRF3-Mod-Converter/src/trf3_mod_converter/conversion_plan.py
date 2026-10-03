@@ -45,7 +45,7 @@ RULES = {
     "unknown": ("general:resourcetypes", ["Identify this resource before selecting a migration; copying is not evidence of compatibility."]),
 }
 NATIVE_ENDINGS = {
-    "construction": (".con.lua",), "module": (".module.lua",),
+    "construction": (".con.lua",), "module": (".module.lua", ".module"),
     "infrastructure": (".street.lua", ".street_template.lua", ".bridge.lua", ".tunnel.lua", ".rcr.lua", ".trl.lua", ".edge.lua"),
     "environment": (".clima.lua", ".gen.lua", ".env.lua", ".tmat.lua", ".grass.lua", ".gtex.lua", ".agt.lua"),
     "cargo": (".cargo.lua", ".cmf.lua", ".cargoclass.lua"), "sound": (".snd.lua",),

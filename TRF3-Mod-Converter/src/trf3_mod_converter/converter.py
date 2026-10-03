@@ -338,6 +338,9 @@ def inspect_mod(source: str | Path) -> ModDescriptor:
                 if isinstance(value, UnsupportedValue):
                     return {"unsupportedLuaValue": value.reason, **({"emptyCallback": True} if value.empty_callback else {})}
                 if isinstance(value, dict):
+                    if any(not isinstance(k,str) for k in value):
+                        return {"luaTableEntries": [{"keyType": "string" if isinstance(k,str) else "number",
+                                                     "key": k, "value": archive(v)} for k,v in value.items()]}
                     return {str(k): archive(v) for k, v in value.items()}
                 if isinstance(value, list):
                     return [archive(v) for v in value]
@@ -348,6 +351,12 @@ def inspect_mod(source: str | Path) -> ModDescriptor:
         raw.update(layer)
         files.append(str(candidate))
     if not files:
+        child_mods = 0
+        for child in root.iterdir():
+            if child.is_dir() and not _linked(child) and any((child / filename).is_file() for filename in filenames):
+                child_mods += 1
+                if child_mods == 2:
+                    raise ValueError("This folder contains multiple mods. Batch conversion is not available; select one mod folder.")
         raise FileNotFoundError(f"No supported metadata found in {source_path}")
     descriptor = _normalize_mod_descriptor(raw)
     # Known aliases are normalized; native extension fields are preserved in place.
@@ -363,7 +372,9 @@ def inspect_mod(source: str | Path) -> ModDescriptor:
     descriptor.source_metadata = source_metadata
     unknown = set(raw) - technical_keys - browser_keys - {"_modinfoDependencies"}
     if unknown:
-        descriptor.warnings.append("Additional metadata is archived in sourceMetadata; native extension fields are retained but not validated: " + ", ".join(sorted(unknown)))
+        descriptor.warnings.append("Additional metadata is archived in sourceMetadata; native extension fields are retained but not validated: " + ", ".join(sorted(str(k) for k in unknown)))
+    if any(not isinstance(k,str) for k in raw):
+        descriptor.blockers.append("Legacy metadata contains non-text keys; review the archived Lua table before conversion. No dependency is inferred from unnamed entries.")
     descriptor.metadata_files = files
     if not descriptor.authors:
         descriptor.warnings.append("No author was provided. Add the original creator before publishing.")

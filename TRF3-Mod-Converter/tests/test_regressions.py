@@ -69,6 +69,34 @@ def test_inline_callback_is_inspectable_but_blocks_conversion(tmp_path):
     assert not (tmp_path / "output").exists()
 
 
+def test_numeric_metadata_keys_are_archived_and_block_instead_of_crashing(tmp_path):
+    path=tmp_path/'mod.lua'
+    original='function data() return {info={name="Mixed keys", dependencies={123}, [1]={456}, ["1"]="distinct string key"}} end'
+    path.write_text(original)
+    descriptor=inspect_mod(path)
+    assert descriptor.name=='Mixed keys'
+    assert any('non-text keys' in b for b in descriptor.blockers)
+    entries=descriptor.source_metadata['mod.lua']['luaTableEntries']
+    assert any(e=={'keyType':'number','key':1,'value':[456]} for e in entries)
+    assert any(e=={'keyType':'string','key':'1','value':'distinct string key'} for e in entries)
+    with pytest.raises(ValueError,match='non-text keys'):
+        convert_mod(path,tmp_path/'output')
+    assert path.read_text()==original and not (tmp_path/'output').exists()
+
+
+def test_workshop_container_is_rejected_without_merging_child_mods(tmp_path):
+    source=tmp_path/'workshop'
+    originals={}
+    for folder in ('123','456'):
+        path=source/folder/'mod.lua';path.parent.mkdir(parents=True)
+        originals[path]='return {info={name="Mod '+folder+'"}}'
+        path.write_text(originals[path])
+    with pytest.raises(ValueError,match='Batch conversion is not available'):
+        convert_mod(source,tmp_path/'output')
+    assert not (tmp_path/'output').exists()
+    assert all(path.read_text()==original for path,original in originals.items())
+
+
 @pytest.mark.parametrize("expression,expected", [
     ('[[\nFirst line\nSecond line]]', "First line\nSecond line"),
     ('[=[First ]] line\nSecond line]=]', "First ]] line\nSecond line"),

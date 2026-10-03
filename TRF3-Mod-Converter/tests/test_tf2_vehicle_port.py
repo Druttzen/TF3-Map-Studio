@@ -74,7 +74,7 @@ def test_full_port_preserves_binaries_source_and_credits(fixture_mod):
     assert material['params']['map_albedo']['fragmentSamplers']['albedoTex']['fileName']=='fixture_test::/textures/body.dds'
 
 
-@pytest.mark.parametrize('case',['callback','script','repair','blob','nested','alias_source'])
+@pytest.mark.parametrize('case',['callback','script','module','repair','blob','nested','alias_source'])
 def test_port_blockers_preserve_existing_output(fixture_mod,case):
     source,game,output=fixture_mod
     output.mkdir(); (output/'sentinel.txt').write_text('keep me')
@@ -82,6 +82,7 @@ def test_port_blockers_preserve_existing_output(fixture_mod,case):
     if case=='callback':
         (source/'mod.lua').write_text('function data() return {info={name="Fixture"},runFn=function() error("must never execute") end} end')
     if case=='script': (source/'res/custom.lua').write_text('error("must never execute")')
+    if case=='module': (source/'res/custom.module').write_text('error("must never execute")')
     if case=='repair': repairs={'unused.dds':'body.dds'}
     if case=='blob': (source/'res/models/mesh/wheel.msh.blob').unlink()
     if case=='nested': output=source/'nested'

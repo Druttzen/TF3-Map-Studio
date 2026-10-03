@@ -57,6 +57,7 @@ def test_mixed_mod_keeps_every_category_and_unknowns(tmp_path):
         'config/terrain_generator/test.lua': 'environment',
         'config/sound_set/test.lua': 'sound',
         'station.module.lua': 'module',
+        'legacy_station.module': 'module',
         'station.con.lua': 'construction',
         'paint.mtl': 'rendering',
         'helper.lua': 'script',
@@ -70,7 +71,8 @@ def test_mixed_mod_keeps_every_category_and_unknowns(tmp_path):
     result = analyze_mod(tmp_path)
     assert result['mixedMod']
     assert result['status'] == 'needs_review'
-    assert all(result['categories'][key] == 1 for key in set(files.values()))
+    assert result['categories']['module'] == 2
+    assert all(result['categories'][key] == 1 for key in set(files.values())-{'module'})
     assert result['categories']['localization'] == 1
     assert len(result['resources']) == len(files) + 2
 

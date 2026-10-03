@@ -47,6 +47,8 @@ Try **examples/legacy_mod**, a metadata-only example.
 
 ## General content analysis (0.5)
 
+The app and CLI currently process one mod at a time. Selecting a Workshop container with multiple child mods gives an explicit message that batch conversion is not available; it does not merge the children into one mod. A future batch queue must inspect and export each package separately, map stable IDs/dependencies and record unsupported items without claiming universal TF3 compatibility.
+
 The conversion scope includes complete mod packages and all vehicle families. Use `trf3-mod-converter analyze "C:\mods\any_mod"` to identify road, rail, tram, water and air vehicles, mixed content and the migration requirements for construction, infrastructure, terrain, cargo, sound, rendering, scripts and localization. Identification uses metadata and resource types; unknown or computed models remain explicit. Analysis does not execute source Lua.
 
 Inspection, desktop preview and conversion reports include this plan. Shared mesh/blob checks validate ranges, component counts, separate attribute indices and triangles for every model category. Invalid buffers block export; non-finite values are reported without automatic repair. Unsupported descriptors remain unverified.
@@ -82,6 +84,8 @@ Folder metadata merges in this order: modinfo.lua, mod.lua, modinfo.json, info.j
 Selecting any recognized metadata file reads the complete containing mod, using the same precedence as folder input. Selecting _metadata/modinfo.json uses the parent mod folder and retains its mod.json identity, revision, dependencies and script configuration. An independently named JSON/Lua file reads only that file and copies its containing folder. Keep unrelated files out of that source folder.
 
 Native extension fields and complete script-reference objects (including params) are retained. conversion-report.json also archives sourceMetadata with the original JSON and statically readable Lua values; unsupported Lua expressions are described without being executed. Additional legacy fields are reported when they cannot be mapped into native metadata. Explicitly empty descriptions stay empty.
+
+Version 0.6.1 fixes inspection of unnamed numeric metadata entries. Mixed numeric/string Lua table keys are archived as typed luaTableEntries, and malformed metadata is blocked for review instead of crashing or guessing a missing dependency. Legacy .module files are recognized in general analysis and explicitly blocked by the vehicle-only exporter.
 
 TF3 mod lifecycle functions receive configDict/allModParams (and baseConfig for preRun); selected mod parameters come from top-level mod.params. This differs from general resource scripts with captureParams. Nested lifecycle-reference params are preserved and explicitly flagged for review, never silently converted into selected mod parameters.
 

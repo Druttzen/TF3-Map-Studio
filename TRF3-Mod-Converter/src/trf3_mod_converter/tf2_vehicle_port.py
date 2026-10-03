@@ -356,7 +356,7 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
             originals[old] = p.read_bytes()
             counts['soundSets'] = counts.get('soundSets',0)+1
             continue
-        if suffix in ('.lua', '.tl', '.script', '.con', '.trf', '.snd'):
+        if suffix in ('.lua', '.tl', '.script', '.con', '.module', '.trf', '.snd'):
             raise ValueError(f'Custom behavior resource needs a manual port: {old}')
         if suffix not in ('.mdl','.mtl','.msh','.ani'): continue
         d = literal(load_lua_table(p.read_text(encoding='utf-8-sig'), constant_numbers=True), old)
