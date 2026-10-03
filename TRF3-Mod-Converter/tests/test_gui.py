@@ -1,10 +1,12 @@
 import json
+import threading
 import time
 import tkinter as tk
 
 import pytest
 
 from trf3_mod_converter.gui import ConverterApp
+from test_batch import mod
 
 
 @pytest.fixture
@@ -12,123 +14,116 @@ def app():
     try:
         root = tk.Tk()
     except tk.TclError as error:
-        pytest.skip(f"Desktop display unavailable: {error}")
+        pytest.skip(f'Desktop display unavailable: {error}')
     root.withdraw()
     instance = ConverterApp(root)
     errors = []
     root.report_callback_exception = lambda *details: errors.append(details)
     yield instance
     assert not errors
+    root.after_cancel(instance.poll_id)
     root.destroy()
 
 
 def wait_for_work(app):
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + 20
     while app.busy and time.monotonic() < deadline:
         app.root.update()
-        time.sleep(0.01)
+        time.sleep(.01)
     app.root.update()
     assert not app.busy
 
 
-def test_desktop_preview_and_conversion(app, tmp_path):
-    source = tmp_path / "source"
-    source.mkdir()
-    original = '{"name":"Desktop Test","revision":2,"authors":["Creator"]}'
-    (source / "mod.json").write_text(original)
-    (source / "README.txt").write_text("asset")
-    app._set_source(str(source))
-    app.inspect()
+def test_folder_selection_scans_names_and_minus_removes_only_queue_entry(app, tmp_path):
+    root = tmp_path/'collection'
+    first = mod(root, 'a', 'First')
+    mod(root, 'b', 'Second')
+    app._set_source(str(root))
     wait_for_work(app)
-    assert app.status.get() == "Ready to convert metadata"
-    assert str(app.convert_button["state"]) == "normal"
-    assert not (tmp_path / "source_converted").exists()
-    app.convert()
-    wait_for_work(app)
-    assert app.status.get() == "Conversion complete"
-    assert app.report["filesCopied"] == 2
-    assert (source / "mod.json").read_text() == original
-    output = tmp_path / "source_converted"
-    assert json.loads((output / "mod.json").read_text())["revision"] == 2
+    assert [i.display_name for i in app.items] == ['First', 'Second']
+    row = app.rows[app.items[0].key]
+    assert row['minus']['text'] == '−'
+    row['minus'].invoke()
+    assert [i.display_name for i in app.items] == ['Second']
+    assert (first/'mod.json').exists()
 
 
-def test_edit_requires_fresh_preview(app, tmp_path):
-    path = tmp_path / "source"
-    path.mkdir()
-    (path / "mod.json").write_text('{"name":"Before"}')
-    app._set_source(str(path))
-    app.inspect()
-    wait_for_work(app)
-    app.variables["name"].set("After")
-    assert app.preview is None
-    assert str(app.convert_button["state"]) == "disabled"
-    app.inspect()
-    wait_for_work(app)
-    assert app.preview.name == "After"
+def test_convert_all_marks_success_green_and_checks_only_successes(app, tmp_path):
+    root = tmp_path/'collection'
+    mod(root, 'a', 'First')
+    mod(root, 'b', 'Blocked', callback=True)
+    mod(root, 'c', 'Last')
+    app._set_source(str(root)); wait_for_work(app)
+    app.variables['destination'].set(str(tmp_path/'out'))
+    assert app.convert_button['text'] == 'Convert all listed mods'
+    app.convert_all(); wait_for_work(app)
+    assert [i.status for i in app.items] == ['completed', 'failed', 'completed']
+    assert app.report['counts']['completed'] == 2
+    for item in app.items:
+        label = app.rows[item.key]['name']
+        assert label['text'].endswith(' ✓') == (item.status == 'completed')
+        assert label['fg'] == ('#16803a' if item.status == 'completed' else '#b53636')
+    assert 'inline Lua callback' in app.details.get('1.0', 'end')
+    assert str(app.stop_button['state']) == 'disabled'
 
 
-def test_unsupported_callback_shown_and_convert_disabled(app, tmp_path):
-    path = tmp_path / "mod.lua"
-    path.write_text('return {info={name="Callbacks"},runFn=function() print("run") end}')
-    app._set_source(str(path))
-    app.inspect()
-    wait_for_work(app)
-    assert app.status.get() == "Manual changes required"
-    assert "inline Lua callback" in app.details.get("1.0", "end")
-    assert str(app.convert_button["state"]) == "disabled"
+def test_new_source_clears_queue_and_unneeded_controls_are_removed(app, tmp_path):
+    root = mod(tmp_path, 'source', 'One')
+    app._set_source(str(root)); wait_for_work(app)
+    app.variables['source'].set(str(tmp_path/'different'))
+    assert not app.items and str(app.convert_button['state']) == 'disabled'
+    assert not hasattr(app, 'inspect_button')
+    assert not hasattr(app, 'port_button')
+    assert not hasattr(app, 'open_button')
+    assert set(app.variables) == {'source', 'destination', 'tf3_game'}
 
 
-def test_desktop_error_can_be_corrected(app, tmp_path):
-    app.variables["source"].set(str(tmp_path / "missing"))
-    app.inspect()
-    wait_for_work(app)
-    assert app.status.get() == "Could not continue"
-    assert "Source does not exist" in app.details.get("1.0", "end")
-    path = tmp_path / "source"
-    path.mkdir()
-    (path / "mod.json").write_text('{"name":"Corrected"}')
-    app._set_source(str(path))
-    app.variables["revision"].set("invalid")
-    app.inspect()
-    assert app.status.get() == "Could not continue"
-    app.variables["revision"].set("4")
-    app.inspect()
-    wait_for_work(app)
-    assert app.preview.revision == 4
+def test_scan_error_is_correctable_and_output_change_removes_old_checks(app, tmp_path):
+    app.variables['source'].set(str(tmp_path/'missing'))
+    app.scan(); wait_for_work(app)
+    assert app.status.get() == 'Could not continue'
+    source = mod(tmp_path, 'source', 'One')
+    app._set_source(str(source)); wait_for_work(app)
+    app.variables['destination'].set(str(tmp_path/'out'))
+    app.convert_all(); wait_for_work(app)
+    item = app.items[0]
+    assert app.rows[item.key]['name']['text'].endswith(' ✓')
+    app.variables['destination'].set(str(tmp_path/'another'))
+    assert item.status == 'pending'
+    assert not app.rows[item.key]['name']['text'].endswith(' ✓')
 
 
-def test_metadata_selection_default_output_is_outside_source_mod(app, tmp_path):
-    source = tmp_path / 'source'
-    metadata = source / '_metadata/modinfo.json'
-    metadata.parent.mkdir(parents=True)
-    metadata.write_text('{"name":"Browser"}')
-    (source / 'mod.json').write_text('{"modId":"existing","revision":8}')
-    app._set_source(str(metadata))
-    assert app.variables['destination'].get() == str(tmp_path / 'source_converted')
-    app.inspect()
-    wait_for_work(app)
-    assert app.preview.target_mod_id == 'existing'
-    assert app.preview.revision == 8
-    assert 'RESOURCE CHECKS' in app.details.get('1.0', 'end')
+def test_stop_disables_removal_and_allows_clean_queue_resume(app, tmp_path, monkeypatch):
+    from trf3_mod_converter import gui
+    root = mod(tmp_path, 'source', 'One')
+    app._set_source(str(root)); wait_for_work(app)
+    app.variables['destination'].set(str(tmp_path/'out'))
+    entered = threading.Event()
+    actual = gui.convert_queue
+    def delayed(items, destination, **kwargs):
+        entered.set()
+        kwargs['stop'].wait(5)
+        return actual(items, destination, **kwargs)
+    monkeypatch.setattr(gui, 'convert_queue', delayed)
+    app.convert_all()
+    assert entered.wait(2)
+    item = app.items[0]
+    assert str(app.rows[item.key]['minus']['state']) == 'disabled'
+    app.remove_item(item.key)
+    assert len(app.items) == 1
+    app.stop(); wait_for_work(app)
+    assert app.report['cancelled'] and app.items[0].status == 'pending'
+    assert str(app.convert_button['state']) == 'normal'
 
 
-def test_desktop_port_uses_explicit_choices_and_metadata_overrides(app,tmp_path,monkeypatch):
-    from trf3_mod_converter import gui,tf2_vehicle_port
-    source=tmp_path/'source'; source.mkdir()
-    (source/'mod.lua').write_text('function data() return {info={name="Original"}} end')
-    app._set_source(str(source))
-    app.variables['name'].set('Draft')
-    app.variables['mod_id'].set('draft_test')
-    app.variables['author'].set('Override')
-    app.variables['revision'].set('4')
-    monkeypatch.setattr(gui.filedialog,'askdirectory',lambda **kwargs:str(tmp_path/'game'))
-    monkeypatch.setattr(gui.filedialog,'askopenfilename',lambda **kwargs:'')
-    observed={}
-    def port(source,destination,**kwargs):
-        observed.update(kwargs)
-        return {'destination':destination,'nativeTest':'not_run'}
-    monkeypatch.setattr(tf2_vehicle_port,'port_tf2_mod',port)
-    app.port_tf2(); wait_for_work(app)
-    assert observed['mod_id']=='draft_test' and observed['repairs'] is None
-    assert observed['author']=='Override' and observed['revision']==4
-    assert app.report['nativeTest']=='not_run'
+def test_same_queue_resume_verifies_exports_and_keeps_names(app, tmp_path):
+    source = mod(tmp_path, 'source', 'Readable Name')
+    app._set_source(str(source)); wait_for_work(app)
+    app.variables['destination'].set(str(tmp_path/'out'))
+    app.convert_all(); wait_for_work(app)
+    item = app.items[0]
+    first = json.loads((tmp_path/'out'/item.mod_id/'conversion-report.json').read_text())
+    app.convert_all(); wait_for_work(app)
+    assert item.message == 'Previous export verified'
+    assert app.rows[item.key]['name']['text'] == 'Readable Name ✓'
+    assert json.loads((tmp_path/'out'/item.mod_id/'conversion-report.json').read_text()) == first

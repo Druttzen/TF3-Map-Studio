@@ -1,0 +1,389 @@
+"""Recursive discovery and sequential exports with durable, verified receipts."""
+from __future__ import annotations
+
+from contextlib import contextmanager
+from collections import Counter
+from dataclasses import asdict, dataclass
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import sys
+import threading
+import uuid
+from luaparser import ast, astnodes as lua
+
+from .converter import convert_mod, inspect_mod
+from .filesystem import linked
+from .lua_metadata import load_lua_table, _value, UnsupportedValue
+from .resource_audit import parse_lua
+from .base_resources import TF2Inventory, find_tf2_game
+from .tf2_vehicle_port import NativeInventory, port_tf2_mod, snapshot, literal
+from . import __version__
+
+METADATA = ('mod.lua', 'modinfo.lua', 'modinfo.json', 'info.json', 'mod.json', '_metadata/modinfo.json')
+SKIP_DIRS = {'.git', '__pycache__', '.pytest_cache', 'node_modules', '.venv', 'venv', '_port_originals'}
+STATE_NAME = '.tf3-batch-report.json'
+FORMAT = 'tf3-converter-batch-v1'
+
+
+@dataclass
+class QueueItem:
+    source: str
+    display_name: str
+    mod_id: str
+    metadata_signature: str
+    scan_error: str = ''
+    status: str = 'pending'
+    message: str = ''
+    destination: str = ''
+
+    @property
+    def key(self):
+        return os.path.normcase(self.source)
+
+
+def metadata_signature(root: Path) -> str:
+    values = {}
+    for name in (*METADATA, 'strings.lua', 'strings.json'):
+        path = root / name
+        if any(linked(p) for p in (path, *path.parents)):
+            raise ValueError(f'Linked metadata is not supported: {path}')
+        if path.is_file():
+            values[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return fingerprint(values)
+
+
+def fingerprint(values: dict) -> str:
+    return hashlib.sha256(json.dumps(values, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def file_fingerprint(root: Path) -> str:
+    for path in root.rglob('*'):
+        if linked(path):
+            raise ValueError(f'Linked package resource is not supported: {path}')
+    return fingerprint(snapshot(root))
+
+
+def display_name(root: Path, descriptor) -> str:
+    name = descriptor.name
+    try:
+        text = (root / 'strings.lua').read_text(encoding='utf-8-sig') if (root / 'strings.lua').is_file() else ''
+        try:
+            translations = load_lua_table(text) if text else {}
+        except Exception:
+            translated = _literal_translation_name(text, name)
+            if translated:
+                return translated
+            translations = {}
+        for locale in ('en', 'sv', 'se', 'de'):
+            table = translations.get(locale, {}) if isinstance(translations, dict) else {}
+            value = table.get(name) if isinstance(table, dict) else None
+            if isinstance(value, str) and value:
+                return value
+        for locale in ('en', 'sv', 'se', 'de'):
+            value = descriptor.localization.get(locale, {}).get('name')
+            if isinstance(value, str) and value:
+                return value
+    except (OSError, ValueError, UnicodeError):
+        pass
+    return name
+
+
+def _literal_translation_name(text: str, key: str) -> str | None:
+    """Read only a proven literal name when unrelated descriptions use locals."""
+    try:
+        tree = parse_lua(text)
+        top = tree.body.body
+        if len(top) != 1 or not isinstance(top[0], lua.Function) or not isinstance(top[0].name, lua.Name) or top[0].name.id != 'data':
+            return None
+        body = top[0].body.body
+        for statement in body[:-1]:
+            if not isinstance(statement, lua.LocalAssign) or any(isinstance(_value(v), UnsupportedValue) or type(_value(v)) not in (str, int, float, bool, type(None)) for v in statement.values):
+                return None
+        returned = body[-1]
+        if not isinstance(returned, lua.Return) or len(returned.values) != 1 or not isinstance(returned.values[0], lua.Table):
+            return None
+        if any(isinstance(node, (lua.Call, lua.Invoke, lua.AnonymousFunction)) for node in ast.walk(returned)):
+            return None
+        def field(table, name):
+            if not isinstance(table, lua.Table):
+                return None
+            found = None
+            for entry in table.fields:
+                if entry.key is None:
+                    continue  # Unnamed numeric entries cannot replace a named key.
+                k = entry.key.id if isinstance(entry.key, lua.Name) and not entry.between_brackets else _value(entry.key)
+                if isinstance(k, UnsupportedValue):
+                    raise ValueError('Computed translation key')
+                if k == name:
+                    found = entry.value
+            return found
+        for locale in ('en', 'sv', 'se', 'de'):
+            value = field(field(returned.values[0], locale), key)
+            if value is not None and isinstance(name := _value(value), str) and name:
+                return name
+    except Exception:
+        pass
+    return None
+
+
+def stable_id(root: Path, descriptor) -> str:
+    if descriptor.mod_id:
+        return descriptor.mod_id
+    if root.name.isdecimal() and root.parent.name == '1066780':
+        return 'tf2_workshop_' + root.name
+    slug = re.sub('[^a-z0-9]+', '_', root.name.lower()).strip('_')[:20] or 'mod'
+    digest = hashlib.sha256(os.path.normcase(str(root)).encode()).hexdigest()[:12]
+    return f'tf2_{slug}_{digest}'
+
+
+def scan_mods(source: str | Path, *, exclude: str | Path | None = None,
+              stop: threading.Event | None = None, progress=None) -> dict:
+    if not str(source).strip():
+        raise ValueError('Choose a mod folder first.')
+    root = Path(source).expanduser().absolute()
+    if any(linked(p) for p in (root, *root.parents)) or not root.is_dir():
+        raise ValueError('Choose an existing folder without symbolic links or junctions.')
+    root = root.resolve()
+    excluded = Path(exclude).expanduser().resolve() if exclude else None
+    items, warnings = [], []
+    stack = [root]
+    while stack:
+        if stop and stop.is_set():
+            break
+        directory = stack.pop()
+        if directory == excluded or directory.name in SKIP_DIRS:
+            continue
+        try:
+            if linked(directory):
+                warnings.append(f'Skipped linked folder: {directory}')
+                continue
+            if any((directory / name).is_file() for name in METADATA):
+                # A package boundary prevents helper-library metadata becoming another mod.
+                signature, error, name, mod_id = '', '', directory.name, ''
+                try:
+                    signature = metadata_signature(directory)
+                    descriptor = inspect_mod(directory)
+                    name, mod_id = display_name(directory, descriptor), stable_id(directory, descriptor)
+                except Exception as exc:
+                    error = str(exc)
+                    mod_id = stable_id(directory, type('Unnamed', (), {'mod_id': ''})())
+                items.append(QueueItem(str(directory), name, mod_id, signature, error))
+                if progress:
+                    progress(f'{len(items)} mods found')
+                continue
+            children = sorted(directory.iterdir(), key=lambda p: p.name.casefold(), reverse=True)
+            for child in children:
+                if linked(child):
+                    if child.is_dir():
+                        warnings.append(f'Skipped linked folder: {child}')
+                elif child.is_dir():
+                    stack.append(child)
+        except OSError as exc:
+            warnings.append(f'Could not scan {directory}: {exc}')
+    return {'source': str(root), 'items': items, 'warnings': warnings,
+            'cancelled': bool(stop and stop.is_set())}
+
+
+def find_tf3_game(source: str | Path) -> str:
+    libraries = [parent.parent for parent in Path(source).absolute().parents if parent.name.lower() == 'steamapps']
+    if sys.platform == 'win32':
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Valve\Steam') as key:
+                libraries.append(Path(winreg.QueryValueEx(key, 'SteamPath')[0]))
+        except OSError:
+            pass
+    for library in list(libraries):
+        file = library / 'steamapps/libraryfolders.vdf'
+        if file.is_file():
+            try:
+                libraries.extend(Path(p.replace('\\\\', '\\')) for p in re.findall(r'"path"\s+"([^"]+)"', file.read_text(encoding='utf-8')))
+            except (OSError, UnicodeError):
+                pass
+    for library in libraries:
+        game = library / 'steamapps/common/Transport Fever 3'
+        if (game / 'base/content').is_dir():
+            return str(game)
+    return ''
+
+
+@contextmanager
+def output_lock(output: Path):
+    """OS locks are automatically released after a crash; keep the lock inode."""
+    path = output / '.tf3-batch.lock'
+    if linked(path):
+        raise ValueError('Linked batch lock is not allowed.')
+    handle, locked = path.open('a+b'), False
+    try:
+        if path.stat().st_size == 0:
+            handle.write(b'0')
+            handle.flush()
+        handle.seek(0)
+        try:
+            if sys.platform == 'win32':
+                import msvcrt
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            locked = True
+        except OSError:
+            raise ValueError('Another conversion owns this output folder. Use another folder or wait.') from None
+        yield
+    finally:
+        if locked:
+            handle.seek(0)
+            if sys.platform == 'win32':
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
+
+
+def _save_state(output: Path, state: dict) -> None:
+    target = output / STATE_NAME
+    if linked(target):
+        raise ValueError('Linked batch report is not allowed.')
+    temporary = output / (STATE_NAME + '.' + uuid.uuid4().hex + '.tmp')
+    try:
+        with temporary.open('x', encoding='utf-8') as handle:
+            json.dump(state, handle, ensure_ascii=False, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _export(item, target, tf3_game, native_cache, tf2_cache, progress):
+    root = Path(item.source)
+    content = root / 'res'
+    if content.is_dir() and any(p.is_file() for p in content.rglob('*')):
+        game = Path(tf3_game) if tf3_game else None
+        if game is None:
+            raise ValueError('Choose the installed TF3 folder before converting TF2 content.')
+        key = str(game.resolve())
+        if key not in native_cache:
+            native_cache[key] = NativeInventory(game)
+        tf2_game = find_tf2_game(root, game)
+        tf2 = None
+        if tf2_game is not None:
+            tf2_key = str(tf2_game.resolve())
+            if tf2_key not in tf2_cache:
+                tf2_cache[tf2_key] = TF2Inventory(tf2_game)
+            tf2 = tf2_cache[tf2_key]
+        return port_tf2_mod(root, target, tf3_game=game, mod_id=item.mod_id, name=item.display_name,
+                            progress=progress, _native_inventory=native_cache[key], _tf2_inventory=tf2)
+    # Metadata-only/native packages retain the original static validation path.
+    return convert_mod(root, target, mod_id=item.mod_id, name=item.display_name, progress=progress)
+
+
+def _preflight_profile(root: Path) -> None:
+    """Reject known unsupported packages before hashing gigabytes of assets."""
+    content = root / 'res'
+    if not content.is_dir():
+        return
+    models, files = [], []
+    for path in content.rglob('*'):
+        if linked(path):
+            raise ValueError(f'Linked resource is not supported: {path}')
+        if path.is_file():
+            files.append(path)
+            relative = path.relative_to(content).as_posix()
+            if path.suffix.lower() in ('.lua', '.tl', '.script', '.con', '.module', '.trf', '.snd'):
+                if not (relative.startswith('config/sound_set/') and path.suffix == '.lua'):
+                    raise ValueError(f'Custom behavior resource needs a manual port: {relative}')
+            if path.suffix.lower() == '.mdl':
+                models.append(path)
+    if files and not models:
+        raise ValueError('This TF2 content needs a category exporter. No supported locomotive model found.')
+    for path in sorted(models):
+        data = literal(load_lua_table(path.read_text(encoding='utf-8-sig'), constant_numbers=True))
+        engines = data.get('metadata', {}).get('railVehicle', {}).get('engines', []) if isinstance(data, dict) else []
+        if data.get('version') != 1 or not engines or any(e.get('type') != 'ELECTRIC' for e in engines):
+            raise ValueError(f'{path.name}: automated content export currently supports electric-locomotive packages only. This mod needs another category exporter.')
+
+
+def convert_queue(items: list[QueueItem], destination: str | Path, *, tf3_game: str | Path | None = None,
+                  stop: threading.Event | None = None, event=None) -> dict:
+    if not str(destination).strip():
+        raise ValueError('Choose a separate export folder.')
+    output = Path(destination).expanduser().absolute()
+    if any(linked(p) for p in (output, *output.parents)):
+        raise ValueError('Output cannot use symbolic links or junctions.')
+    output = output.resolve()
+    for item in items:
+        source = Path(item.source).resolve()
+        if source.is_relative_to(output) or output.is_relative_to(source):
+            raise ValueError('Choose an output folder separate from every source mod.')
+    output.mkdir(parents=True, exist_ok=True)
+    with output_lock(output):
+        state_path = output / STATE_NAME
+        if linked(state_path):
+            raise ValueError('Linked batch report is not allowed.')
+        previous = json.loads(state_path.read_text(encoding='utf-8')) if state_path.exists() else {'format': FORMAT, 'receipts': {}}
+        if not isinstance(previous, dict) or previous.get('format') != FORMAT or not isinstance(previous.get('receipts'), dict):
+            raise ValueError('Existing batch report is not recognized; choose another output folder.')
+        state = {'format': FORMAT, 'destination': str(output), 'receipts': previous['receipts'], 'items': [],
+                 'nativeTest': 'not_run', 'cancelled': False}
+        collisions = {key for key, count in Counter(i.mod_id for i in items).items() if count > 1}
+        native_cache, tf2_cache = {}, {}
+        for item in items:
+            item.status, item.message, item.destination = 'pending', '', str(output / item.mod_id)
+        state['items'] = [asdict(i) for i in items]
+        _save_state(output, state)
+        for index, item in enumerate(items):
+            if stop and stop.is_set():
+                state['cancelled'] = True
+                break
+            target = output / item.mod_id
+            item.destination, item.status, item.message = str(target), 'running', 'Converting…'
+            if event:
+                event('item', {'key': item.key, 'status': item.status, 'message': item.message, 'index': index, 'total': len(items), 'destination': str(target)})
+            try:
+                if not re.fullmatch('[a-z0-9_]+', item.mod_id):
+                    raise ValueError('Invalid mod ID; no export was created.')
+                if item.mod_id in collisions:
+                    raise ValueError('Another listed mod uses the same ID. Remove one or repair its metadata.')
+                root = Path(item.source)
+                if any(linked(p) for p in (root, *root.parents)):
+                    raise ValueError('Source became a linked folder. Scan again.')
+                if item.scan_error:
+                    raise ValueError(item.scan_error)
+                if metadata_signature(root) != item.metadata_signature:
+                    raise ValueError('Metadata changed after scanning. Scan the folder again.')
+                _preflight_profile(root)
+                before = file_fingerprint(root)
+                receipt = state['receipts'].get(item.key, {})
+                if target.exists():
+                    if (receipt.get('status') == 'completed' and receipt.get('modId') == item.mod_id
+                            and receipt.get('sourceFingerprint') == before and not linked(target)
+                            and receipt.get('converterVersion') == __version__
+                            and receipt.get('tf3Game') == (str(Path(tf3_game).resolve()) if tf3_game else None)
+                            and receipt.get('outputFingerprint') == file_fingerprint(target)):
+                        item.message = 'Previous export verified'
+                    else:
+                        raise ValueError('Output already exists or has changed. It was not overwritten; choose another output folder.')
+                else:
+                    progress = (lambda message: event('progress', {'key': item.key, 'message': message})) if event else None
+                    _export(item, target, tf3_game, native_cache, tf2_cache, progress)
+                    if file_fingerprint(root) != before:
+                        raise ValueError('Source changed during conversion. Export needs review.')
+                    state['receipts'][item.key] = {'status': 'completed', 'modId': item.mod_id,
+                                                  'sourceFingerprint': before, 'outputFingerprint': file_fingerprint(target),
+                                                  'converterVersion': __version__, 'tf3Game': str(Path(tf3_game).resolve()) if tf3_game else None}
+                    item.message = 'Export saved'
+                item.status = 'completed'
+            except Exception as exc:
+                item.status, item.message = 'failed', str(exc)
+            state['items'] = [asdict(i) for i in items]
+            _save_state(output, state)  # A durable receipt precedes the green checkmark.
+            if event:
+                event('item', {'key': item.key, 'status': item.status, 'message': item.message, 'index': index + 1, 'total': len(items), 'destination': str(target)})
+        state['items'] = [asdict(i) for i in items]
+        state['counts'] = {s: sum(i.status == s for i in items) for s in ('completed', 'failed', 'pending')}
+        _save_state(output, state)
+        return state

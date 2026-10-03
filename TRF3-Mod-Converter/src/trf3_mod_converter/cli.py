@@ -14,6 +14,12 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     analyze = commands.add_parser("analyze", help="Analyze all vehicle/mod categories and their TF3 migration requirements without exporting")
     analyze.add_argument("source", help="Mod directory; metadata is not required")
+    scan = commands.add_parser('scan', help='List separate mod packages recursively without exporting')
+    scan.add_argument('source')
+    batch = commands.add_parser('batch', help='Convert discovered mods sequentially; unsupported packages get separate errors')
+    batch.add_argument('source')
+    batch.add_argument('destination')
+    batch.add_argument('--tf3-game', help='Installed TF3 folder; detected from Steam when omitted')
     for command in ("convert", "inspect"):
         sub = commands.add_parser(command, help=f"{command.capitalize()} a mod folder or metadata file")
         sub.add_argument("source", help="Mod directory or JSON/Lua metadata file")
@@ -49,6 +55,16 @@ def main(argv: list[str] | None = None) -> int:
         open_gui()
         return 0
     try:
+        if args.command in ('scan', 'batch'):
+            from dataclasses import asdict
+            from .batch import scan_mods, convert_queue, find_tf3_game
+            found = scan_mods(args.source, exclude=getattr(args, 'destination', None))
+            if args.command == 'scan':
+                print(json.dumps({**found, 'items': [asdict(i) for i in found['items']]}, ensure_ascii=False, indent=2))
+                return 0
+            result = convert_queue(found['items'], args.destination, tf3_game=args.tf3_game or find_tf3_game(args.source) or None)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 2 if result['counts']['failed'] else 0
         if args.command == "analyze":
             from .conversion_plan import analyze_mod
             result = analyze_mod(args.source)

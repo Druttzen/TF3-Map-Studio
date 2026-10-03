@@ -1,22 +1,24 @@
 # TRF3 Mod Converter
 
-A local desktop app and command-line tool for converting Transport Fever mod metadata and folder layout, with a separate **TF2 electric-locomotive port profile**. It never executes source Lua. Exported mods remain drafts until tested in TF3.
+A local desktop app and command-line tool with a removable mod queue, metadata/layout conversion and a **TF2 electric-locomotive port profile**. It never executes source Lua. Exported mods remain drafts until tested in TF3.
 
 ## Windows app
 
 Extract **TRF3-Mod-Converter-Windows.zip** and double-click **TRF3-Mod-Converter.exe**. No separate Python installation is needed.
 
-1. Choose a mod folder or JSON/Lua metadata file.
-2. Choose a separate output folder, or type a new folder path.
-3. Click **Preview mod**.
-4. Review required changes and generated metadata. Edit the basic fields and preview again if needed.
-5. Click **Convert mod** and open the converted folder.
+1. Choose a mod folder or collection such as `F:\SteamLibrary\steamapps\workshop\content\1066780`. All subfolders are scanned automatically. You can also enter a folder path and press Enter.
+2. Choose a separate export folder, or type a new folder path. The installed TF3 folder is detected from Steam when possible; choose it manually if necessary.
+3. Review the list of display names. Each **−** button removes that mod from the queue without deleting its source files. Click a name to read its details.
+4. Click **Convert all listed mods**. Each remaining package is processed in list order, into its own folder. A successful export turns the name green and adds **✓**. A failed mod shows **Needs review**, and the queue continues with the next one.
+5. Use **Stop after current mod** to leave the remaining mods pending. Select the same source/export folders and run again to verify existing completed exports and continue.
 
-The left panel scrolls on smaller displays. Leave the author override blank to preserve the original authors.
+The desktop app has one conversion action. It automatically selects the supported TF2 content profile or the metadata/native validation path. Unsupported TF2 content fails explicitly instead of receiving a misleading metadata-only success. Author data is preserved; individual overrides and explicit repairs remain available through the CLI.
 
-Existing non-empty output is protected. The replacement checkbox (or CLI --overwrite) keeps the previous output beside it in a backup folder. Copy failures leave existing output untouched; final rename failures restore its backup.
+The queue never overwrites existing mod folders. Source and output SHA-256 fingerprints, converter version, mod ID and TF3 installation path must match a completed receipt before an existing export receives a green checkmark again. Results are saved after each mod in `.tf3-batch-report.json`. An operating-system lock prevents simultaneous queues writing to the same output folder and releases automatically if the app crashes. Staged exports protect final output from ordinary copy/validation failures. An unrecognized or changed output is retained for review; use a different export folder to make a new draft.
 
-When the output is immediately inside a folder named mods, backups go to the parent folder's trf3_mod_backups instead. TF3 discovers sibling backups as duplicate installed mods. Keep backups outside its active mod directory.
+Workshop packages receive stable IDs from their Workshop folder numbers. Other legacy packages receive IDs based on their source path; explicit mod IDs are retained. Duplicate explicit IDs fail rather than overwrite each other. Linked folders are skipped during scanning and linked resources are rejected during export. No original mod is changed and no source Lua is executed. A green checkmark confirms an export, not operation in TF3.
+
+Individual CLI conversion retains its explicit `--overwrite` option with backups and recovery. Keep those backups outside TF3's active mod directory.
 
 Output contains mod.json, _metadata/modinfo.json, content/, and conversion-report.json. Legacy res/ resources move into content/ in the output. Original source files are preserved.
 The final output folder name must use letters, digits, underscores, or spaces.
@@ -37,27 +39,29 @@ On Linux/macOS, use .venv/bin/python instead.
 
 ~~~console
 trf3-mod-converter inspect "C:\mods\old_mod"
+trf3-mod-converter scan "F:\SteamLibrary\steamapps\workshop\content\1066780"
+trf3-mod-converter batch "F:\SteamLibrary\steamapps\workshop\content\1066780" "F:\exports\tf3_drafts" --tf3-game "B:\SteamLibrary\steamapps\common\Transport Fever 3"
 trf3-mod-converter convert "C:\mods\old_mod" "C:\mods\converted_mod"
 trf3-mod-converter convert "C:\mods\old_mod" "C:\mods\converted_mod" --name "My Mod" --author "Creator" --mod-id "creator_my_mod" --revision 2 --summary "A short description"
 ~~~
 
-Both inspect and convert accept metadata overrides. Inspection prints blockers, warnings, canConvert, and generated metadata. Errors/manual changes exit with code 2; success exits with code 0. **python -m trf3_mod_converter** is equivalent to the installed command.
+Both inspect and convert accept metadata overrides. Inspection prints blockers, warnings, canConvert, and generated metadata. `scan` lists packages without exporting; `batch` uses the desktop queue's sequential conversion and recovery logic. A batch exits 2 if any listed mod failed. Other errors/manual changes also exit with code 2; success exits with code 0. **python -m trf3_mod_converter** is equivalent to the installed command.
 
 Try **examples/legacy_mod**, a metadata-only example.
 
 ## General content analysis (0.5)
 
-The app and CLI currently process one mod at a time. Selecting a Workshop container with multiple child mods gives an explicit message that batch conversion is not available; it does not merge the children into one mod. A future batch queue must inspect and export each package separately, map stable IDs/dependencies and record unsupported items without claiming universal TF3 compatibility.
+Version 0.8 adds recursive collection scanning and sequential batch export to the desktop app and CLI. Each package keeps its own output, result and source identity. Scanning stops at a package boundary so metadata inside a helper library is not mistaken for another mod. Mod names are read statically, including literal translated names; malformed/computed metadata stays listed with an explicit error. Referenced dependencies still require the existing validation and manual migration where needed.
 
 The conversion scope includes complete mod packages and all vehicle families. Use `trf3-mod-converter analyze "C:\mods\any_mod"` to identify road, rail, tram, water and air vehicles, mixed content and the migration requirements for construction, infrastructure, terrain, cargo, sound, rendering, scripts and localization. Identification uses metadata and resource types; unknown or computed models remain explicit. Analysis does not execute source Lua.
 
-Inspection, desktop preview and conversion reports include this plan. Shared mesh/blob checks validate ranges, component counts, separate attribute indices and triangles for every model category. Invalid buffers block export; non-finite values are reported without automatic repair. Unsupported descriptors remain unverified.
+Inspection and conversion reports include this plan. Shared mesh/blob checks validate ranges, component counts, separate attribute indices and triangles for every model category. Invalid buffers block export; non-finite values are reported without automatic repair. Unsupported descriptors remain unverified.
 
 **Analysis coverage is broader than automated export support.** The additional category adapters are not yet exporters. Ordinary conversion still changes metadata/layout; the separate draft exporter still supports only its strict electric-locomotive profile. Native TF3 compatibility is never inferred from recognition or parsing. See [GENERAL_CONVERSION.md](GENERAL_CONVERSION.md) for the reusable pipeline, category requirements and verified references. The `analyze` command exits 2 when unknown resources, geometry warnings/errors or layout problems require review; otherwise it exits 0, meaning analysis completed, not gameplay passed.
 
 ## TF2 electric-locomotive port (0.4)
 
-The separate **Port TF2 electric locomotive…** button rewrites supported version-1 models to version 2 and migrates their materials, units, wheel/bogie node references, headlights, sound, translations and thumbnails. Fill in the source folder, separate output folder, name and ID, then choose your installed TF3 directory. Cancel the optional repair-file dialog when no texture repair is needed. Other metadata overrides apply to this export too.
+The queue automatically uses the electric-locomotive profile for supported TF2 content. It rewrites supported version-1 models to version 2 and migrates their materials, units, wheel/bogie node references, headlights, sound, translations and thumbnails. The installed TF3 inventory is reused across the queue, with independent resource reports for each mod. The standalone `port-tf2` command provides optional metadata overrides and explicit texture repairs:
 
 ~~~console
 trf3-mod-converter port-tf2 "F:\TF2\mods\electric_locomotive" "F:\exports\electric_locomotive_tf3" --tf3-game "B:\SteamLibrary\steamapps\common\Transport Fever 3" --name "Electric Locomotive Test" --mod-id "creator_electric_test"
@@ -81,7 +85,7 @@ Every substitution records its source, TF3 target, origin and proof method in `b
 
 The output must be outside the source mod. SHA-256 hashes verify source preservation; changed model/material text, `mod.lua` and `strings.lua` are retained in `_port_originals/`. Authored meshes, blobs, textures, audio and animation files are retained byte for byte, with resource paths normalized. `pathMapping`, `explicitRepairs`, `baseGameResources` and `portCounts` describe the migration in `conversion-report.json`. Store previews reuse original thumbnails. Default metal/gloss/AO references and automatic emissions follow the installed TF3 defaults; inspect their appearance and balancing in the game.
 
-The ordinary **Convert mod** button continues to convert metadata and layout only. A successful static export does not prove rendering, animations, audio or operation in TF3. See [VALIDATION.md](VALIDATION.md) for the actual tested scope.
+The standalone `convert` command continues to convert metadata and layout only. A successful static export does not prove rendering, animations, audio or operation in TF3. See [VALIDATION.md](VALIDATION.md) for the actual tested scope.
 
 ## Input and precedence
 
@@ -101,13 +105,13 @@ An existing modId is preserved when changing the display name or installation fo
 
 ## Resource and script checks (0.3)
 
-Preview and final staged export scan Lua/JSON text resources, models, mesh indexes, materials and animations without executing them. They resolve literal local resource paths relative to their referring file, absolute paths in the mod, and qualified mod paths. Missing local targets, forbidden parent paths, invalid resource names, UTF-8 BOMs, unparsable Lua resources and missing mesh blobs block export.
+Inspection and final staged export scan Lua/JSON text resources, models, mesh indexes, materials and animations without executing them. They resolve literal local resource paths relative to their referring file, absolute paths in the mod, and qualified mod paths. Missing local targets, forbidden parent paths, invalid resource names, UTF-8 BOMs, unparsable Lua resources and missing mesh blobs block export.
 
 TF2 sound clips, version-1 models and flat materials in the legacy layout use resource-type roots with a base-game fallback. Inspection records local legacy targets and unverified base/other-mod targets instead of falsely calling them missing relative TF3 files. Their required migration still blocks metadata-only conversion. Empty inline lifecycle callbacks are omitted with a warning; callbacks with behavior still require migration.
 
 Referenced lifecycle and literal .script callbacks are checked against keys returned by global data(). A provably missing or non-callable callback blocks conversion. Computed data() tables and Teal callbacks remain explicitly unverified. Literal ug_require calls are checked too; computed references, external mods, base-game resources, binary formats and gameplay APIs require further checks in TF3.
 
-The GUI preview and JSON report include resourceAudit. A static_checks_passed status is a partial offline check, not evidence that the mod works in the engine. nativeTest remains not_run in generated conversion reports: this converter does not launch or observe the game.
+Individual conversion JSON reports include resourceAudit. A static_checks_passed status is a partial offline check, not evidence that the mod works in the engine. nativeTest remains not_run in generated conversion reports: this converter does not launch or observe the game.
 
 Parameter numbers arrays are validated and exported as JSON decimals. The installed TF3 build 40408 rejects integer tokens in this double array even when their mathematical values are valid; the original metadata remains archived in the report.
 

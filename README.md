@@ -6,7 +6,7 @@ Four Transport Fever 3 tools in one project. Each folder includes its source, te
 | --- | --- | --- | --- |
 | 1 | **OSM-TF3-Vanilla-Converter** | Convert OpenStreetMap XML into TF3 Lua data and a vanilla-resource mod template; download and inspect OSM selections. | [OSM-TF3-Vanilla-Converter](OSM-TF3-Vanilla-Converter/) |
 | 2 | **TF3-Heightmap-Studio** | Prepare elevation and biome maps aligned with the converter's map bounds; preview, edit, and export terrain. | [TF3-Heightmap-Studio](TF3-Heightmap-Studio/) |
-| 3 | **TRF3-Mod-Converter** | Inspect and convert older mod metadata and folder layouts into TF3 format. | [TRF3-Mod-Converter](TRF3-Mod-Converter/) |
+| 3 | **TRF3-Mod-Converter** | Scan mod collections into a removable queue and export supported mods sequentially, with recovery and per-mod results. | [TRF3-Mod-Converter](TRF3-Mod-Converter/) |
 | 4 | **TF3-OSM-Importer-Mod** | Import the converter's Lua dataset in TF3 through an in-game control panel, with saved progress, pause/resume, retry, and vanilla resources. | [TF3-OSM-Importer-Mod](TF3-OSM-Importer-Mod/) |
 
 ## Windows downloads
@@ -16,6 +16,8 @@ Download and extract the package for the tool you need, then open its `.exe`. Th
 - [OSM-TF3-Vanilla-Converter — Preview 0.10](https://github.com/Druttzen/TF3-Map-Studio/releases/download/importer-revision-4-2026-10-03/OSM-TF3-Vanilla-Preview-0.10-Windows.zip)
 - [TF3-Heightmap-Studio — Preview 0.6](https://github.com/Druttzen/TF3-Map-Studio/releases/download/preview-2026-10-02/TF3-Heightmap-Studio-Preview-0.6-Windows.zip)
 - [TRF3-Mod-Converter — 0.2.0](https://github.com/Druttzen/TF3-Map-Studio/releases/download/preview-2026-10-02/TRF3-Mod-Converter-Windows.zip)
+
+TRF3-Mod-Converter source is now **0.8.0**, with recursive scanning, a removable conversion queue and protected batch exports. The download above is the earlier published package. See [the current converter instructions and limitations](TRF3-Mod-Converter/README.md).
 
 The [preview release](https://github.com/Druttzen/TF3-Map-Studio/releases/tag/preview-2026-10-02) also includes checksums. Source archives are available on that page.
 

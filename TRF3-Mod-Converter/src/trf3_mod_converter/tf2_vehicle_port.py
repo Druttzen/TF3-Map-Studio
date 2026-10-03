@@ -88,6 +88,11 @@ class NativeInventory:
                             self.files[(f.parent.relative_to(self.content) / n).as_posix()] = (f, n)
             else: self.files[f.relative_to(self.content).as_posix()] = (f, None)
 
+    def fork(self):
+        result = object.__new__(type(self))
+        result.content, result.files, result.references = self.content, self.files, set()
+        return result
+
     def read(self, path: str) -> bytes:
         if path not in self.files: raise ValueError(f"Installed TF3 resource missing: {path}")
         f, n = self.files[path]
@@ -260,7 +265,7 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
                  mod_id: str, name: str, repairs: dict[str, str] | None = None,
                  overwrite: bool = False, progress=None, author: str | None = None,
                  revision: int | None = None, summary: str | None = None,
-                 tf2_game: str | Path | None = None) -> dict:
+                 tf2_game: str | Path | None = None, _native_inventory=None, _tf2_inventory=None) -> dict:
     """Export a separate native-format draft; repairs must be explicitly supplied.
 
     The report never asserts native game compatibility. Installed game resources
@@ -278,9 +283,13 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
     # Check the full tree before following any resource files.
     for p in root.rglob('*'):
         if _linked(p): raise ValueError(f"Linked source is not supported: {p}")
-    native = NativeInventory(Path(tf3_game))
+    native = _native_inventory.fork() if _native_inventory is not None else NativeInventory(Path(tf3_game))
+    if native.content.resolve() != (Path(tf3_game)/'base/content').resolve():
+        raise ValueError('Shared TF3 inventory does not match the selected installation')
     tf2_path = Path(tf2_game) if tf2_game is not None else find_tf2_game(root, Path(tf3_game))
-    tf2 = TF2Inventory(tf2_path) if tf2_path is not None else None
+    tf2 = _tf2_inventory if _tf2_inventory is not None else (TF2Inventory(tf2_path) if tf2_path is not None else None)
+    if tf2 is not None and tf2.content.resolve() != (tf2_path/'res').resolve():
+        raise ValueError('Shared TF2 inventory does not match the selected installation')
     base = BaseResourceResolver(native, tf2, family='train')
     before = snapshot(root)
     repairs = repairs or {}
