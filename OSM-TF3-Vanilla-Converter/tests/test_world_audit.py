@@ -71,6 +71,7 @@ end},streetConnectorSystem={forEach=function(callback)
  for id,components in pairs(world) do if components[T.CONSTRUCTION] then callback(id) end end
 end}}
 api.engine.util={getPlayer=function() return 42 end}
+api.engine.terrain={getBoundingBox=function() return {min={x=-500,y=-500},max={x=500,y=500}} end}
 api.res={modelRep={find=function(name) return ({["::/assets/vegetation/tree.mdl"]=1,["::/assets/fountain.mdl"]=2,["::/assets/markers/marker_locate.mdl"]=3})[name] or -1 end,
  getName=function(id) return ({"::/assets/vegetation/tree.mdl","::/assets/fountain.mdl","::/assets/markers/marker_locate.mdl"})[id] end},
  bridgeTypeRep={find=function(name) assert(name=="::/infrastructure/bridge/steel.bridge"); return 7 end},
@@ -108,6 +109,21 @@ class WorldAuditTests(unittest.TestCase):
     def inspect(self):
         return self.audit.inspect(self.lua.globals().dataset, self.lua.globals().value)
 
+    def test_saved_network_heights_detect_later_vertical_changes_without_commands(self):
+        self.lua.execute('value.heightPolicy="base-v1"; value.nodeHeights={a=10,b=10,c=10,x=10,y=10}')
+        self.assertTrue(self.inspect().ok)
+        self.lua.execute('world[11][api.type.ComponentType.BASE_NODE].position.z=9.5')
+        report=self.inspect()
+        self.assertFalse(report.ok)
+        self.assertEqual(report.problemCounts.wrongNodeHeights,1)
+        self.assertEqual(self.lua.globals().commandCalls,0)
+
+    def test_missing_accepted_network_height_is_not_reported_as_verified(self):
+        self.lua.execute('value.heightPolicy="base-v1"; value.nodeHeights={a=10,c=10,x=10,y=10}')
+        report=self.inspect()
+        self.assertFalse(report.ok)
+        self.assertEqual(report.problemCounts.wrongNodeHeights,1)
+
     def test_complete_world_counts_ownership_connectivity_and_no_mutation(self):
         before = plain(self.lua.globals().world), plain(self.lua.globals().dataset), plain(self.lua.globals().value)
         report = self.inspect()
@@ -122,6 +138,7 @@ class WorldAuditTests(unittest.TestCase):
         self.assertEqual(report.current.components, 2)
         self.assertEqual(report.expected.components, 2)
         self.assertEqual(report.degrees.b.current, 2)
+
         self.assertEqual(report.degrees.b.streets, 2)
         self.assertEqual(report.current.models, 2)
         self.assertEqual(report.current.surfaces, 1)
@@ -141,6 +158,19 @@ class WorldAuditTests(unittest.TestCase):
         check_plain(plain(report))
         after = plain(self.lua.globals().world), plain(self.lua.globals().dataset), plain(self.lua.globals().value)
         self.assertEqual(before, after)
+
+    def test_shallow_water_saved_depth_and_heights_are_verified_read_only(self):
+        self.lua.execute('''
+          dataset.scenery[3].category="waterways";dataset.scenery[3].depth=.5
+          value.options={waterways=true}
+          local item=world[200][api.type.ComponentType.CONSTRUCTION].params.items[3]
+          item.depth=.5; for _,p in ipairs(item.face) do p[3]=9.5 end
+          value.shallowHeightReference={["0.000000,0.000000"]=10,["10.000000,0.000000"]=10,["0.000000,10.000000"]=10}
+        ''')
+        self.assertTrue(self.inspect().ok)
+        self.lua.execute('world[200][api.type.ComponentType.CONSTRUCTION].params.items[3].face[1][3]=8')
+        self.assertFalse(self.inspect().ok)
+        self.assertEqual(self.lua.globals().commandCalls,0)
 
     def test_missing_node_and_component_are_detected_without_invalid_query(self):
         for mutation in ["world[11]=nil", "world[11][1]=nil", "value.nodes.b=nil", 'value.nodes.b="11"']:
@@ -339,6 +369,20 @@ class WorldAuditTests(unittest.TestCase):
                 report = self.inspect()
                 self.assertFalse(report.ok)
                 self.assertTrue(report.problemCounts.wrongNodes or report.problemCounts.wrongEdges)
+
+    def test_positive_boundary_expected_positions_match_without_mutating_source(self):
+        self.lua.execute('''
+          local T=api.type.ComponentType
+          dataset.nodes.c.pos={500,0}; world[12][T.BASE_NODE].position.x=499.99
+          dataset.scenery[1].pos={500,20}; world[200][T.CONSTRUCTION].params.items[1].pos={499.99,20,10}
+          dataset.labels[1].pos={30,500}; world[201][T.CONSTRUCTION].params.items[1].pos={30,499.99,10}
+          dataset.scenery[3].face[2]={500,0}; world[200][T.CONSTRUCTION].params.items[3].face[2]={499.99,0,10}
+        ''')
+        before=plain(self.lua.globals().dataset),plain(self.lua.globals().world)
+        report=self.inspect()
+        self.assertTrue(report.ok,plain(report.problems))
+        self.assertEqual(before,(plain(self.lua.globals().dataset),plain(self.lua.globals().world)))
+        self.assertEqual(self.lua.globals().commandCalls,0)
 
     def test_fictional_sample_expectations_and_unstarted_state(self):
         self.lua.globals().dataset = self.lua.execute((CONTENT / "dataset.lua").read_text(encoding="utf-8"))

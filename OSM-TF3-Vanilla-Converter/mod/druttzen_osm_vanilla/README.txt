@@ -1,309 +1,172 @@
-OSM IMPORTER - TRANSPORT FEVER 3 VANILLA
-Preview 0.10 | GPL-3.0 | 3 October 2026
-
-DOWNLOAD OPENSTREETMAP (0.10)
-Project > Download OSM opens an interactive OpenStreetMap view. No OSM account
-or sign-in is needed. The app connects to public HTTPS services when this
-view opens or you request a download. It does not require firewall changes.
-
-Choose any TF3 size/format, or custom dimensions. The yellow frame matches
-the map's width/height ratio in the converter's Web Mercator projection.
-At Area scale 1x its ground width and height at the centre match the game
-dimensions in metres. Another scale selects a larger/smaller real-world
-region to fit those game dimensions. Geographic variation across large
-areas means this metre scale is exact at the centre, not everywhere.
-
-Drag the map to pan, use the mouse wheel or +/- to zoom, and move the pointer
-to position the yellow frame. Click the map without dragging to lock its
-coordinates. Move frame unlocks it. Fit frame centres and fits its extent.
-Latitude/longitude + Go to coordinates jumps to another location. The initial
-view is Stockholm; existing selected bounds instead supply the initial area.
-Changing dimensions or area scale unlocks the frame and requires another
-click to lock. Pan/zoom after locking keeps the selected coordinates fixed.
-
-Click Download locked area and choose a .osm file. The download includes OSM
-nodes, ways, relations and their full referenced geometry. Complete objects
-can extend beyond the yellow boundary; the converter clips to the exact
-locked bounds. Those bounds are also embedded in the downloaded XML.
-Each download also saves <name>.overview.png beside the OSM file. It shows
-the entire locked yellow frame, coordinates, game dimensions and OSM
-attribution. The view automatically fits the frame and waits for its visible
-tiles before downloading; no extra-resolution or off-screen tiles are fetched.
-The companion .download.json records bounds, TF3 dimensions, source, counts,
-OSM and PNG checksums, overview coordinates and OpenStreetMap attribution. The converter automatically
-selects the saved OSM, its locked bounds and its chosen TF3 dimensions.
-Convert as usual; its Lua and JSON report hand the same area to Heightmap Studio.
-
-Progress reports received MB, XML validation and saving. Cancel works while
-waiting for map tiles or the data server and during transfer/validation.
-Existing OSM, overview and log files are preserved on cancellation or failure;
-a failed final save restores the previous files. If map tiles cannot load,
-the download reports the problem and leaves existing files intact. A brief completed commit is reported as successful.
-
-Visible map tiles use https://tile.openstreetmap.org with attribution and an
-application User-Agent. Only visible tiles are requested; there is no bulk
-tile download or prefetch. Tiles are cached locally for at least seven days
-and expired cache entries use conditional requests. The map cache is under
-%LOCALAPPDATA%\Druttzen\OSM-TF3\map-tiles. Advanced deployments can set
-OSM_TF3_TILE_URL to another permitted HTTPS {z}/{x}/{y}.png tile service.
-Tile usage policy: https://operations.osmfoundation.org/policies/tiles/
-
-OSM XML is downloaded through https://overpass-api.de/api/interpreter, the
-data-download service recommended by OSM. You can enter another public HTTPS
-Overpass endpoint, including your own server. Downloads are single requests,
-not parallel sweeps of a region. Public services may reject busy, very large,
-or dense requests; wait and retry, use a smaller area or your own endpoint.
-Incomplete responses, server error remarks, malformed XML and truncation
-are rejected. Download size has no fixed client file-size cap.
-OSM data: ODbL 1.0, © OpenStreetMap contributors.
-https://www.openstreetmap.org/copyright
-https://dev.overpass-api.de/overpass-doc/en/preface/commons.html
-
-STATUS
-This is a separate rebuild of VacuumTube's OSM-TPF2-Importer 1.5.
-It uses TF3 scripts and references vanilla game resources only. No asset packs,
-third-party game mods, Python installation, or downloaded assets are required
-to use the Windows companion executable.
-
-The desktop conversion, Lua state-machine, native panel contract and saved-world
-audit checks pass in automated tests. Preview 0.10 includes native runtime
-compatibility fixes and a read-only Verify built objects command. The fictional
-sample completed in TF3 Windows build 40408: 10 road/rail segments, 117 scenery
-items and one place marker. See validation.json for exact native checks and
-earlier desktop evidence. Large real-world imports, bridges, tunnels and
-actual vehicle routes remain preview work.
+TF3-OSM-IMPORTER-MOD
+Companion Preview 0.12 | Mod revision 6 | GPL-3.0 | 3 October 2026
 
 INSTALL
-1. Extract the archive to a normal folder.
-2. Copy mod\druttzen_osm_vanilla into the game's LOCAL mods folder:
-   <Steam folder>\userdata\<your Steam user ID>\3493540\local\mods\
-   The result must be ...\mods\druttzen_osm_vanilla\mod.json.
-   Do not put it under TF2's mods folder or overwrite the original TF2 mod.
-3. Launch OSM-TF3-Vanilla-Converter.exe. It needs no Python installation.
-   The exe includes the standalone mod scripts and can create a new mod itself.
-4. Choose an OSM XML file ending in .osm.
-5. Choose an output mode:
-   - Save Lua map file: exports your chosen .lua file and a .report.json beside it.
-     No game or installed mod is required. This is an importer dataset, not a
-     heightmap or a game save. To import, use it as content/osm/dataset.lua.
-   - Update installed mod: choose the existing druttzen_osm_vanilla folder.
-     Writes content/osm/dataset.lua and import-report.json. Other files stay.
-   - Create standalone mod folder: choose a parent folder. The app creates
-     druttzen_osm_vanilla with the importer, panel, dataset and license.
-     An existing mod folder is never replaced by this mode.
-6. Choose TF3 map size and format, or enter custom width and height in metres.
-   All eight sizes are available: Tiny, Small, Medium, Large, Very Large,
-   Huge, Megalomaniac and Gigantomaniac. All five formats are available:
-   1:1, 1:2, 1:3, 1:4 and 1:5. Dimensions use the installed TF3 build's
-   exact terrain-tile lookup (256 metres per tile), including rounded formats.
-   Tiny, Huge, Megalomaniac, Gigantomaniac and formats 1:4/1:5 require
-   experimentalMapFeatures enabled in TF3. The converter labels these choices
-   and does not change your game settings. Match the same size/format in TF3.
-   Editing a dimension switches to Custom dimensions. The initial 1000 x 1000
-   custom size matches the demonstration, not a native TF3 map preset.
-   Exact dimensions are written to the Lua map and JSON log for Heightmap Studio.
-   Custom geographic bounds
-   use min latitude, min longitude, max latitude, max longitude. With custom
-   bounds off, XML bounds are used, or node extents if XML has no bounds.
-   Match these bounds to your heightmap. Geometry is clipped to the map edge.
-7. Adjust the tabs, then click Convert map. Progress follows file reading,
-   coordinate projection, networks, polygons, scenery and output writing.
-   Cancel stops before commit and preserves existing outputs. Closing the
-   app during conversion requests cancellation before it closes.
-8. Review the map preview and Report tab. Large maps use a sampled preview;
-   the full dataset is still exported. Open output folder shows the result.
-   Close TF3 before updating its dataset; restart after conversion.
+Copy this druttzen_osm_vanilla folder into:
+<Steam folder>/userdata/<your Steam user ID>/3493540/local/mods/
+The result must end in mods/druttzen_osm_vanilla/mod.json.
 
-ADJUSTABLE DESKTOP SETTINGS
-- Project: input, three output modes, all TF3 sizes/formats, custom width/height
-  and geographic bounds.
-- Features: roads/tram streets, railways, footpaths, disused tracks, bridges,
-  tunnels, forests, shrubs, individual trees, ground surfaces, fountains,
-  bollards, advertising columns and named place markers.
-  Disabling bridges/tunnels excludes their ways instead of flattening them.
-- Networks: automatic/town/country road style; automatic/simple/standard/
-  high-speed track profile; automatic/always/never overhead rail wiring;
-  high-speed threshold; maximum road/rail segment lengths; tunnel depth.
-  One-way and tram streets keep suitable vanilla profiles. Speed/lane values
-  follow the chosen native profile rather than arbitrary OSM numbers.
-- Vegetation: separate forest/shrub spacing, shared generated-tree limit,
-  position variation, repeatable random seed, three editable species palettes.
-  Maximum generated trees/shrubs is 1,000,000; zero disables area vegetation.
-- Vanilla objects: replacements for tagged trees, fountains, bollards and
-  advertising columns; object rotation; asphalt/dirt/grass material mappings.
-  All choices refer to verified built-in resources.
-- In game: initial scenery batch size (1-100) and job delay (0-2 seconds).
-  These travel with the dataset; saved game settings take precedence.
-- Save settings / Load settings: JSON profiles retain every conversion option,
-  map dimensions, bounds and paths. Profiles are validated before applying.
-  Reset settings returns options and dimensions to defaults, retaining paths.
+This is the same mod bundled with OSM-TF3-Vanilla-Converter (tool 1).
+Install only one copy. Keep modId druttzen_osm_vanilla; do not rename a
+second copy and enable both. Do not put it in the original TF2 mods folder.
 
 FIRST TEST
-The mod contains a fictional 1000 x 1000 metre sample, not a real location.
-It has 10 road/rail segments, 117 scenery items and one named marker.
-Use a fresh, flat test map with this mod enabled. The sample fits within
-500 metres of the map centre. Enable only this mod for the dependency check.
-Never use a valuable existing save for the first test.
+Enable the mod on a fresh, flat test map. The included fictional dataset
+is 1000 x 1000 metres, with 10 road/rail segments, 117 scenery items and
+one named marker. Its geometry fits within 500 metres of the map centre.
+Click OSM Import in the mod button area, then Check map and resources.
+Start import begins the selected import. Use a temporary map first.
 
-START AN IMPORT
-Click OSM Import in TF3's mod button area to open the movable control window.
-Scroll through the list to choose commands and settings. Check map and resources
-runs a check without building anything; Start import begins the selected import.
-The top of the window shows live progress, wrapped messages and errors in its
-own scroll area. Commands and settings use a separate scroll area below it.
+DATASET PREPARATION
+Use the companion OSM-TF3-Vanilla-Converter to download/convert OSM XML.
+Close TF3 before changing its data. Choose Update installed mod in the
+converter and select this folder, or export a Lua map and copy it to
+content/osm/dataset.lua. Match the game dimensions and heightmap bounds.
+Restart TF3 afterwards. The dataset is not a heightmap or a game save.
 
-Commands: Check map and resources, Start import, Pause import, Resume import,
-Retry failed step, Skip failed step, Show progress, Verify built objects,
-Show place names and
-Read map size.
-Command buttons are enabled only when the current import phase allows them.
-The OSM Import button toggles the window; its close button closes only the panel.
+PANEL CONTROLS
+OSM Import toggles a movable window. Scroll its list for commands/settings.
+The window shows progress, notices and errors; its close button closes
+the panel. No debug mode or console is required for these controls.
 
-After the import finishes, Verify built objects compares saved import records
-with live nodes, roads, tracks, scenery and markers without changing the map.
-It checks endpoint connections, templates, ownership, generated vehicle lanes,
-scenery items and connected groups, then reports any discrepancies. Read long
-reports by scrolling the status area. Ground paint appearance and actual vehicle
-routes still need a map check.
-
-Show place names cycles through twenty recorded names and map coordinates
-per page. Coordinates are metres from the map centre. TF3 can optimize
-marker models into unnamed asset groups; their ordinary game windows may
-not display the name. Names and entity references stay in the importer save.
-Older saves without those records cannot reliably identify unnamed models.
+- Check map and resources checks without building. Large datasets are
+  checked in blocks of at most 1000 items; progress is saved and displayed.
+  Pause cancels a running check without building. Selections lock during
+  checking. No geometry is built until every selected item passes.
+  Prepared dimensions larger than the game map are rejected immediately.
+  Smaller sample areas are allowed; custom OSM and heightmaps must still
+  share their intended bounds and dimensions.
+- Start import builds the selected dataset categories.
+- Pause import keeps the current position; Resume import continues it.
+- Retry failed step repeats a rejected proposal, or completes ownership and
+  naming for an accepted object without rebuilding it. An accepted object
+  cannot be skipped.
+- Skip failed step omits the whole proposal, possibly a scenery batch.
+- Show progress refreshes the message and writes it to the game log.
+- Verify built objects reads live road/rail nodes, profiles, ownership,
+  vehicle-compatible lanes and connections. It checks optimized models by
+  live resource ID and transform; retained constructions by saved items.
+- Show place names displays twenty recorded names and map coordinates per
+  page. Click again for the next page. TF3 may optimize marker models into
+  unnamed asset groups; ordinary game windows may not show their names.
+- Read map size shows width and height for the companion converter.
 
 Before starting, choose roads/tram streets, railways, trees/shrubs, ground
-surfaces, decorative objects and named place markers with the checkboxes.
-Selections are saved and locked once the import starts. For another selection,
-use a fresh map. Scenery items per step (1-100) and delay between steps (0-2
-simulation seconds) can be adjusted while running or paused. A delay depends
-on simulation time; the fastest setting can continue with the game paused.
-Preparing/changing the OSM file still uses the desktop companion while TF3
-is closed. No debug mode or console is required by the panel.
+surfaces, decorative objects and named markers. These selections lock
+after starting. Scenery items per step (1-100) and delay between steps
+(0-2 simulation seconds) can change while running or paused. Delay uses
+simulation time; the fastest setting can continue with the game paused.
 
-OPTIONAL CONSOLE FALLBACK
-Enable Debug Mode in the game's settings before loading the map, then open
-the game's Lua/debug console using its console shortcut. The TF3 keybinding
-can vary with build and keyboard layout; it has not been verified here.
-Paste this optional command:
+Automatic pause can stop each run after 1-10000 successful build steps;
+0 disables it. One step is one road/rail segment, one scenery batch or one
+marker, not one object. New datasets with over 1000 items default to 100
+steps unless the dataset explicitly sets a limit. Existing imports keep
+their prior unlimited setting. Choose a small limit for a first trial.
+Save and inspect each paused run; Resume resets its step counter. Pending
+ownership finalization completes before an automatic pause. Rejected
+proposals and excluded items do not consume the successful-step limit.
+
+Progress is stored in the save. The importer builds scenery, roads/rails,
+then named markers and stops at a rejected proposal. It does not bulldoze
+existing map objects or deliberately suppress build errors. A started or
+finished dataset cannot restart in the same save. Use a fresh map for
+another dataset, keep its original dataset.lua when resuming, and keep
+this mod enabled on saves containing its scenery. A changed dataset stops
+the importer. Messages use the prefix [OSM Vanilla].
+
+OPTIONAL CONSOLE
+Enable Debug Mode in the game's settings and open its Lua/debug console.
+The console shortcut can vary with game build and keyboard layout.
 
 ug_require("druttzen_osm_vanilla::/osm/console.lua").start()
 
-To read map dimensions before conversion:
+The helper also supports .validate(), .status(), .pause(), .resume(),
+.retry(), .skip(), .verify(), .placeNames(), .configure(options), and .mapSize().
 
-ug_require("druttzen_osm_vanilla::/osm/console.lua").mapSize()
+LIMITS
+Vanilla assets only; no workshop dependency or bundled game assets.
+Road/rail widths, speeds and lanes follow their chosen native profiles.
+Footpaths/cycleways/steps are small roads with road traffic semantics.
+Narrow gauge is approximated with standard gauge. Trees, shrubs and
+ground surfaces use vanilla resources; bollards use a mooring bollard.
+Place markers and their recorded names are not functioning towns. Bridge/tunnel heights are
+estimated from terrain endpoints: inspect grades and clearances.
+Signals, buildings, stations, depots, functioning towns and water features
+require the game tools. Terrain comes from a separate heightmap.
+Imported geometry does not automatically snap to existing map nodes.
 
-The importer builds scenery, then roads/rails, then named markers. It stores
-progress in the save and builds one proposal per simulation update. Status
-and errors are printed with the prefix [OSM Vanilla]. It stops at a rejected
-proposal so you can inspect the problem. It does not bulldoze existing map
-objects or deliberately suppress build errors.
+PREVIEW STATUS
+Lua/state-machine and panel callback tests simulate TF3 boundaries.
+The existing startup fix is preserved: script resources expose global
+data() functions; helpers and datasets remain normal Lua table modules.
+Restart TF3 completely after updating, rather than using Reload UI on a
+failed startup. The fictional sample completed in TF3 Windows build 40408
+(Steam build 25533170): 10 road/rail segments, 117 scenery items and one
+marker. Read validation.json in the source package for exact native checks.
+Ground appearance and actual vehicle routes need inspection in the game.
+Large real maps, terrain slopes, bridges and tunnels remain preview work.
+Older saves without scenery entity records may report missing unnamed
+objects because they cannot be reliably identified.
+See the source package's validation.json for exact completed checks.
 
-CONTROLS
-Use the same console helper with .status(), .pause(), .resume(), .retry(),
-.skip(), .verify(), or .placeNames(). For example:
-
-ug_require("druttzen_osm_vanilla::/osm/console.lua").status()
-
-Retry repeats a rejected proposal. If geometry was accepted but ownership or
-naming failed, retry completes that step without rebuilding it; skip is refused
-for an accepted object. Skip omits a rejected proposal; a scenery
-proposal can contain up to 100 items. A finished/started dataset cannot be
-started again in the same save. Use a new map for a different dataset.
-Keep the original dataset file when resuming a saved import. Changing it
-causes the importer to stop. Keep this mod enabled on saves using its scenery.
-
-VANILLA MAPPINGS AND LIMITS
-- Roads: current vanilla small/medium/large town or country profiles.
-  One-way direction -1 reverses the geometry; no/false/0 overrides a roundabout.
-  Tram roads use the available electrified tram street profiles.
-- Rails: vanilla simple, standard or high-speed profiles, with overhead
-  electrification when requested. Narrow gauges become standard gauge.
-- Footpaths/cycleways/steps: the smallest vanilla road; these have road
-  traffic semantics. This is an approximation, not a dedicated pedestrian path.
-- Lane counts, road widths and speed limits follow the selected vanilla
-  profile. Original OSM values are retained in the dataset for inspection.
-- Forests/shrubs: deterministic vanilla trees/shrubs. Open member ways are
-  joined into multipolygons, and inner clearings are kept empty. The tree
-  limit applies to generated area vegetation; individually tagged trees remain.
-- Ground surfaces: vanilla asphalt, dirt or cut grass, including concave
-  boundaries and holes. Materials such as cobblestone/gravel are approximated.
-- Tree nodes, fountains, advertising columns and bollards: vanilla models.
-  Bollards use a vanilla mooring bollard as a visual approximation.
-- Places: separately named vanilla marker constructions. Select the marker
-  to read its name. These are not functioning towns or town HUD labels.
-- Bridges/tunnels: vanilla steel bridge and tunnel profile, with heights
-  estimated from terrain endpoints. Inspect grades and clearances manually.
-- Railway signals: add with the game's vanilla signal tool after import.
-  Automatic signal placement is not enabled in this preview.
-- Buildings, stations, depots, functioning towns, rivers and water bodies:
-  create with the game tools. They are not generated by this rebuild.
-- OSM XML only. Convert .pbf to .osm externally before using this tool.
-- No heightmap generation, game-asset redistribution, or external mod lookup.
-  Existing map nodes are not automatically snapped to imported geometry.
-
-SOURCE AND DEVELOPMENT
-Source is in tools/, tests/ and mod/. Use Python 3.10+ with Tk. The OSM map
-picker, download and overview features require Pillow; install the runtime
-dependency before running the desktop app. The command-line conversion core
-uses only Python's standard library.
-
-python -m pip install -r requirements.txt
-python tools/gui.py
-
-Or use the command-line converter:
-
-python tools/converter.py examples/sample.osm --output map.lua --size 1000 1000
-
-Or use --mod <installed-folder> or --new-mod <new-druttzen_osm_vanilla-folder>.
---settings <profile.json> applies saved desktop options; --bounds overrides XML.
-
-Development checks/build use the optional requirements-dev.txt dependencies:
-
-python -m pip install -r requirements-dev.txt
-python -m unittest discover -s tests -v
-python tests/check_resources.py "<your Transport Fever 3 installation folder>"
-powershell -File build.ps1
-
-The Lua tests simulate the command boundary and UI recipes; they cannot prove
-native TF3 proposal acceptance, ownership conversion, construction loading,
-button placement, window rendering or scrolling.
-Full native verification is still in progress: import the sample on a fresh
-map, inspect road/rail ownership and connections, run Verify built objects,
-and check pause/retry and save/reload behavior with no other mods enabled.
+UPGRADING
+Close TF3 and back up the installed mod. Replace runtime files while
+preserving content/osm/dataset.lua and import-report.json for a custom map.
+The release ZIP contains a fictional dataset. Update installed mod in the
+desktop converter updates only the dataset/report, not the runtime.
+Restart TF3 completely after installing the new runtime.
 
 ATTRIBUTION
 Original concept/mod: VacuumTube, OSM-TPF2-Importer, GPL-3.0.
-Standalone TF3 rebuild prepared for Druttzen. See LICENSE and NOTICE.txt.
-OpenStreetMap data: Â© OpenStreetMap contributors, ODbL. Follow its attribution
-requirements when publishing maps made from real OSM data:
+TF3 rebuild prepared for Druttzen. See LICENSE and NOTICE.txt.
+The included sample is fictional. Real OSM maps require attribution to
+OpenStreetMap contributors and compliance with ODbL:
 https://www.openstreetmap.org/copyright
-The included test data is fictional. Vanilla assets remain game-owned; this
-package contains references, not copies of those assets.
 
-Technical references: the installed game's api/tealdef API definitions and
-base game scripts; https://wiki.transportfever3.com/doku.php?id=modding
+The companion desktop converter and its Pillow library are not bundled in
+this game mod. NOTICE.txt retains the original concept and GPL attribution.
 
-HEIGHTMAP STUDIO COMPANION
-After conversion, launch the separate TF3-Heightmap-Studio.exe. Choose the
-converter JSON report and original OSM file; the report now includes a source
-SHA-256 checksum and the north-up map alignment. The terrain app supports
-local DEM files and public terrain downloads. It supplies a 16-bit PNG and
-exact height range for native TF3 import. See its separate README.
 
-CONVERSION LOG CHECKSUMS
-The JSON report contains sourceSha256 for original OSM and luaSha256 for
-the exact generated Lua bytes. Keep the report with the Lua file. Heightmap
-Studio uses both to align terrain with the converted map and verify identity.
+ROAD/RAIL HEIGHT PRIORITY
+New imports use TF3 base terrain, excluding construction alignments. Optional
+node elevation={metres=31.25,datum="game",source="Survey transformed to this map"}
+overrides it. Raw OSM ele is not silently converted. Saved references survive
+retry/reload; accepted junction nodes keep their positions. Verify built objects
+checks accepted heights. Older started saves keep their previous height rules.
+Terrain alignment is applied by TF3 when each network segment is constructed.
 
-STARTUP FIX - PREVIEW 0.6
-The TF3 panel, importer, GUI bridge and scenery script resources now expose
-their callbacks through global data() functions, as the TF3 resource loader
-requires. Normal helper modules and converted datasets remain Lua tables.
-Regression tests load each resource in a fresh environment and resolve all
-.script@callback references. This addresses the reported startup failure
-"function data() not defined" for panel.script@OsmImportButton.
+MAPPED SMALL WATER - EXPERIMENTAL
+Reconvert the original OSM XML with converter Preview 0.12. The converter
+prepares boundaries; this mod performs terrain changes only when built.
+Select Mapped small waters, then Check map and resources and Start import.
+This selection is initially off while native validation is pending.
+Ponds/basins and small stream/river/ditch/drain/canal zones receive a 0.5 m
+bed below saved base-terrain samples and the exact Landscaping Water Dirty
+ground material. LESS alignment lowers rather than raises terrain. Islands
+remain outside the filled area. Faces are subdivided to at most 8 m edges.
+OSM widths are used if present. Missing widths use a visible configured
+approximation, initially 2 m. Widths over 20 m need separate review.
+Prepared network corridors have a conservative 20 m water exclusion; existing
+roads/rails and other constructions are also checked before each build.
+Network elevations themselves are applied only when networks are built.
+Native proposal errors are not bypassed. Retry reuses saved bed samples.
+The new shallow bed/ground paint has automated tests but is NOT yet verified
+in native TF3. Use a separate test map before applying it to real terrain.
 
-Close TF3 completely and start it again after updating; do not use Reload UI
-on a failed startup. Existing converted dataset.lua and import-report.json
-files are preserved by the local update.
+LAKES
+Lake/reservoir geometry, names and raw OSM ele remain in waterFeatures.
+No supported per-lake sea-level command was found in the installed API.
+The mod therefore leaves lakes pending rather than changing global water.
+Raw OSM ele must not be assumed to be a game-height value.
+
+EXPERIMENTAL ELEVATED WATER SURFACES
+The separate water fields define rectangular model surfaces at chosen heights.
+These have no terrain alignment. Raised-basin shaping is disabled after native
+TF3 tests produced terrain spikes, even with an explicit sampled boundary.
+Read water support and Check test water area are read-only. Build queues a
+decorative surface. Prepare another water patch retains the accepted object
+and unlocks the next settings. At most 100 separate patches; no overlap.
+A surface at 20 m was visibly rendered and saved/reloaded in TF3. This proves
+elevated decorative appearance, not ship navigation or shallow-water terrain.
+No original game textures, materials or models are redistributed.
+See WATER-RESEARCH.md in the repository for the exact native evidence.

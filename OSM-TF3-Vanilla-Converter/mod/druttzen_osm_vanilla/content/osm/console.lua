@@ -12,6 +12,11 @@ function helper.status() send("osm.status") end
 function helper.verify() send("osm.verify") end
 function helper.placeNames() send("osm.placeNames") end
 function helper.validate() send("osm.validate") end
+function helper.waterSupport() send("osm.waterSupport") end
+function helper.waterConfigure(settings) send("osm.waterConfigure",settings) end
+function helper.waterCheck() send("osm.waterCheck") end
+function helper.waterBuild() send("osm.waterBuild") end
+function helper.waterNext() send("osm.waterNext") end
 function helper.configure(options) send("osm.configure",options) end
 function helper.mapSize()
   local box=api.engine.terrain.getBoundingBox()

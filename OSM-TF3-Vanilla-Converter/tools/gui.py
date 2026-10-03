@@ -15,7 +15,7 @@ from job import Cancelled
 from map_sizes import CUSTOM, SIZES, FORMATS, dimensions, experimental, matching_preset, validate_preset
 
 MODES=['Save Lua map file','Update installed mod','Create standalone mod folder']
-APP_VERSION='0.10-preview'
+APP_VERSION='0.12-preview'
 LABELS={
     'forest_spacing':'Forest spacing (m)', 'shrub_spacing':'Shrub spacing (m)',
     'max_generated_trees':'Maximum generated trees / shrubs', 'tree_jitter':'Position variation (0–0.49)',
@@ -24,6 +24,7 @@ LABELS={
     'road_segment_length':'Maximum road segment (m)', 'rail_segment_length':'Maximum rail segment (m)',
     'tunnel_depth':'Estimated tunnel depth (m)', 'object_rotation':'Object rotation (degrees)',
     'import_batch_size':'Scenery items per game batch', 'import_delay':'Delay between game jobs (seconds)',
+    'waterway_width':'Small water width if OSM width is missing (m)',
 }
 
 
@@ -65,7 +66,7 @@ class App(tk.Tk):
         style.configure('Horizontal.TProgressbar',background='#087c83',troughcolor='#d6e3e7')
         header=tk.Frame(self,bg='#163b46',padx=22,pady=13); header.pack(fill='x')
         tk.Label(header,text='OSM → LUA MAP',bg='#163b46',fg='white',font=('Segoe UI',21,'bold')).pack(side='left')
-        tk.Label(header,text='TRANSPORT FEVER 3 · PREVIEW 0.10\nVanilla objects · standalone converter',bg='#163b46',fg='#b9dce1',font=('Segoe UI',10),justify='right').pack(side='right')
+        tk.Label(header,text='TRANSPORT FEVER 3 · PREVIEW 0.12\nVanilla objects · standalone converter',bg='#163b46',fg='#b9dce1',font=('Segoe UI',10),justify='right').pack(side='right')
         body=ttk.Frame(self,padding=(16,12)); body.pack(fill='both',expand=True)
         body.columnconfigure(0,weight=3); body.columnconfigure(1,weight=2); body.rowconfigure(0,weight=1)
         self.book=ttk.Notebook(body); self.book.grid(row=0,column=0,sticky='nsew',padx=(0,12))
@@ -213,8 +214,8 @@ class App(tk.Tk):
 
     def build_game(self):
         f=self.pages['In game']; self.note(f,'These defaults travel with the dataset and appear in the in-game OSM Import panel. The panel lets you change batch size and pace during an import.',0)
-        for row,key in enumerate(['import_batch_size','import_delay'],1): self.field(f,row,LABELS[key],self.values[key])
-        self.note(f,'After conversion: enable the standalone mod on a new map, then click OSM Import in the game’s mod button area. Its scroll list contains Check map and resources, Start, Pause, Resume, Retry, Skip, Show progress, Verify built objects, Show place names and Read map size.\n\nVerify built objects reads the saved roads, rails, scenery and markers without building anything. Show place names displays recorded marker names and coordinates. Ground paint appearance and actual vehicle routes still need a map check.\n\nSave Lua mode exports an importer dataset, not a heightmap or a saved game. Copy it to content/osm/dataset.lua in the mod, or use Update installed mod.\n\nThe fictional sample imports in TF3 build 40408. Large real maps and actual vehicle routes still need testing.',3)
+        for row,key in enumerate(['import_batch_size','import_delay','waterway_width'],1): self.field(f,row,LABELS[key],self.values[key])
+        self.note(f,'After conversion: enable the standalone mod on a separate test map, then click OSM Import. Check map and resources works in small steps on large datasets; Pause cancels a check without building. OSM and heightmap dimensions must match the game map.\n\nLarge datasets start with automatic pause after 100 successful build steps. One step is one road/rail segment, one scenery batch or one marker. Select a smaller limit for a first trial. Inspect and save each run; Resume starts the next run. You can change the limit in the game panel.\n\nVerify built objects reads completed import records without building. Show place names displays recorded marker names and coordinates. Ground appearance and actual vehicle routes require a map check.\n\nSave Lua exports a dataset, not a heightmap or game save. Copy it to content/osm/dataset.lua, or use Update installed mod. Install the revision 6 runtime separately before updating an older mod’s dataset.',3)
 
     @staticmethod
     def default_target():
@@ -227,7 +228,7 @@ class App(tk.Tk):
         return ''
 
     def choose_source(self):
-        path=filedialog.askopenfilename(parent=self,title='Choose OSM XML',filetypes=[('OSM XML','*.osm')])
+        path=filedialog.askopenfilename(parent=self,title='Choose OSM XML',filetypes=[('OSM XML','*.osm *.xml')])
         if path:
             self.source.set(path)
             if self.mode.get()==MODES[0] and not self.target.get(): self.target.set(str(Path(path).with_suffix('.lua')))

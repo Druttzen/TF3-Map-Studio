@@ -1,10 +1,16 @@
 # OSM-TF3-Vanilla-Converter
 
-Preview 0.10 converts OpenStreetMap XML to a Transport Fever 3 importer dataset using vanilla resource references. The desktop app can download a selected OSM area, save its overview PNG, export a Lua map, update an installed importer mod, or create a standalone mod folder.
+Preview 0.12 converts OpenStreetMap XML to a Transport Fever 3 importer dataset using vanilla resource references. The desktop app can download a selected OSM area, save its overview PNG, export a Lua map, update an installed importer mod, or create a standalone mod folder.
 
-The `mod/druttzen_osm_vanilla` folder includes importer revision 4 and a fictional demonstration dataset. Its native panel has separate scrolling areas for progress/messages and commands. **Verify built objects** compares saved import records with live nodes, roads, rails and model groups without building anything. **Show place names** displays recorded marker names and coordinates; TF3 may remove model names when optimizing them into asset groups. The sample completed in TF3 Windows build 40408. Ground appearance, actual vehicle routes and large real-world imports still require testing.
+The `mod/druttzen_osm_vanilla` folder includes importer revision 6 and a fictional demonstration dataset. Its native panel has separate scrolling areas for progress/messages and commands. **Verify built objects** compares saved import records with live nodes, roads, rails and model groups without building anything. **Show place names** displays recorded marker names and coordinates; TF3 may remove model names when optimizing them into asset groups. The sample completed in TF3 Windows build 40408. Ground appearance, actual vehicle routes and large real-world imports still require testing.
+
+Revision 5 checks large datasets in blocks of at most 1000 items and rejects prepared dimensions larger than the game map before scanning geometry. **Automatic pause** stops each run after a chosen number of successful build steps. New large datasets default to 100 steps; one step is one segment, one scenery batch or one marker. Save and inspect each run before resuming. Matching map dimensions alone do not establish heightmap alignment.
+
+The importer keeps a one-centimetre inward margin at TF3's excluded positive map boundary. Checking, building and verification use the same margin without modifying the original dataset file or its geographic bounds.
 
 No game assets are included. Read [README.txt](README.txt) for installation, settings, limitations, attribution and the Heightmap Studio handoff. [validation.json](validation.json) records the current checks and preserves earlier desktop validation with its original version.
+
+The bundled revision 6 mod also includes road/rail height priority at construction time and an experimental local-water patch. These features run inside TF3; Heightmap Studio is unchanged. Preview 0.12 prepares mapped ponds and small waterways, preserving multipolygon islands, and the mod has an experimental 0.5 m bed plus Landscaping Water Dirty treatment. Missing widths use a configurable approximation. Lake geometry and raw heights are retained, but independent sea levels and lake flooding are unsupported. The shallow-water path has automated tests and awaits native validation; prior elevated model-water tests do not validate excavation. See [the water investigation](../TF3-OSM-Importer-Mod/WATER-RESEARCH.md).
 
 ## Run from source
 

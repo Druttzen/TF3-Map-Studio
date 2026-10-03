@@ -1,0 +1,12 @@
+-- Original unit triangle geometry; game-owned material is referenced only.
+function data()
+  return {
+    version=2,
+    boundingInfo={bbMin={0,0,-0.01},bbMax={1,1,0.01}},
+    collider={type="NONE",params={},transf={1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1}},
+    lods={{visibleFrom=0,visibleTo=100000,
+      node={name="OSM water triangle",transf={1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1},
+        children={{name="Water",mesh="water_triangle.msh",materials={"::/landmarks/hq/modules/mat/hq_water_tile.mtl"},
+          transf={1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1}}}}}},metadata={},
+  }
+end

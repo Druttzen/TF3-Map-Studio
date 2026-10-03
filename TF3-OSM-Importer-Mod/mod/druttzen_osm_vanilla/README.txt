@@ -1,5 +1,5 @@
 TF3-OSM-IMPORTER-MOD
-Companion Preview 0.10 | Mod revision 4 | GPL-3.0 | 3 October 2026
+Companion Preview 0.12 | Mod revision 6 | GPL-3.0 | 3 October 2026
 
 INSTALL
 Copy this druttzen_osm_vanilla folder into:
@@ -29,7 +29,13 @@ OSM Import toggles a movable window. Scroll its list for commands/settings.
 The window shows progress, notices and errors; its close button closes
 the panel. No debug mode or console is required for these controls.
 
-- Check map and resources checks without building anything.
+- Check map and resources checks without building. Large datasets are
+  checked in blocks of at most 1000 items; progress is saved and displayed.
+  Pause cancels a running check without building. Selections lock during
+  checking. No geometry is built until every selected item passes.
+  Prepared dimensions larger than the game map are rejected immediately.
+  Smaller sample areas are allowed; custom OSM and heightmaps must still
+  share their intended bounds and dimensions.
 - Start import builds the selected dataset categories.
 - Pause import keeps the current position; Resume import continues it.
 - Retry failed step repeats a rejected proposal, or completes ownership and
@@ -50,6 +56,15 @@ surfaces, decorative objects and named markers. These selections lock
 after starting. Scenery items per step (1-100) and delay between steps
 (0-2 simulation seconds) can change while running or paused. Delay uses
 simulation time; the fastest setting can continue with the game paused.
+
+Automatic pause can stop each run after 1-10000 successful build steps;
+0 disables it. One step is one road/rail segment, one scenery batch or one
+marker, not one object. New datasets with over 1000 items default to 100
+steps unless the dataset explicitly sets a limit. Existing imports keep
+their prior unlimited setting. Choose a small limit for a first trial.
+Save and inspect each paused run; Resume resets its step counter. Pending
+ownership finalization completes before an automatic pause. Rejected
+proposals and excluded items do not consume the successful-step limit.
 
 Progress is stored in the save. The importer builds scenery, roads/rails,
 then named markers and stops at a rejected proposal. It does not bulldoze
@@ -110,3 +125,48 @@ https://www.openstreetmap.org/copyright
 
 The companion desktop converter and its Pillow library are not bundled in
 this game mod. NOTICE.txt retains the original concept and GPL attribution.
+
+
+ROAD/RAIL HEIGHT PRIORITY
+New imports use TF3 base terrain, excluding construction alignments. Optional
+node elevation={metres=31.25,datum="game",source="Survey transformed to this map"}
+overrides it. Raw OSM ele is not silently converted. Saved references survive
+retry/reload; accepted junction nodes keep their positions. Verify built objects
+checks accepted heights. Older started saves keep their previous height rules.
+Terrain alignment is applied by TF3 when each network segment is constructed.
+
+MAPPED SMALL WATER - EXPERIMENTAL
+Reconvert the original OSM XML with converter Preview 0.12. The converter
+prepares boundaries; this mod performs terrain changes only when built.
+Select Mapped small waters, then Check map and resources and Start import.
+This selection is initially off while native validation is pending.
+Ponds/basins and small stream/river/ditch/drain/canal zones receive a 0.5 m
+bed below saved base-terrain samples and the exact Landscaping Water Dirty
+ground material. LESS alignment lowers rather than raises terrain. Islands
+remain outside the filled area. Faces are subdivided to at most 8 m edges.
+OSM widths are used if present. Missing widths use a visible configured
+approximation, initially 2 m. Widths over 20 m need separate review.
+Prepared network corridors have a conservative 20 m water exclusion; existing
+roads/rails and other constructions are also checked before each build.
+Network elevations themselves are applied only when networks are built.
+Native proposal errors are not bypassed. Retry reuses saved bed samples.
+The new shallow bed/ground paint has automated tests but is NOT yet verified
+in native TF3. Use a separate test map before applying it to real terrain.
+
+LAKES
+Lake/reservoir geometry, names and raw OSM ele remain in waterFeatures.
+No supported per-lake sea-level command was found in the installed API.
+The mod therefore leaves lakes pending rather than changing global water.
+Raw OSM ele must not be assumed to be a game-height value.
+
+EXPERIMENTAL ELEVATED WATER SURFACES
+The separate water fields define rectangular model surfaces at chosen heights.
+These have no terrain alignment. Raised-basin shaping is disabled after native
+TF3 tests produced terrain spikes, even with an explicit sampled boundary.
+Read water support and Check test water area are read-only. Build queues a
+decorative surface. Prepare another water patch retains the accepted object
+and unlocks the next settings. At most 100 separate patches; no overlap.
+A surface at 20 m was visibly rendered and saved/reloaded in TF3. This proves
+elevated decorative appearance, not ship navigation or shallow-water terrain.
+No original game textures, materials or models are redistributed.
+See WATER-RESEARCH.md in the repository for the exact native evidence.

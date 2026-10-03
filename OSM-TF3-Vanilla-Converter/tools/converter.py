@@ -17,6 +17,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 from settings import normalize_options, SPECIES, MODELS, MATERIALS
 from job import Job, Cancelled
+from hydrology import prepare as prepare_water
 
 MOD_ID = 'druttzen_osm_vanilla'
 ROADS = {'motorway','motorway_link','trunk','trunk_link','primary','primary_link',
@@ -46,8 +47,8 @@ def read_osm(path, job=None):
     path = Path(path)
     job=job or Job()
     job.update(0,'Reading OSM',path.name)
-    if path.suffix.lower() != '.osm':
-        raise ValueError('Use an OSM XML file ending in .osm. Convert PBF to XML first.')
+    if path.suffix.lower() not in {'.osm','.xml'}:
+        raise ValueError('Use an OSM XML file ending in .osm or .xml. Convert PBF to XML first.')
     file_size=path.stat().st_size
     count=0
     nodes, ways, relations, bounds = {}, {}, {}, None
@@ -424,8 +425,9 @@ def convert(path,bounds,size,spacing=18,max_trees=100000,*,options=None,progress
         warn('OSM building footprints are not imported. Add vanilla buildings and functioning towns with the game tools.')
     if any(e['bridge'] or e['tunnel'] for e in data['edges']):
         warn('Bridge/tunnel heights are estimated from terrain at endpoints; inspect grades and clearances after import.')
-    if any(tags.get('waterway') in {'river','stream'} for _,tags in ways.values()):
-        warn('Rivers and streams are not imported as roads. Use the vanilla terrain/water tools to shape water.')
+    if features['waterways']:
+        prepare_water(data,ways,relations,positions,members_for,join_rings,triangulate,
+                      clip_polygon,signed_area,job,warn,options['waterway_width'],inside)
     if any(tags.get('railway')=='signal' for _,_,tags in nodes.values()):
         warn('Railway signals require placement with the vanilla signal tool after import. Automatic TF3 signal placement is not enabled.')
     if data['edges']:
@@ -476,6 +478,7 @@ def write_outputs(source,data_path,report_path,bounds,size,spacing,max_trees,opt
     data=convert(source,bounds,size,spacing,max_trees,options=options,_job=job)
     report={'dataset':data['id'],'input':source.name,'bounds':data['bounds'],'mapSize':data['size'],
             'edges':len(data['edges']),'sceneryItems':len(data['scenery']),'placeLabels':len(data['labels']),
+            'waterFeatures':len(data.get('waterFeatures',[])),
             'warnings':data['warnings'],'settings':data['conversionSettings'],'output':str(data_path),
             'report':str(report_path),'sourceSha256':job.source_sha256,
             'alignment':{'projection':'EPSG:3857 scaled to map size','origin':'centre',

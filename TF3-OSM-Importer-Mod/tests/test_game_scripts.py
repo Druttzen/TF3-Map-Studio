@@ -35,7 +35,9 @@ api={type={ComponentType={BASE_NODE=1,PLAYER_OWNED=2,BASE_EDGE=3,CONSTRUCTION=4,
   groundTextureRep={find=function(name) if name==missing then return -1 end return name end},constructionRep=rep},
  engine={util={getPlayer=function() return 42 end},terrain={
   isValidCoordinate=function(_) return not outside end,
-  getHeightAt=function(_) return 10 end},
+  getBoundingBox=function() return {min={x=-500,y=-500},max={x=500,y=500}} end,
+  getHeightAt=function(_) return 10 end,getBaseHeightAt=function(_) return 10 end},
+  mapgen={getMinMaxValidTerrainHeight=function() return {-1000,9000} end},
   entityExists=function(id) return components[id]~=nil end,
   getComponent=function(id,kind)
     if kind==2 then return owners[id] end
@@ -86,9 +88,10 @@ api.cmd.sendCommand=function(p,callback)
  end
  local resultEntities={}
  for _,con in ipairs(p.constructionsToAdd or {}) do
+   assert(con.params.seed==0,"Native construction proposals require a seed")
    nextId=nextId+1
-   local hasGround=false
-   for _,item in ipairs(con.params.items) do if item.texture then hasGround=true end end
+   local hasGround=con.params.carve or false
+   for _,item in ipairs(con.params.items or {}) do if item.texture then hasGround=true end end
    -- TF3 flattens model-only proposals into asset groups and loses their name.
    local flattened=flattenModelOnly and not hasGround
    components[nextId]=not flattened and {fileName=con.fileName,params=con.params} or {assetGroup=true,items=con.params.items}
@@ -112,6 +115,7 @@ class GameScriptTests(unittest.TestCase):
         self.lua.globals().modules=self.lua.table_from({
             'druttzen_osm_vanilla::/osm/dataset.lua':self.lua.globals().dataset,
             'druttzen_osm_vanilla::/osm/controls.lua':self.lua.execute((CONTENT/'controls.lua').read_text(encoding='utf-8')),
+            'druttzen_osm_vanilla::/osm/water.lua':self.lua.execute((CONTENT/'water.lua').read_text(encoding='utf-8')),
         })
         self.lua.execute(MOCK)
         self.lua.globals().modules['druttzen_osm_vanilla::/osm/ui_snapshot.lua']=self.lua.execute(
@@ -150,6 +154,71 @@ class GameScriptTests(unittest.TestCase):
         count=len(self.lua.globals().commands)
         self.event('start'); self.step()
         self.assertEqual(len(self.lua.globals().commands),count)
+
+    def network_only(self):
+        self.event('configure',dict(vegetation=False,surfaces=False,objects=False,places=False))
+
+    def edge_proposals(self):
+        return [p for p in self.lua.globals().commands.values() if p.streetProposal.edgesToAdd]
+
+    def test_new_network_uses_base_height_excluding_construction_alignments(self):
+        self.lua.execute('api.engine.terrain.getHeightAt=function(_) return -20 end; api.engine.terrain.getBaseHeightAt=function(_) return 37 end')
+        self.network_only(); self.event('start'); self.finish()
+        self.assertEqual(self.state.value.heightPolicy,'base-v1')
+        self.assertTrue(all(p.streetProposal.edgesToAdd[1].comp.position0.z==37 for p in self.edge_proposals()))
+        self.assertTrue(all(z==37 for z in self.state.value.nodeHeights.values()))
+
+    def test_explicit_sourced_game_height_has_priority_and_zero_is_valid(self):
+        self.lua.execute('local e=dataset.edges[1]; dataset.nodes[e.node0].elevation={metres=0,datum="game",source="Survey transformed to this game map"}')
+        self.network_only(); self.event('start'); self.finish()
+        self.assertEqual(self.edge_proposals()[0].streetProposal.edgesToAdd[1].comp.position0.z,0)
+
+    def test_raw_osm_elevation_or_missing_provenance_cannot_be_used_silently(self):
+        for e in ('{metres=20,datum="sea",source="OSM ele"}', '{metres=20,datum="game"}', '{metres=0/0,datum="game",source="survey"}'):
+            with self.subTest(elevation=e):
+                self.lua.execute('dataset.nodes[dataset.edges[1].node0].elevation='+e)
+                self.event('start')
+                self.assertEqual(self.state.value.phase,'ready')
+                self.assertEqual(len(self.lua.globals().commands),0)
+
+    def test_explicit_height_outside_native_limits_fails_before_building(self):
+        self.lua.execute('dataset.nodes[dataset.edges[1].node0].elevation={metres=99999,datum="game",source="survey"}')
+        self.event('start')
+        self.assertIn('height limits',self.state.value.notice)
+        self.assertEqual(len(self.lua.globals().commands),0)
+
+    def test_rejected_network_step_keeps_height_reference_across_retry_reload(self):
+        self.network_only(); self.event('start'); self.lua.globals().failNext=True; self.step()
+        if self.state.value.phase=='scenery': self.step()
+        self.assertEqual(self.state.value.phase,'error')
+        self.lua.execute('api.engine.terrain.getBaseHeightAt=function(_) return 99 end')
+        self.script=load_script(self.lua,CONTENT/'importer.script.lua')
+        self.event('retry'); self.finish()
+        p=self.edge_proposals()[1].streetProposal.edgesToAdd[1]
+        self.assertEqual(p.comp.position0.z,10)
+        self.assertEqual(p.comp.position1.z,10)
+
+    def test_old_started_save_retains_legacy_height_behavior(self):
+        self.network_only(); self.event('start')
+        self.state.value.heightPolicy=None
+        self.lua.execute('api.engine.terrain.getHeightAt=function(_) return 19 end; api.engine.terrain.getBaseHeightAt=function(_) return 99 end')
+        self.finish()
+        self.assertEqual(self.edge_proposals()[0].streetProposal.edgesToAdd[1].comp.position0.z,19)
+
+    def test_water_support_reads_global_level_without_building(self):
+        self.lua.execute('api.type.ComponentType.TERRAIN=7; api.engine.util.getWorld=function() return 900 end; local old=api.engine.getComponent; api.engine.getComponent=function(id,kind) if id==900 and kind==7 then return {waterLevel=12.5} end return old(id,kind) end')
+        self.event('waterSupport')
+        self.assertIn('12.50 m',self.state.value.notice)
+        self.assertIn('Water Dirty',self.state.value.notice)
+        self.assertIn('not navigable water',self.state.value.notice)
+        self.assertEqual(self.state.value.phase,'ready')
+        self.assertEqual(len(self.lua.globals().commands),0)
+        self.assertEqual(len(self.lua.globals().ownershipCommands),0)
+
+    def test_water_support_missing_world_component_reports_unknown(self):
+        self.event('waterSupport')
+        self.assertIn('could not be read',self.state.value.notice)
+        self.assertEqual(len(self.lua.globals().commands),0)
 
     def test_pause_resume_keeps_cursor(self):
         self.event('start'); self.step(); self.event('pause')
@@ -525,6 +594,176 @@ class GameScriptTests(unittest.TestCase):
         controls=self.lua.globals().modules['druttzen_osm_vanilla::/osm/controls.lua']
         item=self.lua.table_from({'model':'::/assets/vegetation/tree.mdl','category':'objects'})
         self.assertEqual(controls.sceneryCategory(item),'objects')
+
+    def large_dataset(self):
+        self.lua.execute('''
+          local original=dataset.edges[1]
+          dataset.edges={}
+          for i=1,2500 do dataset.edges[i]=original end
+          dataset.scenery={}; dataset.labels={}
+        ''')
+
+    def test_large_check_yields_and_builds_nothing_until_every_item_passes(self):
+        self.large_dataset(); self.event('start')
+        self.assertEqual(self.state.value.phase,'checking')
+        self.assertIsNone(self.state.value.datasetId)
+        self.step()
+        self.assertEqual(self.state.value.check.checked,1000)
+        self.assertEqual(len(self.lua.globals().commands),0)
+        self.step(); self.step()
+        self.assertEqual(self.state.value.phase,'scenery')
+        self.assertEqual(len(self.lua.globals().commands),0)
+        self.step()
+        self.assertEqual(len(self.lua.globals().commands),1)
+
+    def test_new_large_import_defaults_to_a_bounded_run_but_keeps_explicit_setting(self):
+        self.large_dataset(); self.state.value=None
+        self.script.update(None,self.state,1)
+        self.assertEqual(self.state.value.options.stepLimit,100)
+        self.assertIn('Large dataset',self.state.value.notice)
+        self.lua.globals().dataset.importOptions.stepLimit=10
+        self.state.value=None; self.script.update(None,self.state,1)
+        self.assertEqual(self.state.value.options.stepLimit,10)
+
+    def test_late_large_check_failure_never_builds_a_partial_map(self):
+        self.large_dataset()
+        self.lua.execute('''
+          dataset.nodes.bad={pos={10000,0}}
+          dataset.edges[2500]={node0="bad",node1=dataset.edges[1].node1,kind="STREET",template=dataset.edges[1].template}
+          api.engine.terrain.isValidCoordinate=function(p) return math.abs(p.x)<=500 and math.abs(p.y)<=500 end
+        ''')
+        self.event('start'); self.step(); self.step(); self.step()
+        self.assertEqual(self.state.value.phase,'ready')
+        self.assertIsNone(self.state.value.datasetId)
+        self.assertIn('2499/2500',self.state.value.notice)
+        self.assertEqual(len(self.lua.globals().commands),0)
+
+    def test_check_cancel_and_selection_lock_do_not_start_an_import(self):
+        self.large_dataset(); self.event('start'); self.step()
+        self.event('configure',dict(roads=False))
+        self.assertTrue(self.state.value.options.roads)
+        self.event('start')
+        self.assertEqual(self.state.value.check.checked,1000)
+        self.event('pause'); self.step()
+        self.assertEqual(self.state.value.phase,'ready')
+        self.assertIsNone(self.state.value.check)
+        self.assertIsNone(self.state.value.datasetId)
+        self.assertEqual(len(self.lua.globals().commands),0)
+
+    def test_large_check_survives_script_reload_without_building(self):
+        self.large_dataset(); self.event('validate'); self.step()
+        self.script=load_script(self.lua,CONTENT/'importer.script.lua')
+        self.step(); self.step()
+        self.assertEqual(self.state.value.phase,'ready')
+        self.assertIn('passed',self.state.value.notice)
+        self.assertEqual(len(self.lua.globals().commands),0)
+
+    def test_large_check_rejects_changed_dataset(self):
+        self.large_dataset(); self.event('start'); self.step()
+        self.lua.globals().dataset.id='changed'; self.step()
+        self.assertEqual(self.state.value.phase,'ready')
+        self.assertIn('Dataset changed',self.state.value.notice)
+        self.assertEqual(len(self.lua.globals().commands),0)
+
+    def test_oversized_dataset_rejected_before_terrain_scan(self):
+        self.lua.execute('''
+          dataset.size={20000,20000}
+          api.engine.terrain.getBoundingBox=function() return {min={x=-8192,y=-8192},max={x=8192,y=8192}} end
+          api.engine.terrain.isValidCoordinate=function(_) error("Unexpected coordinate scan") end
+        ''')
+        self.event('start')
+        self.assertEqual(self.state.value.phase,'ready')
+        self.assertIn('20000 x 20000',self.state.value.notice)
+        self.assertIn('16384 x 16384',self.state.value.notice)
+        self.assertIn('heightmap',self.state.value.notice)
+        self.assertEqual(len(self.lua.globals().commands),0)
+
+    def test_automatic_pause_resume_and_reload_preserve_exact_step_count(self):
+        self.event('configure',dict(stepLimit=2,batchSize=10))
+        self.event('start'); self.step(); self.step(); self.step()
+        self.assertEqual(self.state.value.phase,'paused')
+        self.assertEqual(self.state.value.builtScenery,20)
+        self.assertEqual(len(self.lua.globals().commands),2)
+        self.script=load_script(self.lua,CONTENT/'importer.script.lua')
+        self.step()
+        self.assertEqual(len(self.lua.globals().commands),2)
+        self.event('resume'); self.step(); self.step(); self.step()
+        self.assertEqual(self.state.value.phase,'paused')
+        self.assertEqual(self.state.value.builtScenery,40)
+        self.assertEqual(len(self.lua.globals().commands),4)
+        self.event('configure',dict(stepLimit=0)); self.event('resume'); self.finish()
+        self.assertEqual(self.state.value.builtScenery,117)
+
+    def test_accepted_ownership_retry_uses_one_budget_step_without_duplicate(self):
+        self.event('configure',dict(stepLimit=1))
+        self.lua.globals().failOwnershipNext=True
+        self.event('start'); self.step()
+        self.assertEqual(self.state.value.phase,'error')
+        self.assertEqual(self.state.value.runSteps,1)
+        self.event('retry'); self.step()
+        self.assertEqual(self.state.value.phase,'paused')
+        self.assertEqual(len(self.lua.globals().commands),1)
+
+    def test_excluded_sources_are_scanned_in_bounded_steps(self):
+        self.lua.execute('''
+          local original=dataset.scenery[1]
+          dataset.scenery={}
+          for i=1,2500 do dataset.scenery[i]=original end
+        ''')
+        self.event('configure',dict(vegetation=False,surfaces=False,objects=False,places=False))
+        self.event('start'); self.step(); self.step(); self.step()
+        self.assertEqual(self.state.value.phase,'scenery')
+        self.step()
+        self.assertEqual(self.state.value.cursor,1001)
+        self.assertEqual(len(self.lua.globals().commands),0)
+        self.lua.execute('''
+          state.value.phase="edges"; state.value.cursor=1
+          local original=dataset.edges[1]
+          dataset.edges={}
+          for i=1,2500 do dataset.edges[i]=original end
+          state.value.options.roads=false
+        ''')
+        self.step()
+        self.assertEqual(self.state.value.cursor,1001)
+        self.assertEqual(len(self.lua.globals().commands),0)
+
+    def test_invalid_pause_limits_are_atomic(self):
+        for value in [-1,1.5,10001,float('nan'),True,'10']:
+            with self.subTest(value=value):
+                self.event('configure',dict(stepLimit=value,roads=False))
+                self.assertEqual(self.state.value.options.stepLimit,0)
+                self.assertTrue(self.state.value.options.roads)
+
+    def test_positive_boundary_is_inset_consistently_without_changing_dataset(self):
+        self.lua.execute('''
+          api.engine.terrain.isValidCoordinate=function(p) return p.x>=-500 and p.y>=-500 and p.x<500 and p.y<500 end
+          local y=0; for _,node in pairs(dataset.nodes) do node.pos={500,y}; y=y+10 end
+          dataset.scenery[1].pos={500,500}
+          dataset.labels[1].pos={500,500}
+        ''')
+        self.event('start'); self.finish()
+        d=self.lua.globals().dataset
+        self.assertEqual(d.labels[1].pos[1],500)
+        self.assertEqual(d.scenery[1].pos[1],500)
+        self.assertTrue(all(node.pos[1]==500 for node in d.nodes.values()))
+        for proposal in self.lua.globals().commands.values():
+            for node in (proposal.streetProposal.nodesToAdd or self.lua.table()).values():
+                self.assertAlmostEqual(node.comp.position.x,499.99)
+                self.assertLess(node.comp.position.y,500)
+        first=self.lua.globals().commands[1].constructionsToAdd[1].params['items'][1]
+        self.assertAlmostEqual(first.pos[1],499.99)
+        last=self.lua.globals().commands[len(self.lua.globals().commands)].constructionsToAdd[1].params['items'][1]
+        self.assertAlmostEqual(last.pos[1],499.99)
+
+    def test_positive_boundary_margin_does_not_hide_genuinely_outside_geometry(self):
+        self.lua.execute('''
+          api.engine.terrain.isValidCoordinate=function(p) return p.x>=-500 and p.y>=-500 and p.x<500 and p.y<500 end
+          dataset.labels[1].pos={500.1,0}
+        ''')
+        self.event('start')
+        self.assertEqual(self.state.value.phase,'ready')
+        self.assertIn('500.100',self.state.value.notice)
+        self.assertEqual(len(self.lua.globals().commands),0)
 
 
 if __name__=='__main__': unittest.main()

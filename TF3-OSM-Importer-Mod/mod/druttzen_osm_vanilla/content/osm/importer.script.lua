@@ -2,6 +2,7 @@
 local dataset = ug_require "druttzen_osm_vanilla::/osm/dataset.lua"
 local controls = ug_require "druttzen_osm_vanilla::/osm/controls.lua"
 local worldAudit = ug_require "druttzen_osm_vanilla::/osm/world_audit.lua"
+local water = ug_require "druttzen_osm_vanilla::/osm/water.lua"
 local script = {}
 local eventId = "druttzen_osm_vanilla"
 local sceneryName = "druttzen_osm_vanilla::/osm/scenery.con"
@@ -19,8 +20,14 @@ local function initialState(state)
   local value = state:get() or {}
   if not value.phase then
     value = { phase="ready", cursor=1, builtEdges=0, builtScenery=0, skipped=0, nodes={}, labels=0 }
+    if #dataset.edges+#dataset.scenery+#dataset.labels>1000 and not (dataset.importOptions and dataset.importOptions.stepLimit~=nil) then
+      value.options=controls.options(dataset.importOptions); value.options.stepLimit=100
+      value.notice="Large dataset: automatic pause is set to 100 successful build steps per run. Inspect and save each run before resuming."
+    end
   end
   value.options=controls.options(value.options or dataset.importOptions)
+  value.waterSettings=water.settings(value.waterSettings)
+  value.waterRecords=value.waterRecords or {}
   return value
 end
 
@@ -40,72 +47,150 @@ local function requireResource(rep, name)
   return id
 end
 
-local function preflight(value)
+local checkBudget=1000
+
+local function newCheck(value,starting)
   assert(dataset.schema==1 and type(dataset.id)=="string" and dataset.id~="", "Prepare an OSM dataset with the converter first.")
   assert(#dataset.edges+#dataset.scenery+#dataset.labels>0, "Dataset has no supported roads, tracks or scenery.")
   local totals=controls.totals(dataset,value.options)
   assert(totals.edges+totals.scenery+totals.labels>0,"No dataset items match your import selections.")
+  local box=api.engine.terrain.getBoundingBox()
+  local width,height=box.max.x-box.min.x,box.max.y-box.min.y
+  assert(type(dataset.size)=="table" and type(dataset.size[1])=="number" and type(dataset.size[2])=="number"
+    and dataset.size[1]>0 and dataset.size[2]>0,"Invalid prepared map dimensions")
+  assert(dataset.size[1]<=width+0.01 and dataset.size[2]<=height+0.01,
+    string.format("Prepared area %.0f x %.0f m is larger than this map (%.0f x %.0f m). Reconvert OSM and heightmap with matching dimensions; do not scale only one file.",
+      dataset.size[1],dataset.size[2],width,height))
+  return {datasetId=dataset.id,starting=starting,returnPhase=value.phase,section=1,cursor=1,checked=0,
+    total=#dataset.edges+#dataset.scenery+#dataset.labels,resources={}}
+end
+
+local function advanceCheck(value,job,budget)
+  assert(job.datasetId==dataset.id,"Dataset changed during checking; restore the original dataset.")
+  local box=api.engine.terrain.getBoundingBox()
   local function checkPosition(p)
     assert(type(p)=="table" and type(p[1])=="number" and type(p[2])=="number"
       and p[1]==p[1] and p[2]==p[2] and math.abs(p[1])<math.huge and math.abs(p[2])<math.huge,
       "Invalid dataset coordinate")
+    p=controls.position(p,box)
     assert(api.engine.terrain.isValidCoordinate(api.type.Vec2f.new(p[1],p[2])),
-      "Dataset extends outside this map; check converter map width and height.")
+      string.format("Dataset coordinate x %.3f, y %.3f is outside this map; check converter map width and height.",p[1],p[2]))
   end
-  local checked = {}
-  for _, edge in ipairs(dataset.edges) do
+  local checked=job.resources
+  local function resource(rep,name)
+    assert(type(name)=="string" and (name:sub(1,3)=="::/" or name=="druttzen_osm_vanilla::/osm/dirty_water.gtex"),"Non-vanilla reference rejected: "..tostring(name))
+    if not checked[name] then requireResource(rep,name); checked[name]=true end
+  end
+  local function checkEdge(edge)
     if value.options[edge.kind=="TRACK" and "railways" or "roads"] then
       assert(dataset.nodes[edge.node0] and dataset.nodes[edge.node1], "Invalid dataset node reference")
       checkPosition(dataset.nodes[edge.node0].pos)
       checkPosition(dataset.nodes[edge.node1].pos)
-      if not checked[edge.template] then
-        requireResource(api.res.streetTemplateRep, edge.template)
-        checked[edge.template] = true
+      for _,id in ipairs({edge.node0,edge.node1}) do
+        local z=controls.elevation(dataset.nodes[id])
+        if z~=nil then
+          local limits=api.engine.mapgen.getMinMaxValidTerrainHeight()
+          assert(z>=limits[1] and z<=limits[2],"Road/rail elevation is outside TF3's terrain height limits")
+        end
       end
-      if edge.bridge then requireResource(api.res.bridgeTypeRep, bridgeName) end
-      if edge.tunnel then requireResource(api.res.tunnelTypeRep, tunnelName) end
+      resource(api.res.streetTemplateRep,edge.template)
+      if edge.bridge then resource(api.res.bridgeTypeRep,bridgeName) end
+      if edge.tunnel then resource(api.res.tunnelTypeRep,tunnelName) end
       if edge.heightGuide then checkPosition(edge.heightGuide.start); checkPosition(edge.heightGuide.finish) end
     end
   end
-  for _, item in ipairs(dataset.scenery) do
+  local function checkScenery(item)
     if value.options[controls.sceneryCategory(item)] then
-      if item.model and not checked[item.model] then
-        requireResource(api.res.modelRep, item.model)
-        checked[item.model] = true
-      end
+      if item.model then resource(api.res.modelRep,item.model) end
       if item.model then checkPosition(item.pos) end
       if item.texture then
-        if not checked[item.texture] then
-          requireResource(api.res.groundTextureRep,item.texture); checked[item.texture]=true
+        if item.category=="waterways" then
+          assert(item.depth==0.5 and item.texture=="druttzen_osm_vanilla::/osm/dirty_water.gtex","Invalid shallow-water treatment")
+          assert(#item.face==3,"Shallow water requires a prepared triangle")
         end
+        resource(api.res.groundTextureRep,item.texture)
         assert(#item.face>=3,"Invalid ground polygon")
         for _,p in ipairs(item.face) do checkPosition(p) end
       end
     end
   end
-  if value.options.places then
-    for _,label in ipairs(dataset.labels) do checkPosition(label.pos) end
-    if #dataset.labels>0 then requireResource(api.res.modelRep,markerName) end
+  local lists={dataset.edges,dataset.scenery,dataset.labels}
+  local used=0
+  while job.section<=3 and used<budget do
+    local list=lists[job.section]
+    if job.cursor>#list then job.section=job.section+1; job.cursor=1
+    else
+      local item=list[job.cursor]
+      if job.section==1 then checkEdge(item)
+      elseif job.section==2 then checkScenery(item)
+      elseif value.options.places then checkPosition(item.pos); resource(api.res.modelRep,markerName) end
+      job.cursor=job.cursor+1; job.checked=job.checked+1; used=used+1
+    end
   end
-  if totals.scenery+totals.labels>0 then requireResource(api.res.constructionRep, sceneryName) end
-  -- Never accept a referenced visual resource from another mod namespace.
-  for name, _ in pairs(checked) do assert(name:sub(1,3)=="::/", "Non-vanilla reference rejected: "..name) end
+  while job.section<=3 and job.cursor>#lists[job.section] do job.section=job.section+1; job.cursor=1 end
+  if job.section<=3 then return false end
+  local totals=controls.totals(dataset,value.options)
+  if totals.scenery+totals.labels>0 then requireResource(api.res.constructionRep,sceneryName) end
   for _,warning in ipairs(controls.warnings(dataset)) do message(warning) end
+  return true
+end
+
+local function beginImport(value)
+  value.datasetId=dataset.id; value.phase="scenery"; value.cursor=1; value.nodes={}; value.runSteps=0
+  -- Preserve older saves' height rules. New imports exclude construction
+  -- alignments from their height reference, including future water basins.
+  value.heightPolicy="base-v1"; value.heightReference={}; value.nodeHeights={}
+  value.notice="Import started."; value.error=nil
+  message("Starting vanilla import. No existing roads, trees or towns will be deleted.")
+end
+
+local function finishCheck(value,job)
+  value.check=nil; value.phase=job.returnPhase
+  if job.starting then beginImport(value)
+  else value.notice="Map and vanilla resource checks passed." end
+end
+
+local function requestCheck(value,starting)
+  local job=newCheck(value,starting)
+  if job.total<=checkBudget then
+    assert(advanceCheck(value,job,checkBudget)); finishCheck(value,job)
+  else
+    value.check=job; value.phase="checking"
+    value.notice="Checking map and resources in small steps. Pause cancels the check without building."
+  end
 end
 
 local function terrainZ(pos)
+  pos=controls.position(pos,api.engine.terrain.getBoundingBox())
   local xy = api.type.Vec2f.new(pos[1],pos[2])
   assert(api.engine.terrain.isValidCoordinate(xy), "Coordinate outside this map; check converter map size.")
   return api.engine.terrain.getHeightAt(xy)
 end
 
-local function nodePosition(edge, nodeId, ending)
-  local p = dataset.nodes[nodeId].pos
-  local z = terrainZ(p)
-  if edge.heightGuide then
+local function referenceHeight(value,pos)
+  if value.heightPolicy~="base-v1" then return terrainZ(pos) end
+  pos=controls.position(pos,api.engine.terrain.getBoundingBox())
+  local key=string.format("%.6f,%.6f",pos[1],pos[2])
+  value.heightReference=value.heightReference or {}
+  local z=value.heightReference[key]
+  if z==nil then
+    local xy=api.type.Vec2f.new(pos[1],pos[2])
+    assert(api.engine.terrain.isValidCoordinate(xy),"Coordinate outside this map")
+    z=api.engine.terrain.getBaseHeightAt(xy)
+    assert(controls.finiteHeight(z),"TF3 returned an invalid base terrain height")
+    value.heightReference[key]=z
+  end
+  return z
+end
+
+local function nodePosition(edge, nodeId, ending,value)
+  local p = controls.position(dataset.nodes[nodeId].pos,api.engine.terrain.getBoundingBox())
+  local explicit=value.heightPolicy=="base-v1" and controls.elevation(dataset.nodes[nodeId]) or nil
+  local z = explicit or referenceHeight(value,p)
+  if edge.heightGuide and explicit==nil then
     local guide = edge.heightGuide
     local t = ending and guide.t1 or guide.t0
-    z = terrainZ(guide.start)*(1-t)+terrainZ(guide.finish)*t
+    z = referenceHeight(value,guide.start)*(1-t)+referenceHeight(value,guide.finish)*t
     if edge.tunnel then z=z-(guide.depth or 8)*math.sin(math.pi*t) end
   end
   return api.type.Vec3f.new(p[1],p[2],z)
@@ -120,10 +205,12 @@ end
 
 local function edgeProposal(edge, value)
   local proposal = api.type.SimpleProposal.new()
-  local p0, p1 = nodePosition(edge,edge.node0,false), nodePosition(edge,edge.node1,true)
+  local p0, p1 = nodePosition(edge,edge.node0,false,value), nodePosition(edge,edge.node1,true,value)
   local id0, id1 = existingNode(value,edge.node0,p0), existingNode(value,edge.node1,p1)
   if id0 then p0=api.engine.getComponent(id0,compType.BASE_NODE).position end
   if id1 then p1=api.engine.getComponent(id1,compType.BASE_NODE).position end
+  assert(controls.finiteHeight(p0.z) and controls.finiteHeight(p1.z),"Invalid road/rail height")
+  assert(math.abs(p1.x-p0.x)+math.abs(p1.y-p0.y)>0.000001,"Road/rail segment has coincident endpoints")
   assert(not id0 or id0~=id1, "Both endpoints resolve to the same node")
   local newNodes={}
   local function newNode(entity, position)
@@ -164,6 +251,15 @@ local function finishOwnership(value)
   if not entity then return end
   local edge=api.engine.getComponent(entity,compType.BASE_EDGE)
   assert(edge,"The built edge is missing; ownership cannot be completed.")
+  if value.pendingHeightNodes then
+    value.nodeHeights=value.nodeHeights or {}
+    for _,id in ipairs(value.pendingHeightNodes) do
+      local node=api.engine.getComponent(value.nodes[id],compType.BASE_NODE)
+      assert(node and controls.finiteHeight(node.position.z),"Accepted road/rail node has no valid height")
+      value.nodeHeights[id]=node.position.z
+    end
+    value.pendingHeightNodes=nil
+  end
   local player=api.engine.util.getPlayer()
   local function assign(id)
     api.cmd.sendCommand(api.cmd.makeEntitySetPlayerCmd(id,player))
@@ -200,11 +296,12 @@ end
 
 local function labelProposal(value)
   local source=dataset.labels[value.cursor]
+  local pos=controls.position(source.pos,api.engine.terrain.getBoundingBox())
   local proposal=api.type.SimpleProposal.new()
   local construction=api.type.SimpleProposal.ConstructionEntity.new()
   construction.fileName=sceneryName
   construction.params={items={{model=markerName,rotation=0,
-    pos={source.pos[1],source.pos[2],terrainZ(source.pos)}}},seed=0}
+    pos={pos[1],pos[2],terrainZ(pos)}}},seed=0}
   construction.transf=api.type.Mat4f.new()
   construction.name=source.name
   construction.playerEntity=api.engine.util.getPlayer()
@@ -216,21 +313,39 @@ local function sceneryProposal(value)
   local items={}
   local last=value.cursor-1
   local included=0
+  local scanned=0
   -- Scan by original dataset index, so progress remains resumable when the
   -- batch size changes. A batch counts selected items, not excluded ones.
-  while last<#dataset.scenery and included<value.options.batchSize do
+  while last<#dataset.scenery and included<value.options.batchSize and scanned<checkBudget do
     last=last+1
+    scanned=scanned+1
     if value.options[controls.sceneryCategory(dataset.scenery[last])] then included=included+1 end
   end
   for i=value.cursor,last do
     local source=dataset.scenery[i]
     if value.options[controls.sceneryCategory(source)] and source.model then
+      local pos=controls.position(source.pos,api.engine.terrain.getBoundingBox())
       items[#items+1]={model=source.model,rotation=source.rotation,
-        pos={source.pos[1],source.pos[2],terrainZ(source.pos)}}
+        pos={pos[1],pos[2],terrainZ(pos)}}
     elseif value.options[controls.sceneryCategory(source)] and source.texture then
       local face={}
-      for _,p in ipairs(source.face) do face[#face+1]={p[1],p[2],terrainZ(p)} end
-      items[#items+1]={texture=source.texture,face=face}
+      local shallow=source.category=="waterways"
+      if shallow then water.checkEmpty(source.face,20) end
+      for _,sourcePos in ipairs(source.face) do
+        local p=controls.position(sourcePos,api.engine.terrain.getBoundingBox())
+        local z=terrainZ(p)
+        if shallow then
+          value.shallowHeightReference=value.shallowHeightReference or {}
+          local key=string.format("%.6f,%.6f",p[1],p[2])
+          local height=value.shallowHeightReference[key]
+          if height==nil then height=api.engine.terrain.getBaseHeightAt(api.type.Vec2f.new(p[1],p[2])); value.shallowHeightReference[key]=height end
+          local limits=api.engine.mapgen.getMinMaxValidTerrainHeight()
+          assert(controls.finiteHeight(height) and height-0.5>=limits[1] and height<=limits[2],"Invalid shallow-water terrain height")
+          z=height-0.5
+        end
+        face[#face+1]={p[1],p[2],z}
+      end
+      items[#items+1]={texture=source.texture,face=face,depth=shallow and 0.5 or nil}
     end
   end
   if included==0 then return nil,last,0 end
@@ -243,6 +358,47 @@ local function sceneryProposal(value)
   construction.playerEntity=api.engine.util.getPlayer()
   proposal.constructionsToAdd={construction}
   return proposal,last,included
+end
+
+local function waterOwnership(value)
+  local record=value.waterRecord
+  assert(record and #record.entities>0,"TF3 returned no water entity; inspect this test save before any further build")
+  for _,entity in ipairs(record.entities) do
+    assert(api.engine.entityExists(entity),"Accepted test water entity is missing; inspect this test save")
+    api.cmd.sendCommand(api.cmd.makeEntitySetPlayerCmd(entity,api.engine.util.getPlayer()))
+    local owner=api.engine.getComponent(entity,compType.PLAYER_OWNED)
+    assert(owner and owner.player==api.engine.util.getPlayer(),"Test water ownership is incomplete; Build retries ownership without building again")
+  end
+end
+
+local function buildWater(value,state)
+  local p=value.waterJob
+  if value.waterRecord then waterOwnership(value); value.waterJob=nil; value.notice="Test water ownership completed. No duplicate built."; state:set(value); return end
+  local proposal=water.proposal(p)
+  local called,callbackError=false,nil
+  api.cmd.sendCommand(api.cmd.makeWorldBuildProposalCmd(proposal,nil,false,false),function(res,success,entities)
+    called=true
+    local ok,err=pcall(function()
+    if not success then
+      local errors=res and res.resultProposalData and res.resultProposalData.errorState
+      error(errors and table.concat(errors.messages or {},"; ") or "TF3 rejected test water")
+    end
+    local record={entities={},settings=p,navigable=false}
+    for _,entry in ipairs(entities or res.resultEntities or {}) do
+      local entity=entry[1]
+      if api.engine.entityExists(entity) and (api.engine.getComponent(entity,compType.CONSTRUCTION) or api.engine.getComponent(entity,compType.ASSET_GROUP)) then record.entities[#record.entities+1]=entity end
+    end
+    -- Commit every accepted result before fallible ownership work. Never
+    -- replay an accepted construction after a save/reload or callback failure.
+    value.waterRecord=record; state:set(value)
+    waterOwnership(value); value.waterJob=nil
+    value.notice="Experimental test water built. Inspect its surface, basin and save/reload in TF3. Decorative water is not navigable."
+    state:set(value)
+    end)
+    if not ok then callbackError=tostring(err) end
+  end)
+  assert(called,"Test water builder must execute in engine postUpdate state")
+  assert(not callbackError,callbackError)
 end
 
 function script.update(_userParams, state, _dt)
@@ -266,15 +422,32 @@ function script.update(_userParams, state, _dt)
     state:subscribeToEvent("osm.placeNames")
     value.placeNamesSubscribed=true
   end
+  if not value.waterSupportSubscribed then
+    state:subscribeToEvent("osm.waterSupport"); value.waterSupportSubscribed=true
+  end
+  if not value.waterTestSubscribed then
+    for _,name in ipairs({"osm.waterConfigure","osm.waterCheck","osm.waterBuild"}) do state:subscribeToEvent(name) end
+    value.waterTestSubscribed=true
+  end
   state:set(value)
   -- TF3 schedules postUpdate for scripts that return an update result.
+  if not value.waterNextSubscribed then
+    state:subscribeToEvent("osm.waterNext"); value.waterNextSubscribed=true; state:set(value)
+  end
   -- Return a serializable result only while there are build steps to run.
-  if value.phase=="edges" or value.phase=="scenery" or value.phase=="labels" then return {} end
+  if value.waterJob or value.phase=="checking" or value.phase=="edges" or value.phase=="scenery" or value.phase=="labels" then return {} end
 end
 
 function script.handleEvent(_userParams, state, _src, id, name, param)
   if id~=eventId then return end
   local value=initialState(state)
+  if value.waterJob and name~="osm.status" and name~="osm.waterSupport" then
+    value.notice="Test water build is pending; wait for completion before another command."; state:set(value); return
+  end
+  if value.check and name~="osm.pause" and name~="osm.status" and name~="osm.mapSize" and name~="osm.placeNames" then
+    value.notice="Map checks are running. Pause to cancel before changing selections or starting another check."
+    state:set(value); return
+  end
   if name=="osm.placeNames" then
     value.notice,value.placeNamesPage=controls.placeNames(dataset,value)
     state:set(value); message(value.notice); return
@@ -295,14 +468,49 @@ function script.handleEvent(_userParams, state, _src, id, name, param)
     state:set(value); return
   end
   if name=="osm.validate" then
-    local ok,err=pcall(preflight,value)
-    value.notice=ok and "Map and vanilla resource checks passed." or tostring(err)
+    local ok,err=pcall(requestCheck,value,false)
+    if not ok then value.notice=tostring(err) end
     state:set(value); message(value.notice); return
   end
   if name=="osm.mapSize" then
     local box=api.engine.terrain.getBoundingBox()
-    value.notice=string.format("Map size: %.0f Ã— %.0f metres",box.max.x-box.min.x,box.max.y-box.min.y)
+    value.notice=string.format("Map size: %.0f x %.0f metres",box.max.x-box.min.x,box.max.y-box.min.y)
     state:set(value); message(value.notice); return
+  end
+  if name=="osm.waterSupport" then
+    local ok,terrain=pcall(function()
+      return api.engine.getComponent(api.engine.util.getWorld(),compType.TERRAIN)
+    end)
+    value.notice=controls.waterSupport(ok and terrain or nil)
+    state:set(value); message(value.notice); return
+  end
+  if name=="osm.waterNext" then
+    local ok,err=pcall(function()
+      assert(controls.enabled("waterBuild",value) and value.waterRecord and value.waterRecord.complete,"Complete the current water patch before preparing another")
+      assert(#value.waterRecords<99,"Experimental water test limit reached: use another test save")
+      value.waterRecords[#value.waterRecords+1]=value.waterRecord
+      value.waterRecord=nil
+    end)
+    value.notice=ok and "Accepted water retained. Choose another position and height before building the next patch." or tostring(err)
+    state:set(value); message(value.notice); return
+  end
+  if name=="osm.waterConfigure" or name=="osm.waterCheck" or name=="osm.waterBuild" then
+    if not controls.enabled("waterBuild",value) then value.notice="Pause or finish the import before testing local water."; state:set(value); return end
+    local ok,result=pcall(function()
+      if name=="osm.waterConfigure" then
+        assert(not value.waterRecord,"Water settings are locked for the accepted patch; complete ownership, then prepare another patch")
+        value.waterSettings=water.configure(value.waterSettings,param)
+        return "Test water settings saved. Nothing built."
+      end
+      if name=="osm.waterCheck" then water.checkRecorded(value.waterSettings,value.waterRecords); water.check(value.waterSettings); return "Test water area checked. No water or terrain changed." end
+      if value.waterRecord then
+        assert(not value.waterRecord.complete,"Water is already recorded. Prepare another patch before building at another position.")
+      end
+      water.checkRecorded(value.waterSettings,value.waterRecords)
+      value.waterJob=water.configure(nil,value.waterSettings)
+      return "Test water queued for the next engine build step."
+    end)
+    value.notice=tostring(result); state:set(value); message(value.notice); return
   end
   if name=="osm.start" then
     if value.datasetId then
@@ -310,11 +518,11 @@ function script.handleEvent(_userParams, state, _src, id, name, param)
       state:set(value); message(value.notice)
       return
     end
-    local ok,err=pcall(preflight,value)
+    local ok,err=pcall(requestCheck,value,true)
     if not ok then value.notice=tostring(err); state:set(value); message(value.notice); return end
-    value.datasetId=dataset.id; value.phase="scenery"; value.cursor=1; value.nodes={}
-    value.notice="Import started."; value.error=nil
-    message("Starting vanilla import. No existing roads, trees or towns will be deleted.")
+  elseif name=="osm.pause" and value.check then
+    value.phase=value.check.returnPhase; value.check=nil
+    value.notice="Map check cancelled. No objects were built by this check."
   elseif name=="osm.pause" and (value.phase=="edges" or value.phase=="scenery" or value.phase=="labels") then
     value.resumePhase=value.phase; value.phase="paused"
     value.notice="Import paused. Progress is kept in this save."
@@ -324,6 +532,7 @@ function script.handleEvent(_userParams, state, _src, id, name, param)
       state:set(value); message(value.notice); return
     end
     value.phase=value.resumePhase
+    value.runSteps=0
     value.notice="Import resumed."
   elseif name=="osm.retry" and value.phase=="error" then
     value.phase=value.resumePhase; value.error=nil
@@ -343,6 +552,25 @@ end
 
 function script.postUpdate(_userParams, state, _dt, _result)
   local value=initialState(state)
+  if value.waterJob then
+    local ok,err=pcall(buildWater,value,state)
+    if not ok then
+      value.waterJob=nil; value.notice="Test water stopped: "..tostring(err)
+    elseif value.waterRecord then value.waterRecord.complete=true end
+    state:set(value); return
+  end
+  if value.phase=="checking" then
+    local job=value.check
+    if not job then value.phase="ready"; value.notice="Missing map check; start the check again."; state:set(value); return end
+    local ok,done=pcall(advanceCheck,value,job,checkBudget)
+    if not ok then
+      value.phase=job.returnPhase; value.check=nil
+      value.notice=string.format("Map check stopped after %d/%d items: %s",job.checked,job.total,tostring(done))
+      message(value.notice)
+    elseif done then finishCheck(value,job); message(value.notice)
+    else value.notice=string.format("Checking map and resources: %d/%d items (%.1f%%). No objects built.",job.checked,job.total,100*job.checked/job.total) end
+    state:set(value); return
+  end
   if value.phase~="edges" and value.phase~="scenery" and value.phase~="labels" then return end
   if value.datasetId~=dataset.id then
     value.resumePhase=value.phase; value.phase="error"; value.error="Dataset changed; restore it before continuing."
@@ -368,15 +596,23 @@ function script.postUpdate(_userParams, state, _dt, _result)
     value.phase="edges"; value.cursor=1; state:set(value)
   end
   if value.phase=="edges" then
-    while value.cursor<=#dataset.edges and not value.options[dataset.edges[value.cursor].kind=="TRACK" and "railways" or "roads"] do
+    local scanned=0
+    while value.cursor<=#dataset.edges and not value.options[dataset.edges[value.cursor].kind=="TRACK" and "railways" or "roads"] and scanned<checkBudget do
       value.cursor=value.cursor+1
+      scanned=scanned+1
     end
+    if value.cursor<=#dataset.edges and not value.options[dataset.edges[value.cursor].kind=="TRACK" and "railways" or "roads"] then state:set(value); return end
   end
   if value.phase=="edges" and value.cursor>#dataset.edges then
     value.phase="labels"; value.cursor=1; state:set(value)
   end
   if value.phase=="labels" and (not value.options.places or value.cursor>#dataset.labels) then
     value.phase="finished"; value.notice="Import finished. Check the map before continuing."; state:set(value); status(value); return
+  end
+  if value.options.stepLimit>0 and (value.runSteps or 0)>=value.options.stepLimit then
+    value.resumePhase=value.phase; value.phase="paused"
+    value.notice=string.format("Automatically paused after %d successful build steps. Save and inspect the map; Resume starts another run.",value.runSteps)
+    state:set(value); status(value); return
   end
   local phase=value.phase
   local ok,err=pcall(function()
@@ -393,9 +629,13 @@ function script.postUpdate(_userParams, state, _dt, _result)
       called=true
       local callbackOk,callbackError=pcall(function()
       if success then
+        value.runSteps=(value.runSteps or 0)+1
         if phase=="edges" then
           local built=res.proposal.proposal.addedSegments[1]
           value.nodes[edge.node0]=built.comp.node0; value.nodes[edge.node1]=built.comp.node1
+          if value.heightPolicy=="base-v1" then
+            value.pendingHeightNodes={edge.node0,edge.node1}
+          end
           value.builtEdges=value.builtEdges+1
           -- Commit the accepted geometry before assigning ownership. If that
           -- separate command fails, Retry completes it without building twice.

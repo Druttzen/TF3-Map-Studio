@@ -15,7 +15,7 @@ renderDepth=0; scriptLookups=0; scriptReads=0
 gameScriptAvailable=true; gameScriptComponentAvailable=true; gameScriptStateAvailable=true
 local builtin={type={Orientation={Vertical=0,Horizontal=1},ScrollBarPolicy={AlwaysOff=0,AsNeeded=1}}}
 local builtinKinds={}
-for _,name in ipairs({"TextView","RichTextView","Window","Component","BoxLayout","ScrollArea","Button","CheckBox","ComboBox","ComboBoxItem"}) do
+for _,name in ipairs({"TextView","RichTextView","Window","Component","BoxLayout","ScrollArea","Button","CheckBox","ComboBox","ComboBoxItem","DoubleSpinBox"}) do
  local kind=name
  builtin[kind]=function(params) return {kind=kind,params=params} end
  builtinKinds[builtin[kind]]=kind
@@ -111,6 +111,7 @@ class PanelTests(unittest.TestCase):
         self.lua.globals().modules=self.lua.table_from({
             'druttzen_osm_vanilla::/osm/dataset.lua':self.lua.globals().dataset,
             'druttzen_osm_vanilla::/osm/controls.lua':self.lua.execute((CONTENT/'controls.lua').read_text(encoding='utf-8')),
+            'druttzen_osm_vanilla::/osm/water.lua':self.lua.execute((CONTENT/'water.lua').read_text(encoding='utf-8')),
         })
         self.lua.execute(MOCK)
         self.lua.globals().modules['druttzen_osm_vanilla::/osm/world_audit.lua']=self.lua.execute(
@@ -311,6 +312,33 @@ class PanelTests(unittest.TestCase):
         self.assertTrue(any(item.params.value==17 for item in batches['items'].values()))
         self.assertTrue(any(item.params.value==.7 for item in delays['items'].values()))
 
+    def test_automatic_pause_control_and_checking_rules(self):
+        self.node('step-limit').params.onValueChange(10)
+        self.assertEqual(self.lua.globals().state.value.options.stepLimit,10)
+        self.lua.globals().state.value.phase='checking'
+        self.lua.globals().state.value.check=self.lua.table_from({'checked':1000,'total':2500})
+        tree=self.tree()
+        self.assertTrue(self.node('command-pause',tree).params.meta.enabled)
+        self.assertFalse(self.node('command-start',tree).params.meta.enabled)
+        self.assertFalse(self.node('command-validate',tree).params.meta.enabled)
+        self.assertFalse(self.node('option-roads',tree).params.meta.enabled)
+        self.assertFalse(self.node('step-limit',tree).params.meta.enabled)
+
+    def test_water_fields_emit_distinct_settings_and_lock_after_build(self):
+        for key,number in (('x',100),('y',-80),('level',45),('endLevel',42),('width',30),('length',60)):
+            with self.subTest(key=key):
+                self.node('water-'+key).params.onValueChange(number)
+                self.assertEqual(self.lua.globals().state.value.waterSettings[key],number)
+        self.assertFalse(self.lua.globals().state.value.waterSettings.carve)
+        self.lua.globals().state.value.waterRecord=self.lua.table_from({'complete':True})
+        tree=self.tree()
+        self.assertFalse(self.node('water-level',tree).params.meta.enabled)
+        self.assertFalse(self.node('command-waterBuild',tree).params.meta.enabled)
+        self.assertTrue(self.node('command-waterNext',tree).params.meta.enabled)
+        self.node('command-waterNext',tree).params.onClick()
+        self.assertIsNone(self.lua.globals().state.value.waterRecord)
+        self.assertTrue(self.node('water-level').params.meta.enabled)
+
     def test_error_controls_and_skip(self):
         self.node('command-start').params.onClick()
         self.lua.globals().failNext=True
@@ -331,8 +359,9 @@ class PanelTests(unittest.TestCase):
     def test_every_referenced_script_callback_uses_resource_entrypoint(self):
         desc=load_script(self.lua,CONTENT/'importer.gs.lua')
         scenery=load_script(self.lua,CONTENT/'scenery.con.lua')
+        water=load_script(self.lua,CONTENT/'water.con.lua')
         panel=load_script(self.lua,CONTENT/'panel.res.lua')
-        paths=[item.fileName for item in desc.values()]+[scenery.updateScript.fileName,panel.data.filePath]
+        paths=[item.fileName for item in desc.values()]+[scenery.updateScript.fileName,panel.data.filePath,water.updateScript.fileName]
         for reference in paths:
             with self.subTest(reference=reference):
                 filename,callback=reference.split('::/osm/',1)[1].split('@')

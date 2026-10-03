@@ -1,7 +1,7 @@
 {
   "name": "OSM Importer TF3 Vanilla (Preview)",
-  "summary": "Vanilla OSM importer with an in-game button, scrollable commands and adjustable settings.",
-  "description": "Preview rebuild of VacuumTube's OSM Importer. The fictional sample imports in TF3 Windows build 40408. Prepare OSM XML with the companion converter, then use OSM Import for category selection, saved progress and adjustable pace. Verify built objects checks saved records against the live map. Show place names displays recorded marker names and coordinates; native asset windows may not show their names. Vanilla resources only; no workshop dependencies. Large real-world maps and actual vehicle routes remain unverified. Signals and functioning towns require the game tools. See README.txt.",
+  "summary": "OSM import with road/rail height priority and experimental mapped small water.",
+  "description": "Preview OSM importer. New imports use base terrain or explicitly sourced game elevations for networks, preserving accepted node heights. Mapped small waters use an experimental 0.5 m shallow bed and Landscaping Water Dirty; native validation is pending. Lake metadata is retained without flooding because no supported local sea-level command was found. A separate elevated flat model surface was rendered and reloaded in TF3; it is decorative, not navigable water. The old raised basin is disabled after native terrain spikes. Large real-world import still requires validation. No external mod dependencies. See README.txt.",
   "authors": [
     {
       "name": "VacuumTube",

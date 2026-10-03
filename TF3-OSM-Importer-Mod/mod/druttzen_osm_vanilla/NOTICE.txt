@@ -5,8 +5,8 @@ The original GPL-3.0 license is retained. The TF3 rebuild was prepared for
 Druttzen. The original TF2 source is separate. The TF3 integration is
 included as editable Lua source under the same license.
 
-This revision 4 game component shares its runtime with
-OSM-TF3-Vanilla-Converter Preview 0.10. The fictional sample dataset is
+This revision 6 game component shares its runtime with
+OSM-TF3-Vanilla-Converter Preview 0.12. The fictional sample dataset is
 unchanged. The identity remains druttzen_osm_vanilla.
 Install only one copy of this mod.
 

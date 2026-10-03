@@ -1,0 +1,9 @@
+-- Original triangle data in the adjacent blob. Offsets/counts are bytes;
+-- attributes are float32; the native ReadMesh loader requires int32 indices.
+function data()
+  return {vertexAttr={
+    position={offset=0,count=36,numComp=3},uv0={offset=36,count=24,numComp=2},
+    normal={offset=60,count=12,numComp=3},tangent={offset=72,count=16,numComp=4}},
+    subMeshes={{indices={position={offset=88,count=12},uv0={offset=100,count=12},
+      normal={offset=112,count=12},tangent={offset=124,count=12}}}}}
+end

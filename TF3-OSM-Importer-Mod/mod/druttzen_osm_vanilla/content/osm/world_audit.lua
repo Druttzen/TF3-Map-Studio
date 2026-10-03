@@ -6,14 +6,15 @@ local markerName = "::/assets/markers/marker_locate.mdl"
 local bridgeName = "::/infrastructure/bridge/steel.bridge"
 local tunnelName = "::/infrastructure/tunnel/tunnel_c.tunnel"
 
-local function coordinate(p)
+local function coordinate(p,box)
   if not p or type(p[1])~="number" or type(p[2])~="number" then return nil end
+  p=controls.position(p,box)
   return string.format("%.6f,%.6f",p[1],p[2])
 end
 
-local function itemKey(item)
+local function itemKey(item,box)
   if item.model then
-    local pos=coordinate(item.pos)
+    local pos=coordinate(item.pos,box)
     local rotation=item.rotation or 0
     if type(rotation)~="number" then return nil end
     return pos and "model|"..item.model.."|"..pos.."|"..string.format("%.6f",rotation) or nil
@@ -21,11 +22,16 @@ local function itemKey(item)
   if item.texture and item.face then
     local points={}
     for _,p in ipairs(item.face) do
-      local pos=coordinate(p)
+      local pos=coordinate(p,box)
       if not pos then return nil end
       points[#points+1]=pos
     end
-    return "surface|"..item.texture.."|"..table.concat(points,";")
+    local suffix=""
+    if item.depth~=nil then
+      if not controls.finiteHeight(item.depth) then return nil end
+      suffix="|depth:"..string.format("%.6f",item.depth)
+    end
+    return "surface|"..item.texture.."|"..table.concat(points,";")..suffix
   end
   return nil
 end
@@ -62,6 +68,10 @@ end
 
 function audit.inspect(dataset,value)
   value=value or {}
+  local box=api.engine.terrain.getBoundingBox()
+  local rawCoordinate,rawItemKey=coordinate,itemKey
+  local function coordinate(p) return rawCoordinate(p,box) end
+  local function itemKey(item) return rawItemKey(item,box) end
   local T=api.type.ComponentType
   local enums=api.type["enum"]
   local modes=enums.TransportMode
@@ -125,9 +135,18 @@ function audit.inspect(dataset,value)
       report.current.nodes=report.current.nodes+1
       if liveNodes[entity] then problem("wrongNodes","Imported nodes share the same world entity: "..tostring(id)..".") end
       liveNodes[entity]=id
+      if value.heightPolicy=="base-v1" then
+        local z=value.nodeHeights and value.nodeHeights[id]
+        if not controls.finiteHeight(z) then
+          problem("wrongNodeHeights","Imported node "..tostring(id).." has no saved accepted height.")
+        elseif not node.position or not controls.finiteHeight(node.position.z) or math.abs(node.position.z-z)>0.01 then
+          problem("wrongNodeHeights","Imported node "..tostring(id).." has moved from its accepted road/rail height.")
+        end
+      end
       local source=dataset.nodes and dataset.nodes[id]
-      if source and source.pos and node.position and
-        (math.abs(node.position.x-source.pos[1])>0.01 or math.abs(node.position.y-source.pos[2])>0.01) then
+      local expectedPos=source and source.pos and controls.position(source.pos,box)
+      if expectedPos and node.position and
+        (math.abs(node.position.x-expectedPos[1])>0.01 or math.abs(node.position.y-expectedPos[2])>0.01) then
         problem("wrongNodes","Imported node "..tostring(id).." has moved from its dataset position.")
       end
     end
@@ -319,6 +338,14 @@ function audit.inspect(dataset,value)
                 if item.model then report.current.models=report.current.models+1
                 elseif item.texture then report.current.surfaces=report.current.surfaces+1 end
                 key=itemKey(item)
+                if item.depth~=nil then
+                  for _,p in ipairs(item.face or {}) do
+                    local reference=value.shallowHeightReference and value.shallowHeightReference[coordinate(p)]
+                    if item.depth~=0.5 or not controls.finiteHeight(reference) or not controls.finiteHeight(p[3]) or math.abs(p[3]-(reference-0.5))>0.01 then
+                      problem("wrongScenery","Saved shallow-water bed differs from its 0.5 m reference; native terrain cells still need visual measurement.")
+                    end
+                  end
+                end
               end
               if key and expectedItems[key] then foundItems[key]=(foundItems[key] or 0)+1
               else problem("wrongScenery","Imported construction "..tostring(entity).." contains an unexpected model, surface or marker position.") end
@@ -333,6 +360,7 @@ function audit.inspect(dataset,value)
   local buckets={}
   local function bucket(model,x,y) return model.."|"..tostring(x).."|"..tostring(y) end
   local function expectAsset(item,key,name)
+    item={model=item.model,pos=controls.position(item.pos,box),rotation=item.rotation,scale=item.scale}
     local x,y=math.floor(item.pos[1]/0.01),math.floor(item.pos[2]/0.01)
     local model=api.res.modelRep.find(item.model)
     local id=bucket(model,x,y)

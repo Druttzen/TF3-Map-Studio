@@ -10,6 +10,16 @@ function script.updateFn(_captureParams, params)
         transf = {c,s,0,0, -s,c,0,0, 0,0,1,0, item.pos[1],item.pos[2],item.pos[3],1},
       }
     elseif item.texture then
+      if item.depth~=nil then
+        assert(item.depth==0.5 and item.texture=="druttzen_osm_vanilla::/osm/dirty_water.gtex","Invalid shallow-water construction")
+        assert(#item.face==3,"Shallow-water bed must be a triangle")
+        local face={}
+        for _,p in ipairs(item.face) do
+          assert(type(p[3])=="number" and p[3]==p[3] and math.abs(p[3])<math.huge,"Invalid saved bed height")
+          face[#face+1]={p[1],p[2],p[3],1}
+        end
+        sub.terrainAlignmentLists[#sub.terrainAlignmentLists+1]={type="LESS",faces={face},slopeLow=0.5,slopeHigh=0.5}
+      end
       sub.groundFaces[#sub.groundFaces+1] = {
         face = item.face,
         modes = {{type="FILL",key=item.texture}},

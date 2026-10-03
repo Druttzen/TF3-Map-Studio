@@ -21,6 +21,8 @@ The [preview release](https://github.com/Druttzen/TF3-Map-Studio/releases/tag/pr
 
 ## In-game importer mod — tool #4
 
+Current source is revision 6 (bundled with converter source Preview 0.12), adding saved road/rail heights at construction time and experimental mapped small waters with a 0.5 m bed and Landscaping Water Dirty. Read [the water investigation and native test scope](TF3-OSM-Importer-Mod/WATER-RESEARCH.md). Shallow-water excavation and paint await native validation; local lake sea levels and ship navigation are not implemented. The downloads below are the earlier revision 4 until a newer release is published.
+
 [Download TF3-OSM-Importer-Mod revision 4](https://github.com/Druttzen/TF3-Map-Studio/releases/download/importer-revision-4-2026-10-03/TF3-OSM-Importer-Mod-Revision-4.zip), extract it, and copy the `druttzen_osm_vanilla` folder into TF3's local mods folder. Prepare custom OSM datasets with tool #1 and enable the importer in a fresh test map. The mod package contains Lua scripts, a fictional demonstration dataset, instructions, and license notices; Python is required only for development tests and packaging.
 
 The separate importer package preserves the mod ID used by the converter's bundled template. Keep one installed `druttzen_osm_vanilla` folder and preserve your custom dataset when updating. See [the importer instructions](TF3-OSM-Importer-Mod/README.md) and [the revision 4 release and checksums](https://github.com/Druttzen/TF3-Map-Studio/releases/tag/importer-revision-4-2026-10-03).

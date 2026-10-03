@@ -40,13 +40,13 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
       onClose=close,content=text("Waiting for the importer to initialise. Close and reopen the panel if needed."),
     }
   end
-  local ruleState={phase=snapshot.phase,datasetId=snapshot.started and snapshot.datasetId or nil,labels=snapshot.labels}
+  local ruleState={phase=snapshot.phase,datasetId=snapshot.started and snapshot.datasetId or nil,labels=snapshot.labels,waterBusy=snapshot.waterBusy,waterBuilt=snapshot.waterBuilt}
   local rows={text("Commands","font-scale-headline")}
   for _,command in ipairs(controls.commands) do
     local key=command.key
     rows[#rows+1]=builtin.Button{
       meta={id="druttzen-osm-command-"..key,localKey=key,class="osm-import-command",
-        tooltip=command.help,enabled=controls.enabled(key,ruleState)},
+        tooltip=command.help,enabled=controls.enabled(key,ruleState) and not (key=="waterBuild" and snapshot.waterBuilt)},
       content=text(command.label),onClick=function() send(key) end,
     }
   end
@@ -55,12 +55,25 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
   for _,category in ipairs(controls.categories) do
     local key=category.key
     rows[#rows+1]=builtin.CheckBox{
-      meta={id="druttzen-osm-option-"..key,localKey=key,enabled=not snapshot.started},
+      meta={id="druttzen-osm-option-"..key,localKey=key,enabled=not snapshot.started and not snapshot.checking},
       label=category.label,value=snapshot.options[key] and 1 or 0,
       onValueChange=function(value) send("configure",{[key]=value==1}) end,
     }
   end
   rows[#rows+1]=text("Adjust import pace","font-scale-headline")
+  rows[#rows+1]=text("Automatically pause after successful build steps")
+  rows[#rows+1]=text("One step builds one road/rail segment, one scenery batch or one marker. Resume starts another run.")
+  local limits={}
+  local limitPreset=false
+  for _,limit in ipairs({0,10,100,1000,10000}) do
+    if limit==snapshot.options.stepLimit then limitPreset=true end
+    limits[#limits+1]=builtin.ComboBoxItem{value=limit,content=text(limit==0 and "No automatic pause" or tostring(limit).." steps")}
+  end
+  if not limitPreset then limits[#limits+1]=builtin.ComboBoxItem{value=snapshot.options.stepLimit,content=text(tostring(snapshot.options.stepLimit).." steps")} end
+  rows[#rows+1]=builtin.ComboBox{
+    meta={id="druttzen-osm-step-limit",class="osm-import-choice",enabled=not snapshot.checking},value=snapshot.options.stepLimit,items=limits,
+    onValueChange=function(value) send("configure",{stepLimit=tonumber(value)}) end,
+  }
   rows[#rows+1]=text("These settings can be changed while the import is running or paused.")
   rows[#rows+1]=text("Scenery items per step")
   local batches={}
@@ -92,6 +105,28 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
   rows[#rows+1]=text(string.format("Current map: %.0f × %.0f m",snapshot.mapWidth,snapshot.mapHeight))
   rows[#rows+1]=text("Prepare or replace OSM data with the desktop converter while TF3 is closed.")
   rows[#rows+1]=text("Signals and functioning towns use the vanilla game tools. Read marker names with Show place names.")
+  rows[#rows+1]=text("New imports use base terrain heights for roads/rails, excluding construction terrain alignments. Explicit sourced heights in game coordinates take priority. Terrain alignment occurs through the road/rail build proposal.")
+  rows[#rows+1]=text("Mapped water","font-scale-headline")
+  rows[#rows+1]=text(string.format("Prepared water features: %d. Lakes retained without flooding: %d.",snapshot.mappedWaterCount,snapshot.mappedLakeCount))
+  rows[#rows+1]=text("Small mapped waters use the original OSM outlines and Water Dirty. Start import lowers their bed by 0.5 m. Missing stream widths use the configured approximation. Reconvert older OSM datasets with Preview 0.12 to include water metadata. Local sea level is not supported; lakes remain pending. Use a separate test map: this shallow-water version needs native validation.")
+  rows[#rows+1]=text("Experimental elevated water surface","font-scale-headline")
+  rows[#rows+1]=text("Use a separate test save. Each rectangular patch is decorative water. Equal start/end heights make a flat lake surface; different heights test a sloping stream surface. Coordinates and heights are game metres. Prepare another water patch retains completed objects and unlocks the next settings. Recorded patches cannot overlap. Ship navigation is not established.")
+  local editable=controls.enabled("waterBuild",ruleState) and not snapshot.waterBuilt
+  local fields={
+    {key="x",label="Centre X",min=-20000,max=20000},{key="y",label="Centre Y",min=-20000,max=20000},
+    {key="level",label="Water start height",min=-20000,max=20000},{key="endLevel",label="Water end height",min=-20000,max=20000},
+    {key="length",label="Length along X (metres)",min=1,max=100},{key="width",label="Width along Y (metres)",min=1,max=100},
+  }
+  for _,field in ipairs(fields) do
+    local key=field.key
+    rows[#rows+1]=text(field.label)
+    rows[#rows+1]=builtin.DoubleSpinBox{
+      meta={id="druttzen-osm-water-"..key,localKey="water-"..key,enabled=editable},
+      value=snapshot.waterSettings[key],min=field.min,max=field.max,
+      onValueChange=function(v) send("waterConfigure",{[key]=v}) end,
+    }
+  end
+  rows[#rows+1]=text("Mapped ponds and small waterways use a 0.5 m shallow bed and Landscaping Water Dirty through Start import. Existing and planned network corridors are protected. Elevated model water is a separate surface-only test; experimental basin shaping is disabled after native terrain spikes. Lakes retain their OSM metadata; a local sea level is not supported by the installed API.")
   if #snapshot.warnings>0 then
     rows[#rows+1]=text("Conversion notes","font-scale-headline")
     for i,warning in ipairs(snapshot.warnings) do
@@ -103,6 +138,7 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
     text(string.format("Roads / rails: %d / %d    Scenery: %d / %d    Markers: %d / %d",
       snapshot.builtEdges,snapshot.totals.edges,snapshot.builtScenery,snapshot.totals.scenery,snapshot.labels,snapshot.totals.labels)),
     text("Skipped steps: "..snapshot.skipped),
+    text("Recorded experimental water patches: "..snapshot.waterCount),
   }
   if snapshot.error then header[#header+1]=text(snapshot.error,"osm-import-note, font-scale-body") end
   if snapshot.notice then header[#header+1]=text(snapshot.notice,"osm-import-note, font-scale-body") end

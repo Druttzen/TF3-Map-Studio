@@ -1,7 +1,7 @@
 TF3-OSM-Importer-Mod, GPL-3.0
 
-This standalone in-game package shares its revision 4 Lua runtime with
-OSM-TF3-Vanilla-Converter Preview 0.10. Its modId remains
+This standalone in-game package shares its revision 6 Lua runtime with
+OSM-TF3-Vanilla-Converter Preview 0.12. Its modId remains
 druttzen_osm_vanilla. The fictional sample dataset is unchanged.
 Install one copy of this mod only.
 

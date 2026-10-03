@@ -1,7 +1,7 @@
 OSM IMPORTER - TRANSPORT FEVER 3 VANILLA
-Preview 0.10 | GPL-3.0 | 3 October 2026
+Preview 0.12 | GPL-3.0 | 3 October 2026
 
-DOWNLOAD OPENSTREETMAP (0.10)
+DOWNLOAD OPENSTREETMAP (0.12)
 Project > Download OSM opens an interactive OpenStreetMap view. No OSM account
 or sign-in is needed. The app connects to public HTTPS services when this
 view opens or you request a download. It does not require firewall changes.
@@ -66,7 +66,7 @@ third-party game mods, Python installation, or downloaded assets are required
 to use the Windows companion executable.
 
 The desktop conversion, Lua state-machine, native panel contract and saved-world
-audit checks pass in automated tests. Preview 0.10 includes native runtime
+audit checks pass in automated tests. Preview 0.12 includes native runtime
 compatibility fixes and a read-only Verify built objects command. The fictional
 sample completed in TF3 Windows build 40408: 10 road/rail segments, 117 scenery
 items and one place marker. See validation.json for exact native checks and
@@ -307,3 +307,31 @@ Regression tests load each resource in a fresh environment and resolve all
 Close TF3 completely and start it again after updating; do not use Reload UI
 on a failed startup. Existing converted dataset.lua and import-report.json
 files are preserved by the local update.
+
+REVISION 5 LARGE-MAP TESTING
+Check map and resources uses blocks of at most 1000 source items. Pause
+cancels the check without building. Oversized prepared areas are rejected
+before geometry checks; OSM and heightmap must use matching bounds and size.
+New large datasets default to automatic pause after 100 successful build
+steps. Choose a smaller limit in the game for a first trial. One step is
+one road/rail segment, one scenery batch or one marker. Inspect and save
+each paused run; Resume starts another run. Existing imports retain their
+previous unlimited setting. Install the revision 6 runtime separately
+before using Update installed mod, which updates only dataset/report.
+
+MAPPED SMALL WATER - PREVIEW 0.12 / IMPORTER REVISION 6
+The Waterways selection prepares OSM pond/basin polygons and small waterway
+lines, preserving islands. OSM width/est_width is used if valid; missing width
+uses the visible Small water width if OSM width is missing setting (initially
+2 m). This is labelled an approximation. The game mod, not Heightmap Studio,
+lowers the bed by 0.5 m and paints the Landscaping Water Dirty material.
+Preparation excludes conservative planned network corridors. Existing roads,
+tracks and other constructions are also protected in the game builder.
+The new shallow-water treatment is automated-tested but native validation is
+pending. Select Mapped small waters in the game panel (initially off) on a
+separate test map first. Reconvert older OSM datasets to include
+water geometry; do not replace the dataset of an already-started import.
+Lake boundaries and raw elevations are retained without automatic flooding.
+No supported command for per-lake sea level was found; global water is unchanged.
+The separate rectangular elevated model-water test does not shape terrain.
+Raised basin mode is disabled after native terrain spikes.

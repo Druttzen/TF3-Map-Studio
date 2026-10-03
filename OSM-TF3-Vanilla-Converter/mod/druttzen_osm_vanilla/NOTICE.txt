@@ -1,21 +1,27 @@
-OSM TF3 Vanilla, GPL-3.0
+TF3-OSM-Importer-Mod / OSM TF3 Vanilla, GPL-3.0
 
 This standalone rebuild is inspired by VacuumTube's OSM-TPF2-Importer 1.5.
-The original GPL-3.0 license is retained. The original F: source directory
-was not modified. New preprocessing, desktop UI and TF3 integration are
-included as editable source under the same license.
+The original GPL-3.0 license is retained. The TF3 rebuild was prepared for
+Druttzen. The original TF2 source is separate. The TF3 integration is
+included as editable Lua source under the same license.
+
+This revision 6 game component shares its runtime with
+OSM-TF3-Vanilla-Converter Preview 0.12. The fictional sample dataset is
+unchanged. The identity remains druttzen_osm_vanilla.
+Install only one copy of this mod.
 
 Transport Fever 3 vanilla assets are referenced by resource names. No game
 models, textures, audio, API source files or game executables are distributed.
 
-The example OSM file is fictional test data. For real OpenStreetMap data,
+The example Lua dataset is fictional test data. For real OpenStreetMap data,
 provide attribution to OpenStreetMap contributors and respect ODbL.
 https://www.openstreetmap.org/copyright
 
-The desktop map picker uses Pillow 12.3.0 for map tile display. Its licence
-and bundled imaging-library notices are included in third-party/Pillow-LICENSE.txt.
-Displayed map tiles and downloaded OSM extracts are retrieved on demand and
-are not redistributed in this application package.
+Prepare real OSM datasets with companion tool 1, OSM-TF3-Vanilla-Converter.
+That desktop converter and its Pillow dependency are not bundled in this
+installable game mod. No Python installation is required to play with it.
 
 Preview: the fictional sample imports in TF3 Windows build 40408. Refer to
-README.txt and validation.json for the exact scope of completed checks.
+README.txt for controls and limitations. Automated checks and the read-only
+resource inventory audit are recorded in the source package's validation.json.
+Large real-world maps and actual vehicle routes remain unverified.

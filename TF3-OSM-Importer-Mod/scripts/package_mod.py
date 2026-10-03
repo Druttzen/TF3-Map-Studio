@@ -20,7 +20,7 @@ def package(output=DEFAULT_OUTPUT):
     if not all(file.is_file() for file in required):
         raise ValueError("Installable mod is incomplete")
     for file in files:
-        if file.is_symlink() or (file.name != "LICENSE" and file.suffix not in {".lua", ".json", ".txt"}):
+        if file.is_symlink() or (file.name != "LICENSE" and file.suffix not in {".lua", ".json", ".txt", ".mdl", ".msh", ".blob"}):
             raise ValueError(f"Unexpected file in installable mod: {file.relative_to(MOD)}")
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=output.parent, suffix=".tmp", delete=False) as temp:
