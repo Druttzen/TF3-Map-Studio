@@ -8,6 +8,8 @@ Version 0.5 adds a general requirement planner and mesh checks shared across mod
 
 Read-only local analysis also covered the DH106 B757C aircraft package (14 air models, an asset construction and 6 mesh pairs), Autobahn Kreuz (construction, infrastructure, models/materials and 246 mesh pairs), and a modular-station adapter (construction and scripts). These are identification/buffer checks, not successful TF3 conversions. SJ Class D's 108 meshes were additionally checked: 101 passed these binary checks, seven had non-finite tangent warnings. No original assets or scripts were altered.
 
+Version 0.5.1 corrects nil/invalid/conflicting vehicle markers, native TF3 tram detection through transportModes, rebound data() classification and dotted callback lookup in exported tables. Regression fixtures cover these cases and an actual staged export with a nested module callback. The native TF3 tram and warehouse-module resource definitions were inspected read-only to confirm the formats. A built Windows app completed preview and metadata export of a separate authored fixture; this is an app workflow check, not a native-game compatibility test.
+
 Coverage includes literal parsing, metadata preservation, stable IDs, script references, missing resources, material-property migration using an installed-resource inventory, locomotive units and named nodes, source hashes, binary preservation, unsupported behavior blockers, protected output, backups, recovery, CLI and the Tk desktop workflow. Game appearance, driving, audio, physics and animations require native tests.
 
 ## Local SJ Class D experiment — 2026-10-03

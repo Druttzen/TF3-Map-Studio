@@ -105,6 +105,39 @@ def test_conditional_returns_are_not_guessed(tmp_path):
     assert analyze_mod(tmp_path)['categories'] == {'unknown': 1}
 
 
+@pytest.mark.parametrize('statement', [
+    'data = function() return calculateActualData() end',
+    'local data = function() return calculateActualData() end',
+    'if choose() then data = other end',
+    'replaceDataFunction()',
+    '_G.data = other',
+])
+def test_rebound_or_conditional_data_is_not_classified_from_old_body(tmp_path, statement):
+    path = write_model(tmp_path, 'rebound', {'airVehicle': {}})
+    path.write_text(path.read_text() + '\n' + statement)
+    assert analyze_mod(tmp_path)['categories'] == {'unknown': 1}
+
+
+def test_nil_vehicle_marker_does_not_override_valid_road_metadata(tmp_path):
+    path = write_model(tmp_path, 'nil_marker', {})
+    path.write_text('function data() return {metadata={airVehicle=nil,roadVehicle={}}} end')
+    assert analyze_mod(tmp_path)['categories'] == {'road_vehicle': 1}
+
+
+@pytest.mark.parametrize('metadata', [
+    {'airVehicle': False, 'roadVehicle': {}},
+    {'airVehicle': {}, 'waterVehicle': {}},
+])
+def test_invalid_or_conflicting_vehicle_markers_require_review(tmp_path, metadata):
+    write_model(tmp_path, 'invalid', metadata)
+    assert analyze_mod(tmp_path)['categories'] == {'unknown': 1}
+
+
+def test_native_tf3_tram_uses_transport_modes(tmp_path):
+    write_model(tmp_path, 'native_tram', {'railVehicle': {}, 'transportVehicle': {'transportModes': ['TRAM', 'ELECTRIC_TRAM']}})
+    assert analyze_mod(tmp_path)['categories'] == {'tram': 1}
+
+
 def mesh(root, *, bad_index=False, nonfinite=False):
     root.mkdir(parents=True, exist_ok=True)
     data = {'vertexAttr': {}, 'subMeshes': [{'indices': {}}]}

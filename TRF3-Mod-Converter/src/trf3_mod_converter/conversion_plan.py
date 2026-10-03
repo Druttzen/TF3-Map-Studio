@@ -82,8 +82,15 @@ def _read_data(path):
                        and isinstance(s.name, lua.Name) and s.name.id == "data"]
         if len(definitions) != 1:
             raise ValueError("No unique data() function for static classification")
+        definition_index = tree.body.body.index(definitions[0])
+        for index, statement in enumerate(tree.body.body):
+            if isinstance(statement, (lua.Assign, lua.LocalAssign)):
+                if index > definition_index or any(isinstance(target, lua.Name) and target.id == "data" for target in statement.targets):
+                    raise ValueError("Rebound data() function requires manual classification")
+            elif not isinstance(statement, (lua.Function, lua.LocalFunction)):
+                raise ValueError("Top-level control flow or calls require manual classification")
         body = definitions[0].body.body
-        if any(isinstance(s, (lua.If, lua.While, lua.Repeat, lua.Fornum, lua.Forin)) for s in body):
+        if any(isinstance(s, (lua.If, lua.While, lua.Repeat, lua.Fornum, lua.Forin, lua.Do)) for s in body):
             raise ValueError("Control flow in data() requires manual classification")
         returns = [s for s in body if isinstance(s, lua.Return)]
         if len(returns) != 1 or len(returns[0].values) != 1 or not isinstance(returns[0].values[0], lua.Table):
@@ -101,10 +108,18 @@ def _model(path: Path) -> tuple[str, dict]:
         return "unknown", {"reason": "Computed or unsupported model metadata; category cannot be established."}
     m = _dict(data.get("metadata"))
     t = _dict(m.get("transportVehicle"))
-    if "airVehicle" in m: kind = "air_vehicle"
-    elif "waterVehicle" in m: kind = "water_vehicle"
-    elif "railVehicle" in m: kind = "tram" if t.get("carrier") == "TRAM" else "rail_vehicle"
-    elif "roadVehicle" in m: kind = "road_vehicle"
+    markers = [key for key in ("airVehicle", "waterVehicle", "railVehicle", "roadVehicle")
+               if key in m and m[key] is not None]
+    if any(not isinstance(m[key], dict) and m[key] != [] for key in markers):
+        return "unknown", {"reason": "Non-literal or invalid vehicle metadata struct."}
+    if len(markers) > 1:
+        return "unknown", {"reason": "Conflicting vehicle metadata structs require manual classification."}
+    modes = t.get("transportModes", [])
+    is_tram = t.get("carrier") == "TRAM" or isinstance(modes, list) and any(mode in ("TRAM", "ELECTRIC_TRAM") for mode in modes)
+    if "airVehicle" in markers: kind = "air_vehicle"
+    elif "waterVehicle" in markers: kind = "water_vehicle"
+    elif "railVehicle" in markers: kind = "tram" if is_tram else "rail_vehicle"
+    elif "roadVehicle" in markers: kind = "road_vehicle"
     else: kind = "model_metadata" if m else "static_model"
     dynamics = _dict(m.get("landVehicle")) or _dict(m.get("railVehicle")) or _dict(m.get("roadVehicle"))
     engines = dynamics.get("engines")

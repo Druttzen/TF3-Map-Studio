@@ -5,6 +5,21 @@ import pytest
 
 from trf3_mod_converter import convert_mod, prepare_mod
 from trf3_mod_converter import converter
+from trf3_mod_converter.resource_audit import callback_status, parse_lua
+
+
+@pytest.mark.parametrize('script,key,expected', [
+    ('function data() return {bulk={updateFn=function() end}} end', 'bulk.updateFn', 'resolved'),
+    ('local function update() end function data() return {bulk={updateFn=update}} end', 'bulk.updateFn', 'resolved'),
+    ('function data() return {bulk={}} end', 'bulk.updateFn', 'missing'),
+    ('function data() return {bulk=false} end', 'bulk.updateFn', 'missing'),
+    ('function data() return {bulk=makeCallbacks()} end', 'bulk.updateFn', 'unverified'),
+    ('function data() return {[computed]=function() end} end', 'computed', 'unverified'),
+    ('function data() return {runFn=function() end} end data=other', 'runFn', 'unverified'),
+    ('function data() return {bulk={updateFn=function() end},bulk=nil} end', 'bulk.updateFn', 'missing'),
+])
+def test_nested_and_dynamic_callbacks(script, key, expected):
+    assert callback_status(parse_lua(script), key) == expected
 
 
 def fixture(root, *, callback='function data() return {runFn=function(captureParams) end} end', extra=None):
@@ -20,6 +35,19 @@ def fixture(root, *, callback='function data() return {runFn=function(capturePar
     (root / '_metadata/modinfo.json').write_text(json.dumps(browser), encoding='utf-8')
     (root / 'content/mod.script.lua').write_text(callback, encoding='utf-8')
     return technical, browser
+
+
+def test_valid_nested_module_callback_no_longer_blocks_export(tmp_path):
+    source = tmp_path / 'source'
+    fixture(source)
+    (source / 'content/station.module.lua').write_text('function data() return {updateScript={fileName="original::/station.script@platform.updateFn"}} end')
+    (source / 'content/station.script.lua').write_text('function data() return {platform={updateFn=function(captureParams,params) end}} end')
+    descriptor = prepare_mod(source)
+    assert not descriptor.blockers
+    row = next(r for r in descriptor.resource_audit['references'] if r['reference'].endswith('@platform.updateFn'))
+    assert row['callbackStatus'] == 'resolved'
+    report = convert_mod(source, tmp_path / 'output')
+    assert report['resourceAudit']['status'] == 'static_checks_passed'
 
 
 @pytest.mark.parametrize('selection', ['mod.json', '_metadata/modinfo.json', ''])

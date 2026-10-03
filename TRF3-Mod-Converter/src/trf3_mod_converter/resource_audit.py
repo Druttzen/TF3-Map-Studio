@@ -47,6 +47,13 @@ def callback_status(tree, key: str) -> str:
                                 for s in tree.body.body) else "unverified"
     if len(definitions) != 1:
         return "unverified"
+    definition_index = tree.body.body.index(definitions[0])
+    for index, statement in enumerate(tree.body.body):
+        if isinstance(statement, (nodes.Assign, nodes.LocalAssign)):
+            if index > definition_index or any(isinstance(target, nodes.Name) and target.id == "data" for target in statement.targets):
+                return "unverified"
+        elif not isinstance(statement, (nodes.Function, nodes.LocalFunction)):
+            return "unverified"
     body = definitions[0].body.body
     if any(not isinstance(s, (nodes.Return, nodes.LocalFunction)) for s in body):
         return "unverified"
@@ -59,16 +66,23 @@ def callback_status(tree, key: str) -> str:
     for s in ast.walk(tree):
         if isinstance(s, (nodes.Assign, nodes.LocalAssign)):
             bindings.difference_update(t.id for t in s.targets if isinstance(t, nodes.Name))
-    matches = []
-    for entry in returns[0].values[0].fields:
-        field_key = entry.key.id if isinstance(entry.key, nodes.Name) else _value(entry.key)
-        if field_key == key:
-            matches.append(entry.value)
-        elif not isinstance(field_key, (str, int)):
-            return "unverified"
-    if not matches:
-        return "missing"
-    value = matches[-1]
+    value = returns[0].values[0]
+    # TF3 function keys can traverse exported tables, e.g. bulk.updateFn.
+    for part in key.split("."):
+        if not part:
+            return "missing"
+        if not isinstance(value, nodes.Table):
+            return "missing" if isinstance(value, (nodes.Nil, nodes.Number, nodes.String, nodes.TrueExpr, nodes.FalseExpr, nodes.AnonymousFunction)) else "unverified"
+        matches = []
+        for entry in value.fields:
+            field_key = entry.key.id if isinstance(entry.key, nodes.Name) and not entry.between_brackets else _value(entry.key)
+            if field_key == part:
+                matches.append(entry.value)
+            elif not isinstance(field_key, (str, int)):
+                return "unverified"
+        if not matches:
+            return "missing"
+        value = matches[-1]
     if isinstance(value, nodes.AnonymousFunction) or isinstance(value, nodes.Name) and value.id in bindings:
         return "resolved"
     if isinstance(value, (nodes.Nil, nodes.Number, nodes.String, nodes.Table, nodes.TrueExpr, nodes.FalseExpr)):
