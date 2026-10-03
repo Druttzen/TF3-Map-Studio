@@ -12,6 +12,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Inspect and convert Transport Fever mod metadata safely.")
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", required=True)
+    analyze = commands.add_parser("analyze", help="Analyze all vehicle/mod categories and their TF3 migration requirements without exporting")
+    analyze.add_argument("source", help="Mod directory; metadata is not required")
     for command in ("convert", "inspect"):
         sub = commands.add_parser(command, help=f"{command.capitalize()} a mod folder or metadata file")
         sub.add_argument("source", help="Mod directory or JSON/Lua metadata file")
@@ -46,6 +48,11 @@ def main(argv: list[str] | None = None) -> int:
         open_gui()
         return 0
     try:
+        if args.command == "analyze":
+            from .conversion_plan import analyze_mod
+            result = analyze_mod(args.source)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 2 if result["status"] == "needs_review" else 0
         if args.command == "port-tf2":
             from pathlib import Path
             from .tf2_vehicle_port import port_tf2_mod

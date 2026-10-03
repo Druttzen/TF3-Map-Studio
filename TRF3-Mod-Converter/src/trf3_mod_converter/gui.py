@@ -328,6 +328,12 @@ class ConverterApp:
         if descriptor.warnings:
             sections.append("REVIEW NOTES\n" + "\n\n".join(descriptor.warnings))
         audit = descriptor.resource_audit
+        plan = descriptor.conversion_plan
+        sections.append("CONTENT MIGRATION\n" +
+                        "\n".join(f"{category.replace('_', ' ')}: {count} resources" for category, count in plan.get("categories", {}).items()) +
+                        f"\n{len(plan.get('geometry', []))} mesh/blob pairs analyzed.\n" +
+                        "Analysis identifies required work; automated export currently supports metadata/layout and the separate electric-locomotive draft.\n\n" +
+                        "\n\n".join(f"{item['file']}\n" + "\n".join(item["requirements"]) for item in plan.get("resources", [])))
         references = audit.get("references", [])
         sections.append(f"RESOURCE CHECKS\n{audit.get('filesScanned', 0)} text resources checked; {len(references)} literal references found.\n"
                         "External resources and game compatibility still require TF3 testing.\n\n" +

@@ -4,6 +4,10 @@ Version 0.4 introduces a strict TF2 electric-locomotive draft profile alongside 
 
 ## Automated checks
 
+Version 0.5 adds a general requirement planner and mesh checks shared across mod categories. Authored tests cover road/rail/tram/water/air classification, propulsion types and unpowered vehicles, mixed packages, computed metadata, unknown resources, source-code non-execution, independent attribute indices, out-of-range buffers, component/triangle counts and non-finite warnings. Analysis-only support is explicitly distinct from exporter support. No new native-game test was performed for these changes.
+
+Read-only local analysis also covered the DH106 B757C aircraft package (14 air models, an asset construction and 6 mesh pairs), Autobahn Kreuz (construction, infrastructure, models/materials and 246 mesh pairs), and a modular-station adapter (construction and scripts). These are identification/buffer checks, not successful TF3 conversions. SJ Class D's 108 meshes were additionally checked: 101 passed these binary checks, seven had non-finite tangent warnings. No original assets or scripts were altered.
+
 Coverage includes literal parsing, metadata preservation, stable IDs, script references, missing resources, material-property migration using an installed-resource inventory, locomotive units and named nodes, source hashes, binary preservation, unsupported behavior blockers, protected output, backups, recovery, CLI and the Tk desktop workflow. Game appearance, driving, audio, physics and animations require native tests.
 
 ## Local SJ Class D experiment — 2026-10-03

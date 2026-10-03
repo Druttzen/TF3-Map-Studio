@@ -14,6 +14,7 @@ from typing import Any, Callable
 from .lua_metadata import UnsupportedValue, load_lua_table
 from .filesystem import linked as _linked
 from .resource_audit import audit_resources
+from .conversion_plan import analyze_mod
 
 _load_lua_table = load_lua_table
 Progress = Callable[[str], None]
@@ -62,6 +63,7 @@ class ModDescriptor:
     source_metadata: dict = field(default_factory=dict)
     source_id: str = ""
     resource_audit: dict = field(default_factory=dict)
+    conversion_plan: dict = field(default_factory=dict)
 
     @property
     def target_mod_id(self) -> str:
@@ -118,6 +120,7 @@ class ModDescriptor:
             "canConvert": not self.blockers,
             "sourceModId": self.source_id or self.target_mod_id,
             "resourceAudit": self.resource_audit,
+            "conversionPlan": self.conversion_plan,
             "sourceMetadata": self.source_metadata,
         }
 
@@ -432,6 +435,10 @@ def _validate(descriptor: ModDescriptor, root: Path) -> list[str]:
 
 
 def _audit(descriptor: ModDescriptor, root: Path) -> None:
+    descriptor.conversion_plan = analyze_mod(root)
+    for mesh in descriptor.conversion_plan["geometry"]:
+        descriptor.blockers.extend(f"{mesh['file']}: {error}" for error in mesh["errors"])
+        descriptor.warnings.extend(f"{mesh['file']}: {warning}" for warning in mesh["warnings"])
     extras = {k: v for k, v in descriptor.native_mod_fields.items()
               if k not in {"preRunScript", "runScript", "postRunScript"}}
     descriptor.resource_audit = audit_resources(root, descriptor.target_mod_id, source_id=descriptor.source_id,
@@ -590,6 +597,8 @@ def convert_mod(source: str | Path, destination: str | Path, *, name: str | None
         if descriptor.blockers:
             raise ValueError("Staged conversion needs manual changes:\n" + "\n".join(descriptor.blockers))
         report["resourceAudit"] = descriptor.resource_audit
+        report["conversionPlan"] = descriptor.conversion_plan
+        report["conversionPlan"]["source"] = str(destination_path)
         report["warnings"] = descriptor.warnings
         _check_paths(source_path, destination_path, overwrite)
         if destination_path.exists():

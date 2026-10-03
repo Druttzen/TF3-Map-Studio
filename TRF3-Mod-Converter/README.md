@@ -45,6 +45,14 @@ Both inspect and convert accept metadata overrides. Inspection prints blockers, 
 
 Try **examples/legacy_mod**, a metadata-only example.
 
+## General content analysis (0.5)
+
+The conversion scope includes complete mod packages and all vehicle families. Use `trf3-mod-converter analyze "C:\mods\any_mod"` to identify road, rail, tram, water and air vehicles, mixed content and the migration requirements for construction, infrastructure, terrain, cargo, sound, rendering, scripts and localization. Identification uses metadata and resource types; unknown or computed models remain explicit. Analysis does not execute source Lua.
+
+Inspection, desktop preview and conversion reports include this plan. Shared mesh/blob checks validate ranges, component counts, separate attribute indices and triangles for every model category. Invalid buffers block export; non-finite values are reported without automatic repair. Unsupported descriptors remain unverified.
+
+**Analysis coverage is broader than automated export support.** The additional category adapters are not yet exporters. Ordinary conversion still changes metadata/layout; the separate draft exporter still supports only its strict electric-locomotive profile. Native TF3 compatibility is never inferred from recognition or parsing. See [GENERAL_CONVERSION.md](GENERAL_CONVERSION.md) for the reusable pipeline, category requirements and verified references. The `analyze` command exits 2 when unknown resources, geometry warnings/errors or layout problems require review; otherwise it exits 0, meaning analysis completed, not gameplay passed.
+
 ## TF2 electric-locomotive port (0.4)
 
 The separate **Port TF2 electric locomotive…** button rewrites supported version-1 models to version 2 and migrates their materials, units, wheel/bogie node references, headlights, sound, translations and thumbnails. Fill in the source folder, separate output folder, name and ID, then choose your installed TF3 directory. Cancel the optional repair-file dialog when no texture repair is needed. Other metadata overrides apply to this export too.

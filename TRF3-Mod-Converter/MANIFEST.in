@@ -1,5 +1,5 @@
 include desktop_launcher.py
-include VALIDATION.md
+include VALIDATION.md GENERAL_CONVERSION.md
 recursive-include scripts *.py
 recursive-include examples *.lua *.txt *.json
 recursive-include .github *.yml
