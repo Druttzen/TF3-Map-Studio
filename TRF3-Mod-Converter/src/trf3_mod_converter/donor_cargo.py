@@ -154,20 +154,7 @@ def _keys(entry: dict, catalog: CargoCatalog, path: str) -> set[str]:
         if entry.get('capacity', 0) == 0 and not entry.get('seats'):
             return set()
         raise ValueError(f'{path}: missing cargo identity cannot be inferred from a donor')
-    config = _named(entry['cargoTypeSet'], f'{path}/cargoTypeSet')
-    fields = {'cargoClassesIncluded', 'cargoClassesExcluded', 'cargoTypesIncluded', 'cargoTypesExcluded'}
-    if set(config) - fields:
-        raise ValueError(f'{path}: unknown cargoTypeSet fields')
-    included, excluded = set(), set()
-    for field in fields:
-        tokens = _list(config.get(field, []), f'{path}/cargoTypeSet/{field}')
-        selected = set()
-        for token in tokens:
-            if not isinstance(token, str) or not token or isinstance(token, TranslatedString):
-                raise ValueError(f'{path}/cargoTypeSet/{field}: requires literal cargo identifiers')
-            selected.update(catalog.class_types(token) if field.startswith('cargoClasses') else catalog.keys(token)[0])
-        (included if field.endswith('Included') else excluded).update(selected)
-    return included - excluded
+    return catalog.evaluate_set(entry['cargoTypeSet'])[0]
 
 
 def _classes(keys: set[str], catalog: CargoCatalog) -> set[str]:

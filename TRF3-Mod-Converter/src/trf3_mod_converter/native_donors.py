@@ -124,24 +124,7 @@ def _sound_propulsion(metadata, family, *, native):
 
 
 def _cargo_set(value, catalog):
-    data = _table(value, 'cargoTypeSet')
-    allowed = {'cargoClassesIncluded', 'cargoClassesExcluded', 'cargoTypesIncluded', 'cargoTypesExcluded'}
-    if set(data) - allowed:
-        raise ValueError('Unknown cargoTypeSet fields cannot be used to identify a donor class')
-    selected = set()
-    for field in allowed:
-        tokens = _array(data.get(field, []), f'cargoTypeSet/{field}')
-        if any(not isinstance(token, str) or not token or isinstance(token, TranslatedString) for token in tokens):
-            raise ValueError(f'cargoTypeSet/{field}: expected non-localized literal cargo identifiers')
-    for tag in data.get('cargoClassesIncluded', []):
-        selected.update(catalog.class_types(tag))
-    for token in data.get('cargoTypesIncluded', []):
-        selected.update(catalog.keys(token)[0])
-    for tag in data.get('cargoClassesExcluded', []):
-        selected.difference_update(catalog.class_types(tag))
-    for token in data.get('cargoTypesExcluded', []):
-        selected.difference_update(catalog.keys(token)[0])
-    return selected
+    return catalog.evaluate_set(value)[0]
 
 
 def _cargo_entry(entry, catalog, *, native):
@@ -491,14 +474,18 @@ class NativeDonorCatalog:
     MAX_PHYSICAL_RATIO = 2.0
     MAX_SCORE = 0.40
 
-    def __init__(self, donors, cargo_catalog, *, native=None, diagnostics=()):
+    def __init__(self, donors, cargo_catalog, *, native=None, diagnostics=(), resource_dependencies=None):
         self.donors = tuple(donors)
         self.cargo_catalog = cargo_catalog
         self.native = native
         self.diagnostics = tuple(deepcopy(list(diagnostics)))
+        self.resource_dependencies = dict(resource_dependencies or {})
+        if self.resource_dependencies and hasattr(native, 'track_dependencies'):
+            native.track_dependencies(self.resource_dependencies)
 
     def for_native(self, native):
-        return type(self)(self.donors, self.cargo_catalog, native=native, diagnostics=self.diagnostics)
+        return type(self)(self.donors, self.cargo_catalog, native=native, diagnostics=self.diagnostics,
+                          resource_dependencies=self.resource_dependencies)
 
     @classmethod
     def from_native(cls, native):
@@ -508,7 +495,7 @@ class NativeDonorCatalog:
         if cached is not None:
             return cached.for_native(native)
         cargo = CargoCatalog.from_native(native)
-        donors, diagnostics = [], []
+        donors, diagnostics, dependencies = [], [], []
         for path in sorted(native.files):
             if not path.startswith('vehicle/') or not path.endswith(('.mdl', '.mdl.lua', '.mdl.tl')):
                 continue
@@ -521,6 +508,7 @@ class NativeDonorCatalog:
                 # whose provenance would resolve to different native bytes.
                 continue
             try:
+                dependencies.append(path)
                 text = native.read(path).decode('utf-8-sig')
                 projected = True
                 try:
@@ -528,6 +516,8 @@ class NativeDonorCatalog:
                 except UnsupportedProjection:
                     data = load_resource_table(text)
                     projected = False
+                if type(data.get('version')) not in (int, float) or data['version'] != 2:
+                    raise ValueError('Native donor requires explicit TF3 model version 2')
                 signature = _signature(data, cargo, native=True)
                 donors.append(NativeDonor(resource, deepcopy(data), signature, cargo, text if projected else None))
             except Exception as exc:
@@ -536,7 +526,9 @@ class NativeDonorCatalog:
             raise ValueError('Selected TF3 installation contains no verified literal vehicle donors')
         # The cached object has no writable reference-tracking binding. Parsed
         # immutable records are shared; each match returns defensive data copies.
-        cached = cls(donors, cargo, native=None, diagnostics=diagnostics)
+        fingerprints = native.fingerprints(dependencies) if hasattr(native, 'fingerprints') else {}
+        fingerprints.update(cargo.resource_dependencies)
+        cached = cls(donors, cargo, native=None, diagnostics=diagnostics, resource_dependencies=fingerprints)
         owner._native_donor_catalog = cached
         return cached.for_native(native)
 

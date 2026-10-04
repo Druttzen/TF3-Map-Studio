@@ -83,6 +83,7 @@ class NativeInventory:
         if not self.content.is_dir(): raise ValueError("Choose the TF3 installation folder (with base/content)")
         self.files: dict[str, tuple[Path, str | None]] = {}
         self.references: set[str] = set()
+        self.dependencies: dict[str,str] = {}
         self._cache_owner = self
         for f in self.content.rglob('*'):
             if not f.is_file(): continue
@@ -96,6 +97,7 @@ class NativeInventory:
     def fork(self):
         result = object.__new__(type(self))
         result.content, result.files, result.references = self.content, self.files, set()
+        result.dependencies = {}
         result._cache_owner = self._cache_owner
         if hasattr(self, '_cargo_catalog'):
             result._cargo_catalog = self._cargo_catalog
@@ -104,8 +106,35 @@ class NativeInventory:
     def read(self, path: str) -> bytes:
         if path not in self.files: raise ValueError(f"Installed TF3 resource missing: {path}")
         f, n = self.files[path]
-        if n is None: return f.read_bytes()
-        with zipfile.ZipFile(f) as z: return z.read(n)
+        if n is None: data=f.read_bytes()
+        else:
+            with zipfile.ZipFile(f) as z: data=z.read(n)
+        self.dependencies[path]=hashlib.sha256(data).hexdigest()
+        return data
+
+    def fingerprints(self, paths):
+        return {path:hashlib.sha256(self.read(path)).hexdigest() for path in sorted(set(paths))}
+
+    def track_dependencies(self, values):
+        self.dependencies.update(values)
+
+    def inventory_fingerprint(self):
+        """Cover mount additions/removals and changed zip catalog entries.
+
+        Referenced and donor/cargo input bytes are separately SHA-256 checked.
+        This avoids hashing gigabytes of unrelated native textures per mod.
+        """
+        rows=[];archives={}
+        for path,(file,member) in sorted(self.files.items()):
+            if member is None:
+                stat=file.stat();value=[stat.st_size,stat.st_mtime_ns,stat.st_ctime_ns]
+            else:
+                if file not in archives:
+                    with zipfile.ZipFile(file) as archive:
+                        archives[file]={i.filename:[i.CRC,i.file_size] for i in archive.infolist()}
+                value=archives[file][member]
+            rows.append([path,value])
+        return hashlib.sha256(json.dumps(rows,separators=(',',':')).encode()).hexdigest()
 
     def reference(self, path: str) -> str:
         prefix = path.split('@', 1)[0]
@@ -534,6 +563,7 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
         port_report = dict(source=str(root), portProfile=port_profile, sourceUnchanged=True,
                   portCounts=counts, pathMapping={old:new for old,new in mapping.items() if old not in omitted_borrowed}, explicitRepairs=repairs,
                   baseGameResources=sorted(native.references), nativeTest='not_run',
+                  nativeResourceFingerprints=dict(native.dependencies),
                   baseResourceReplacements=base.replacements, omittedBorrowedResources=sorted(omitted_borrowed),
                   tf2BaseInventory=str(tf2_path) if tf2_path is not None else None,
                   migrationAudit=migration_audit, capabilities=capability_report(mapping),

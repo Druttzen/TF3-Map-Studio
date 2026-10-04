@@ -135,6 +135,60 @@ class ConverterTests(unittest.TestCase):
         hole=[c.project(*nodes[id][:2],bounds,(1000,1000)) for id in ['20','21','22','23']]
         self.assertTrue(all(not c.inside(x['pos'],hole) for x in trees))
 
+    def test_independently_tagged_inner_landuse_keeps_its_surface(self):
+        import xml.etree.ElementTree as ET
+        for landuse,texture in [('meadow',c.GROUND['grass']),('farmland',c.GROUND['dirt'])]:
+            with self.subTest(landuse=landuse),tempfile.TemporaryDirectory() as folder:
+                tree=ET.parse(ROOT/'tests/sample.osm'); root=tree.getroot()
+                ET.SubElement(root.find("way[@id='112']"),'tag',k='landuse',v=landuse)
+                source=Path(folder)/'areas.osm';tree.write(source)
+                data=c.convert(source,None,(1000,1000),options={'max_generated_trees':0})
+                inner_faces=[item['face'] for item in data['scenery'] if item.get('texture')==texture]
+                self.assertEqual(len(inner_faces),2)
+                # The enclosing relation must not change the clearing's own area.
+                root.remove(root.find("relation[@id='200']"));tree.write(source)
+                standalone=c.convert(source,None,(1000,1000),options={'max_generated_trees':0})
+                self.assertEqual(inner_faces,[item['face'] for item in standalone['scenery']
+                                              if item.get('texture')==texture])
+
+    def test_tagged_inner_relation_is_built_once_and_still_excludes_forest(self):
+        import xml.etree.ElementTree as ET
+        tree=ET.parse(ROOT/'tests/sample.osm');root=tree.getroot()
+        ET.SubElement(root.find("way[@id='112']"),'tag',k='landuse',v='meadow')
+        nested=ET.SubElement(root,'relation',id='201')
+        ET.SubElement(nested,'member',type='way',ref='112',role='outer')
+        ET.SubElement(nested,'tag',k='type',v='multipolygon')
+        ET.SubElement(nested,'tag',k='landuse',v='meadow')
+        member=root.find("relation[@id='200']/member[@ref='112']")
+        member.set('type','relation');member.set('ref','201')
+        with tempfile.TemporaryDirectory() as folder:
+            source=Path(folder)/'nested.osm';tree.write(source)
+            data=c.convert(source,None,(1000,1000))
+            nodes,_,_,bounds=c.read_osm(source)
+        inner_faces=[item['face'] for item in data['scenery'] if item.get('texture')==c.GROUND['grass']]
+        self.assertEqual(len(inner_faces),2)
+        hole=[c.project(*nodes[id][:2],bounds,(1000,1000)) for id in ['20','21','22','23']]
+        trees=[item for item in data['scenery'] if item.get('category')=='vegetation']
+        self.assertTrue(trees)
+        self.assertTrue(all(not c.inside(item['pos'],hole) for item in trees))
+
+    def test_tagged_outer_outline_does_not_duplicate_relation_vegetation(self):
+        import xml.etree.ElementTree as ET
+        tree=ET.parse(ROOT/'tests/sample.osm');root=tree.getroot()
+        way=root.find("way[@id='110']")
+        for child in list(way):way.remove(child)
+        for ref in ['9','10','11','12','9']:ET.SubElement(way,'nd',ref=ref)
+        relation=root.find("relation[@id='200']")
+        relation.remove(relation.find("member[@ref='111']"))
+        with tempfile.TemporaryDirectory() as folder:
+            source=Path(folder)/'outer.osm';tree.write(source)
+            baseline=c.convert(source,None,(1000,1000))
+            ET.SubElement(way,'tag',k='landuse',v='forest');tree.write(source)
+            tagged=c.convert(source,None,(1000,1000))
+        vegetation=lambda data:[item for item in data['scenery'] if item.get('category')=='vegetation']
+        self.assertTrue(vegetation(baseline))
+        self.assertEqual(vegetation(baseline),vegetation(tagged))
+
     def test_tree_limit(self):
         data=c.convert(ROOT/'tests/sample.osm',None,(1000,1000),max_trees=2)
         self.assertEqual(sum(item.get('model') in c.TREES for item in data['scenery']),2)

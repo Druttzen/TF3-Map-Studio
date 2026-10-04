@@ -321,6 +321,9 @@ local function sceneryProposal(value)
     scanned=scanned+1
     if value.options[controls.sceneryCategory(dataset.scenery[last])] then included=included+1 end
   end
+  -- A preparation failure belongs to this explicit candidate batch, even if
+  -- terrain/resource checks stop before a native proposal can be submitted.
+  value.failedLast=last
   for i=value.cursor,last do
     local source=dataset.scenery[i]
     if value.options[controls.sceneryCategory(source)] and source.model then
@@ -358,6 +361,29 @@ local function sceneryProposal(value)
   construction.playerEntity=api.engine.util.getPlayer()
   proposal.constructionsToAdd={construction}
   return proposal,last,included
+end
+
+local function proposedModelPositions(value,phase,last,proposal)
+  if phase=="edges" then return nil end
+  local items=proposal.constructionsToAdd[1].params.items
+  local positions={}
+  local function save(index,item)
+    assert(item and item.model and type(item.pos)=="table" and controls.finiteHeight(item.pos[3]),
+      "A scenery model has no finite prepared world height")
+    positions[index]={item.pos[1],item.pos[2],item.pos[3]}
+  end
+  if phase=="labels" then save(value.cursor,items[1])
+  else
+    local itemIndex=0
+    for index=value.cursor,last do
+      local source=dataset.scenery[index]
+      if value.options[controls.sceneryCategory(source)] and (source.model or source.texture) then
+        itemIndex=itemIndex+1
+        if source.model then save(index,items[itemIndex]) end
+      end
+    end
+  end
+  return positions
 end
 
 local function waterOwnership(value)
@@ -535,16 +561,33 @@ function script.handleEvent(_userParams, state, _src, id, name, param)
     value.runSteps=0
     value.notice="Import resumed."
   elseif name=="osm.retry" and value.phase=="error" then
-    value.phase=value.resumePhase; value.error=nil
+    if value.datasetId~=dataset.id then
+      value.notice="Dataset changed; restore the original dataset before retrying."
+      state:set(value); message(value.notice); return
+    end
+    if value.acceptedUnjournalled or value.errorKind=="command_state" then
+      value.notice="The previous build outcome cannot be safely replayed. Keep this save for inspection."
+      state:set(value); message(value.notice); return
+    end
+    value.phase=value.resumePhase; value.error=nil; value.errorKind=nil
     value.notice="Retrying the failed step."
   elseif name=="osm.skip" and value.phase=="error" then
+    if value.datasetId~=dataset.id or value.errorKind=="dataset_identity" then
+      value.notice="A dataset identity failure cannot skip source items. Restore the original dataset, then Retry."
+      state:set(value); message(value.notice); return
+    end
     if value.pendingOwnership or value.pendingScenery then
       value.notice="This accepted object already exists. Retry to complete ownership and naming; it cannot be skipped."
       state:set(value); message(value.notice); return
     end
-    value.cursor=value.failedLast and value.failedLast+1 or value.cursor+1
+    if not controls.skippable(value) or value.failedFirst~=value.cursor
+      or type(value.failedLast)~="number" or value.failedLast<value.cursor then
+      value.notice="This state error has no safely identified rejected job to skip. Retry or inspect this save."
+      state:set(value); message(value.notice); return
+    end
+    value.cursor=value.failedLast+1
     value.skipped=value.skipped+1
-    value.phase=value.resumePhase; value.error=nil; value.failedLast=nil
+    value.phase=value.resumePhase; value.error=nil; value.errorKind=nil; value.failedFirst=nil; value.failedLast=nil
     value.notice="Failed step skipped. Items in that step were not built."
   end
   state:set(value); status(value)
@@ -574,12 +617,14 @@ function script.postUpdate(_userParams, state, _dt, _result)
   if value.phase~="edges" and value.phase~="scenery" and value.phase~="labels" then return end
   if value.datasetId~=dataset.id then
     value.resumePhase=value.phase; value.phase="error"; value.error="Dataset changed; restore it before continuing."
+    value.errorKind="dataset_identity"; value.failedFirst=nil; value.failedLast=nil
     state:set(value); status(value); return
   end
   if value.pendingOwnership then
     local ok,err=pcall(finishOwnership,value)
     if not ok then
       value.resumePhase=value.phase; value.phase="error"; value.error=tostring(err)
+      value.errorKind="finalization"
       state:set(value); status(value); return
     end
   end
@@ -587,6 +632,7 @@ function script.postUpdate(_userParams, state, _dt, _result)
     local ok,err=pcall(finishScenery,value)
     if not ok then
       value.resumePhase=value.phase; value.phase="error"; value.error=tostring(err)
+      value.errorKind="finalization"
       state:set(value); status(value); return
     end
   end
@@ -615,6 +661,8 @@ function script.postUpdate(_userParams, state, _dt, _result)
     state:set(value); status(value); return
   end
   local phase=value.phase
+  local submitted,accepted=false,false
+  value.failedFirst=value.cursor; value.failedLast=value.cursor
   local ok,err=pcall(function()
     local proposal,last,included
     local edge
@@ -622,13 +670,22 @@ function script.postUpdate(_userParams, state, _dt, _result)
       edge=dataset.edges[value.cursor]; proposal=edgeProposal(edge,value); last=value.cursor
     elseif phase=="labels" then proposal,last=labelProposal(value)
     else proposal,last,included=sceneryProposal(value) end
-    if not proposal then value.cursor=last+1; state:set(value); return end
+    if not proposal then value.cursor=last+1; value.failedFirst=nil; value.failedLast=nil; state:set(value); return end
+    -- Preserve the exact world XYZ supplied to our identity-transformed native
+    -- construction. Publish this evidence only after acceptance, before any
+    -- separate ownership/name commands can fail. Older journals stay unchanged.
+    local modelPositions=proposedModelPositions(value,phase,last,proposal)
     value.failedLast=last
     local called=false
+    submitted=true
     api.cmd.sendCommand(api.cmd.makeWorldBuildProposalCmd(proposal,nil,false,false),function(res,success,resultEntities)
       called=true
       local callbackOk,callbackError=pcall(function()
       if success then
+        accepted=true
+        -- An accepted command must never be replayed if result decoding fails
+        -- before its native entities can be journalled.
+        value.acceptedUnjournalled=true; state:set(value)
         value.runSteps=(value.runSteps or 0)+1
         if phase=="edges" then
           local built=res.proposal.proposal.addedSegments[1]
@@ -639,12 +696,14 @@ function script.postUpdate(_userParams, state, _dt, _result)
           value.builtEdges=value.builtEdges+1
           -- Commit the accepted geometry before assigning ownership. If that
           -- separate command fails, Retry completes it without building twice.
-          value.cursor=last+1; value.failedLast=nil
+          value.cursor=last+1; value.failedFirst=nil; value.failedLast=nil
           value.pendingOwnership=built.entity
+          value.acceptedUnjournalled=nil
           state:set(value)
           finishOwnership(value)
         else
-          local record={entities={},name=proposal.constructionsToAdd[1].name,phase=phase,first=value.cursor,last=last}
+          local record={entities={},name=proposal.constructionsToAdd[1].name,phase=phase,first=value.cursor,last=last,
+            modelJournalSchema=1,modelPositions=modelPositions}
           for _,entry in ipairs(resultEntities or res.resultEntities or {}) do
             local entity=entry[1]
             if api.engine.entityExists(entity) and
@@ -656,14 +715,16 @@ function script.postUpdate(_userParams, state, _dt, _result)
           value.sceneryRecords[#value.sceneryRecords+1]=record
           if phase=="labels" then value.labels=(value.labels or 0)+1
           else value.builtScenery=value.builtScenery+included end
-          value.cursor=last+1; value.failedLast=nil; value.pendingScenery=record
+          value.cursor=last+1; value.failedFirst=nil; value.failedLast=nil; value.pendingScenery=record
+          value.acceptedUnjournalled=nil
           state:set(value)
           finishScenery(value)
         end
-        value.cursor=last+1; value.failedLast=nil
+        value.cursor=last+1; value.failedFirst=nil; value.failedLast=nil; value.errorKind=nil
         value.cooldown=value.options.interval
       else
         value.resumePhase=phase; value.phase="error"
+        value.errorKind="proposal_rejected"
         local errors=res and res.resultProposalData and res.resultProposalData.errorState
         value.error=errors and table.concat(errors.messages or {},"; ") or "Game rejected the build proposal"
         status(value)
@@ -672,6 +733,7 @@ function script.postUpdate(_userParams, state, _dt, _result)
       end)
       if not callbackOk then
         value.resumePhase=phase; value.phase="error"; value.error=tostring(callbackError)
+        value.errorKind=(value.pendingOwnership or value.pendingScenery) and "finalization" or "accepted_state"
         state:set(value); status(value)
       end
     end)
@@ -679,6 +741,7 @@ function script.postUpdate(_userParams, state, _dt, _result)
   end)
   if not ok then
     value.resumePhase=phase; value.phase="error"; value.error=tostring(err)
+    value.errorKind=accepted and "accepted_state" or submitted and "command_state" or "preparation"
     state:set(value); status(value)
   elseif value.cursor%100==0 then status(value) end
 end

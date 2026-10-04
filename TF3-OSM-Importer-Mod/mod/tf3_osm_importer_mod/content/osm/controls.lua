@@ -100,6 +100,13 @@ function controls.waterSupport(terrain)
     "Mapped small waters use Landscaping Water Dirty on a 0.5 m shallow bed. Water Dirty is ground paint, not navigable water. Elevated model surfaces are a separate experiment. Lakes retain their metadata without changing the global sea level. No water or terrain was changed."
 end
 
+function controls.skippable(value)
+  return value.phase=="error" and value.datasetMatches~=false
+    and not value.pendingOwnership and not value.pendingScenery and not value.pendingAccepted
+    and not value.acceptedUnjournalled
+    and (value.errorKind=="proposal_rejected" or value.errorKind=="preparation")
+end
+
 function controls.enabled(command,value)
   local phase=value.phase or "ready"
   if phase=="checking" then return command=="pause" or command=="status" or command=="mapSize" end
@@ -108,7 +115,9 @@ function controls.enabled(command,value)
   if command=="start" then return not value.datasetId end
   if command=="pause" then return phase=="scenery" or phase=="edges" or phase=="labels" end
   if command=="resume" then return phase=="paused" end
-  if command=="retry" or command=="skip" then return phase=="error" end
+  if command=="skip" then return controls.skippable(value) end
+  if command=="retry" then return phase=="error" and value.datasetMatches~=false
+    and not value.acceptedUnjournalled and value.errorKind~="command_state" end
   if command=="verify" then return phase=="finished" end
   if command=="placeNames" then return (value.labels or 0)>0 end
   return command=="validate" or command=="status" or command=="mapSize" or command=="waterSupport"

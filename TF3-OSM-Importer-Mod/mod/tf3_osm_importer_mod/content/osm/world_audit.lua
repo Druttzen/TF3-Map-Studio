@@ -78,7 +78,7 @@ function audit.inspect(dataset,value)
   local player=api.engine.util.getPlayer()
   local options=controls.options(value.options or dataset.importOptions)
   local report={
-    ok=false,phase=value.phase or "ready",datasetId=value.datasetId,
+    ok=false,partial=false,missingModelHeights=0,phase=value.phase or "ready",datasetId=value.datasetId,
     skipped=value.skipped or 0,problems={},problemCounts={},degrees={},
     expected={nodes=0,edges=0,usableEdges=0,streets=0,tracks=0,scenery=0,models=0,surfaces=0,labels=0,components=0},
     current={nodes=0,edges=0,usableEdges=0,streets=0,tracks=0,scenery=0,models=0,surfaces=0,labels=0,components=0,constructions=0,assetGroups=0},
@@ -247,24 +247,66 @@ function audit.inspect(dataset,value)
   end
 
   local expectedItems,foundItems,labelNames={},{},{}
-  for _,item in ipairs(dataset.scenery or {}) do
+  local savedPositions={scenery={},labels={}}
+  local schemas={scenery={},labels={}}
+  for _,record in ipairs(value.sceneryRecords or {}) do
+    if savedPositions[record.phase] then
+      for index=record.first or 1,record.last or record.first or 0 do
+        schemas[record.phase][index]=record.modelJournalSchema
+        local saved=record.modelPositions and record.modelPositions[index]
+        if saved then
+          if savedPositions[record.phase][index] then problem("wrongScenery","Duplicate saved model position in importer journal.") end
+          savedPositions[record.phase][index]=saved
+        end
+      end
+    end
+  end
+  local positionsByKey={}
+  local function expectPosition(item,key,index,phase)
+    local p=savedPositions[phase][index]
+    if type(p)=="table" and controls.finiteHeight(p[1]) and controls.finiteHeight(p[2]) and controls.finiteHeight(p[3]) then
+      local xy=controls.position(item.pos,box)
+      if math.abs(p[1]-xy[1])>0.01 or math.abs(p[2]-xy[2])>0.01 then
+        problem("wrongScenery","Saved accepted model position differs from its source item.")
+      end
+      positionsByKey[key]=positionsByKey[key] or {}
+      positionsByKey[key][#positionsByKey[key]+1]=p
+    else
+      savedPositions[phase][index]=nil
+      report.partial=true; report.missingModelHeights=report.missingModelHeights+1
+      if schemas[phase][index]==1 then problem("wrongScenery","New importer journal is missing a finite accepted model position.") end
+    end
+  end
+  local function savedPositionMatches(key,pos)
+    local candidates=positionsByKey[key]
+    if not candidates then return true end -- explicitly partial for old saves
+    if not pos or not controls.finiteHeight(pos[1]) or not controls.finiteHeight(pos[2]) or not controls.finiteHeight(pos[3]) then return false end
+    for _,p in ipairs(candidates) do
+      if math.abs(pos[1]-p[1])<=0.01 and math.abs(pos[2]-p[2])<=0.01 and math.abs(pos[3]-p[3])<=0.01 then return true end
+    end
+    return false
+  end
+  for index,item in ipairs(dataset.scenery or {}) do
     if options[controls.sceneryCategory(item)] then
       local key=itemKey(item)
       if key then expectedItems[key]=(expectedItems[key] or 0)+1
       else problem("wrongScenery","A selected dataset scenery item has invalid saved parameters.") end
       report.expected.scenery=report.expected.scenery+1
-      if item.model then report.expected.models=report.expected.models+1
+      if item.model then
+        report.expected.models=report.expected.models+1
+        if key then expectPosition(item,key,index,"scenery") end
       elseif item.texture then report.expected.surfaces=report.expected.surfaces+1 end
     end
   end
   if options.places then
-    for _,label in ipairs(dataset.labels or {}) do
+    for index,label in ipairs(dataset.labels or {}) do
       local pos=coordinate(label.pos)
       local key=pos and "label|"..label.name.."|"..pos
       if key then expectedItems[key]=(expectedItems[key] or 0)+1
       else problem("wrongScenery","A selected dataset marker has invalid saved parameters.") end
       labelNames[label.name]=true
       report.expected.labels=report.expected.labels+1
+      if key then expectPosition(label,key,index,"labels") end
     end
   end
   local prefix="OSM scenery "..tostring(dataset.id).." "
@@ -349,6 +391,9 @@ function audit.inspect(dataset,value)
               end
               if key and expectedItems[key] then foundItems[key]=(foundItems[key] or 0)+1
               else problem("wrongScenery","Imported construction "..tostring(entity).." contains an unexpected model, surface or marker position.") end
+              if item.model and key and not savedPositionMatches(key,item.pos) then
+                problem("wrongScenery","Imported construction model differs from its saved accepted XYZ position.")
+              end
             end
           end
         end
@@ -359,8 +404,9 @@ function audit.inspect(dataset,value)
   -- this linear in the number of models rather than scanning the dataset per tree.
   local buckets={}
   local function bucket(model,x,y) return model.."|"..tostring(x).."|"..tostring(y) end
-  local function expectAsset(item,key,name)
+  local function expectAsset(item,key,name,index,phase)
     item={model=item.model,pos=controls.position(item.pos,box),rotation=item.rotation,scale=item.scale}
+    item.acceptedPos=savedPositions[phase][index]
     local x,y=math.floor(item.pos[1]/0.01),math.floor(item.pos[2]/0.01)
     local model=api.res.modelRep.find(item.model)
     local id=bucket(model,x,y)
@@ -368,12 +414,12 @@ function audit.inspect(dataset,value)
     buckets[id][#buckets[id]+1]={item=item,key=key,name=name}
   end
   if #assetEntities>0 then
-    for _,item in ipairs(dataset.scenery or {}) do
-      if item.model and options[controls.sceneryCategory(item)] then expectAsset(item,itemKey(item)) end
+    for index,item in ipairs(dataset.scenery or {}) do
+      if item.model and options[controls.sceneryCategory(item)] then expectAsset(item,itemKey(item),nil,index,"scenery") end
     end
     if options.places then
-      for _,label in ipairs(dataset.labels or {}) do
-        expectAsset({model=markerName,pos=label.pos,rotation=0},"label|"..label.name.."|"..coordinate(label.pos),label.name)
+      for index,label in ipairs(dataset.labels or {}) do
+        expectAsset({model=markerName,pos=label.pos,rotation=0},"label|"..label.name.."|"..coordinate(label.pos),label.name,index,"labels")
       end
     end
   end
@@ -385,7 +431,7 @@ function audit.inspect(dataset,value)
     report.current.assetGroups=report.current.assetGroups+1
     owned(entity,"Imported asset group "..tostring(entity))
     local models=api.engine.getComponent(entity,T.MODEL_INSTANCE_LIST)
-    local function checkModel(modelId,pos,rotation,scale)
+    local function checkModel(modelId,pos,rotation,scale,basis)
       if isLabel then report.current.labels=report.current.labels+1
       else report.current.scenery=report.current.scenery+1; report.current.models=report.current.models+1 end
       local model=modelId
@@ -395,8 +441,17 @@ function audit.inspect(dataset,value)
         for _,expected in ipairs(buckets[bucket(model,x+dx,y+dy)] or {}) do
           local item=expected.item
           local angle=math.abs(((rotation-(item.rotation or 0)+math.pi)%(2*math.pi))-math.pi)
+          local heightMatches=not item.acceptedPos or (controls.finiteHeight(pos.z) and math.abs(pos.z-item.acceptedPos[3])<=0.01)
+          local basisMatches=true
+          if basis then
+            local c,s=math.cos(item.rotation or 0),math.sin(item.rotation or 0)
+            local expectedBasis={c,s,0,-s,c,0,0,0,1}
+            for index=1,9 do
+              if not controls.finiteHeight(basis[index]) or math.abs(basis[index]-expectedBasis[index])>0.0001 then basisMatches=false; break end
+            end
+          end
           if expected.name==(isLabel and name or nil) and math.abs(pos.x-item.pos[1])<=0.01 and math.abs(pos.y-item.pos[2])<=0.01
-            and angle<=0.0001 and math.abs(scale-1)<=0.0001 then
+            and heightMatches and basisMatches and angle<=0.0001 and math.abs(scale-1)<=0.0001 then
             if not key or (foundItems[expected.key] or 0)<expectedItems[expected.key] then key=expected.key end
           end
         end
@@ -411,7 +466,9 @@ function audit.inspect(dataset,value)
         -- Installed custom_entity_util uses zero-based columns; the API's
         -- "1-4" comment does not match the native matrix accessor.
         local col=model.transf:cols(0)
-        checkModel(model.modelId,model.transf:getTransl(),(math.atan2 or math.atan)(col.y,col.x),math.sqrt(col.x*col.x+col.y*col.y))
+        local y,z=model.transf:cols(1),model.transf:cols(2)
+        checkModel(model.modelId,model.transf:getTransl(),(math.atan2 or math.atan)(col.y,col.x),math.sqrt(col.x*col.x+col.y*col.y),
+          {col.x,col.y,col.z,y.x,y.y,y.z,z.x,z.y,z.z})
       end
     end
   end
@@ -428,14 +485,17 @@ function audit.inspect(dataset,value)
       problem("progress","Saved "..kind.." progress is "..tostring(report.counters[kind]).." of "..tostring(report.expected[kind]).." selected items.")
     end
   end
-  report.ok=#report.problems==0
+  if report.partial then
+    report.limitations[#report.limitations+1]=string.format("Accepted XYZ positions are missing for %d models/markers from older or incomplete journals; their vertical position is not verified.",report.missingModelHeights)
+  end
+  report.ok=#report.problems==0 and not report.partial
   return report
 end
 
 function audit.format(report)
   local e,c=report.expected,report.current
   local text=string.format("%s | nodes %d/%d | roads %d/%d | rails %d/%d | vehicle lane edges %d/%d | models %d/%d | ground items %d/%d | markers %d/%d | connected groups %d/%d",
-    report.ok and "Saved built objects verified" or "Built objects need attention",
+    report.ok and "Saved built objects verified" or (#report.problems==0 and report.partial and "Built objects partially verified" or "Built objects need attention"),
     c.nodes,e.nodes,c.streets,e.streets,c.tracks,e.tracks,c.usableEdges,e.usableEdges,c.models,e.models,
     c.surfaces,e.surfaces,c.labels,e.labels,c.components,e.components)
   if #report.problems>0 then
@@ -444,6 +504,7 @@ function audit.format(report)
     text=text.." | "..table.concat(shown," ")
     if #report.problems>3 then text=text.." ("..tostring(#report.problems-3).." more issues)" end
   end
+  if report.partial then text=text..string.format(" | Accepted XYZ evidence missing for %d models/markers. Vertical position is not verified.",report.missingModelHeights) end
   return text.." Ground paint appearance and actual vehicle routes still need a map check. Place names: use Show place names."
 end
 

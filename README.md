@@ -17,13 +17,13 @@ Download and extract the package for the tool you need, then open its `.exe`. Th
 - [TF3-Heightmap-Studio — Preview 0.6](https://github.com/Druttzen/TF3-Map-Studio/releases/download/preview-2026-10-02/TF3-Heightmap-Studio-Preview-0.6-Windows.zip)
 - [TRF3-Mod-Converter — 0.2.0](https://github.com/Druttzen/TF3-Map-Studio/releases/download/preview-2026-10-02/TRF3-Mod-Converter-Windows.zip)
 
-TRF3-Mod-Converter source is now **0.10.0**, with road/rail/tram/water/air export profiles, automatic completion of missing data from sufficiently similar installed TF3 vehicles, same-class TF3 freight additions and protected queued exports. Existing data stays authoritative, every completion records its source, and uncertain matches receive **Needs review**. Dynamic/API mods still require manual migration; completed drafts require tests in TF3. The download above is the earlier published package. See [the current converter instructions and limitations](TRF3-Mod-Converter/EXPORT_PROFILES.md).
+TRF3-Mod-Converter source is now **0.11.0**, with road/rail/tram/water/air export profiles, automatic completion of missing data from sufficiently similar installed TF3 vehicles, same-class TF3 freight additions and protected queued exports. Existing data stays authoritative, every completion records its source, and uncertain matches receive **Needs review**. Dynamic/API mods still require manual migration; completed drafts require tests in TF3. The download above is the earlier published package. See [the current converter instructions and limitations](TRF3-Mod-Converter/EXPORT_PROFILES.md).
 
 The [preview release](https://github.com/Druttzen/TF3-Map-Studio/releases/tag/preview-2026-10-02) also includes checksums. Source archives are available on that page.
 
 ## In-game importer mod — tool #4
 
-Current source is revision 6 (bundled with converter source Preview 0.12), adding saved road/rail heights at construction time and experimental mapped small waters with a 0.5 m bed and Landscaping Water Dirty. Read [the water investigation and native test scope](TF3-OSM-Importer-Mod/WATER-RESEARCH.md). Shallow-water excavation and paint await native validation; local lake sea levels and ship navigation are not implemented. The downloads below are the earlier revision 4 until a newer release is published.
+Current source is revision 7 (bundled with converter source Preview 0.13), adding saved road/rail heights at construction time and experimental mapped small waters with a 0.5 m bed and Landscaping Water Dirty. Read [the water investigation and native test scope](TF3-OSM-Importer-Mod/WATER-RESEARCH.md). Shallow-water excavation and paint await native validation; local lake sea levels and ship navigation are not implemented. The downloads below are the earlier revision 4 until a newer release is published.
 
 [Download TF3-OSM-Importer-Mod revision 4](https://github.com/Druttzen/TF3-Map-Studio/releases/download/importer-revision-4-2026-10-03/TF3-OSM-Importer-Mod-Revision-4.zip), extract it, and copy the `druttzen_osm_vanilla` folder into TF3's local mods folder. Prepare custom OSM datasets with tool #1 and enable the importer in a fresh test map. The mod package contains Lua scripts, a fictional demonstration dataset, instructions, and license notices; Python is required only for development tests and packaging.
 
@@ -49,3 +49,5 @@ The local `work/`, `outputs/`, and `.relocation-recovery/` folders contain worki
 Licenses apply per tool. OSM-TF3-Vanilla-Converter, TF3-Heightmap-Studio, and TF3-OSM-Importer-Mod include their GPL licenses and applicable third-party notices. TRF3-Mod-Converter uses the MIT license. Preserve the license and notice files when distributing a tool.
 
 TRF3-Mod-Converter originated in [Druttzen/TRF3-mod-converter](https://github.com/Druttzen/TRF3-mod-converter). This combined project includes the local desktop edition and keeps the original repository available separately.
+
+Current Heightmap Studio source is Preview 0.7, with AOI-based LiDAR/ground-model discovery and classified LAS/LAZ import. See [LiDAR sources and access](TF3-Heightmap-Studio/LIDAR-SOURCES.md). Published downloads above remain the earlier releases; new local Windows packages are in `outputs/`. All four tools now run through root GitHub Actions workflows.

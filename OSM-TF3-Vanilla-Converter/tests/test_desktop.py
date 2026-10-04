@@ -121,6 +121,38 @@ class DesktopTests(unittest.TestCase):
             self.assertEqual(output.read_text(),'old lua'); self.assertEqual(report.read_text(),'old report')
             self.assertEqual(len(list(Path(folder).iterdir())),2)
 
+    def test_failed_dataset_restore_retains_backup_and_reports_its_path(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output=Path(folder)/'map.lua'; output.write_bytes(b'previous dataset')
+            report=output.with_suffix('.report.json'); report.write_bytes(b'previous report')
+            replace=c.os.replace; progress=[]
+            def fail_commit_and_restore(src,dst):
+                if Path(dst)==report or '.backup.' in Path(src).name:
+                    raise PermissionError('simulated locked output')
+                return replace(src,dst)
+            with patch.object(c.os,'replace',side_effect=fail_commit_and_restore):
+                with self.assertRaisesRegex(RuntimeError,'Backup retained at') as error:
+                    c.export_file(SAMPLE,output,None,[1000,1000],
+                                  progress=lambda pct,stage,detail:progress.append(pct))
+            backups=list(Path(folder).glob('map.lua.backup.*'))
+            self.assertEqual(len(backups),1)
+            self.assertEqual(backups[0].read_bytes(),b'previous dataset')
+            self.assertIn(str(backups[0].resolve()),str(error.exception))
+            self.assertEqual(report.read_bytes(),b'previous report')
+            self.assertNotIn(100,progress)
+            self.assertEqual(set(Path(folder).iterdir()),{output,report,backups[0]})
+
+    def test_report_commit_failure_removes_new_dataset_without_previous_export(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output=Path(folder)/'map.lua'; report=output.with_suffix('.report.json')
+            replace=c.os.replace
+            def fail_report(src,dst):
+                if Path(dst)==report: raise PermissionError('simulated locked report')
+                return replace(src,dst)
+            with patch.object(c.os,'replace',side_effect=fail_report),self.assertRaises(OSError):
+                c.export_file(SAMPLE,output,None,[1000,1000])
+            self.assertEqual(list(Path(folder).iterdir()),[])
+
     def test_new_mod_is_self_contained_and_does_not_overwrite(self):
         with tempfile.TemporaryDirectory() as folder:
             target=Path(folder)/c.MOD_FOLDER

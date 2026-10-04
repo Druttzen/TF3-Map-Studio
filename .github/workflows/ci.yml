@@ -1,0 +1,60 @@
+name: TF3 Map Studio checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  tools:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        tool: [OSM-TF3-Vanilla-Converter, TF3-Heightmap-Studio, TF3-OSM-Importer-Mod]
+    defaults:
+      run:
+        working-directory: ${{ matrix.tool }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - run: python -m pip install -r requirements-dev.txt pytest
+      - run: python -m pytest -q
+  converter:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.10', '3.12', '3.14']
+    defaults:
+      run:
+        working-directory: TRF3-Mod-Converter
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e '.[dev]'
+      - run: python -m pytest -q
+      - run: python -m build
+  windows-apps:
+    needs: [tools, converter]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - run: python -m pip install -r TF3-Heightmap-Studio/requirements-dev.txt -r OSM-TF3-Vanilla-Converter/requirements-dev.txt -e './TRF3-Mod-Converter[dev]'
+      - run: ./TF3-Heightmap-Studio/build.ps1
+      - run: ./OSM-TF3-Vanilla-Converter/build.ps1
+      - run: python scripts/build_windows.py
+        working-directory: TRF3-Mod-Converter
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TF3-Map-Studio-Windows
+          path: |
+            TF3-Heightmap-Studio/dist/*.exe
+            OSM-TF3-Vanilla-Converter/dist/*.exe
+            TRF3-Mod-Converter/dist/*.zip

@@ -371,11 +371,21 @@ def convert_queue(items: list[QueueItem], destination: str | Path, *, tf3_game: 
                 _preflight_profile(root)
                 before = file_fingerprint(root)
                 receipt = state['receipts'].get(item.key, {})
+                native=None
+                if tf3_game and (root/'res').is_dir():
+                    game_key=str(Path(tf3_game).resolve())
+                    if game_key not in native_cache:native_cache[game_key]=NativeInventory(Path(tf3_game))
+                    native=native_cache[game_key]
+                native_valid=(native is None and receipt.get('nativeResources')=={} or native is not None
+                              and receipt.get('nativeInventory')==native.inventory_fingerprint()
+                              and isinstance(receipt.get('nativeResources'),dict)
+                              and native.fingerprints(receipt['nativeResources'])==receipt['nativeResources']) if target.exists() else False
                 if target.exists():
                     if (receipt.get('status') == 'completed' and receipt.get('modId') == item.mod_id
                             and receipt.get('sourceFingerprint') == before and not linked(target)
                             and receipt.get('converterVersion') == __version__
                             and receipt.get('tf3Game') == (str(Path(tf3_game).resolve()) if tf3_game else None)
+                            and native_valid
                             and receipt.get('outputFingerprint') == file_fingerprint(target)):
                         item.message = ('Previous export verified · TF3 data added'
                                         if receipt.get('tf3DataAdded') is True else 'Previous export verified')
@@ -384,12 +394,16 @@ def convert_queue(items: list[QueueItem], destination: str | Path, *, tf3_game: 
                 else:
                     progress = (lambda message: event('progress', {'key': item.key, 'message': message})) if event else None
                     report = _export(item, target, tf3_game, native_cache, tf2_cache, progress)
+                    if native and native.fingerprints(report.get('nativeResourceFingerprints',{}))!=report.get('nativeResourceFingerprints',{}):
+                        raise ValueError('TF3 resources changed during conversion. Export needs review.')
                     if file_fingerprint(root) != before:
                         raise ValueError('Source changed during conversion. Export needs review.')
                     data_added = _tf3_data_added(report)
                     state['receipts'][item.key] = {'status': 'completed', 'modId': item.mod_id,
                                                   'sourceFingerprint': before, 'outputFingerprint': file_fingerprint(target),
                                                   'converterVersion': __version__, 'tf3Game': str(Path(tf3_game).resolve()) if tf3_game else None,
+                                                  'nativeInventory': native.inventory_fingerprint() if native else None,
+                                                  'nativeResources': report.get('nativeResourceFingerprints',{}) if native else {},
                                                   'tf3DataAdded': data_added}
                     item.message = 'Export saved · TF3 data added' if data_added else 'Export saved'
                 item.status = 'completed'

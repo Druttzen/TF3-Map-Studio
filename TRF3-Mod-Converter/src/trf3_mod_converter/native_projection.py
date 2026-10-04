@@ -69,7 +69,7 @@ class _Scanner:
         if depth > _MAX_DEPTH:
             raise UnsupportedProjection('Native literal nesting exceeds the projection limit')
         token = self.peek()
-        if token in (LuaLexer.MINUS, LuaLexer.PLUS, LuaLexer.SQUIG, LuaLexer.POUND, LuaLexer.NOT):
+        if token in (LuaLexer.MINUS, LuaLexer.SQUIG, LuaLexer.POUND, LuaLexer.NOT):
             self.take()
             self.atom(depth+1)
         elif token in _SCALARS:

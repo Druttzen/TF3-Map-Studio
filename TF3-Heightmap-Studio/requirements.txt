@@ -7,3 +7,6 @@ affine==3.0.1
 attrs==26.1.0
 click==8.5.0
 pyparsing==3.3.3
+laspy==2.7.0
+lazrs==0.8.2
+pyproj==3.8.0

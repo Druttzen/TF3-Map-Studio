@@ -27,7 +27,7 @@ FEATURES={
     'footpaths':'Footpaths, cycleways and steps (small vanilla roads)',
     'disused_tracks':'Disused railway tracks','bridges':'Bridges','tunnels':'Tunnels',
     'forests':'Forests','shrubs':'Shrub areas','tree_nodes':'Individually tagged trees',
-    'surfaces':'Ground surfaces','fountains':'Fountains','bollards':'Bollards',
+    'surfaces':'Ground surfaces','waterways':'Small mapped waters (0.5 m bed, Water Dirty)','fountains':'Fountains','bollards':'Bollards',
     'advertising_columns':'Advertising columns','place_markers':'Named place markers',
 }
 DEFAULTS={
@@ -41,14 +41,14 @@ DEFAULTS={
     'tunnel_depth':8.0,'object_rotation':0.0,
     'object_models':{'tree':'Oak','fountain':'Fountain','bollard':'Mooring bollard','advertising_column':'Advertising column'},
     'surface_materials':{'asphalt':'Asphalt','dirt':'Dirt','grass':'Cut grass'},
-    'import_batch_size':100,'import_delay':0.0,
+    'import_batch_size':100,'import_delay':0.0,'waterway_width':2.0,
 }
 RANGES={
     'forest_spacing':(2,1000),'shrub_spacing':(2,1000),'max_generated_trees':(0,1000000),
     'tree_jitter':(0,0.49),'high_speed_threshold':(1,500),
     'road_segment_length':(5,1000),'rail_segment_length':(5,1000),
     'tunnel_depth':(0,100),'object_rotation':(-360,360),
-    'import_batch_size':(1,100),'import_delay':(0,2),
+    'import_batch_size':(1,100),'import_delay':(0,2),'waterway_width':(0.1,20),
 }
 CHOICES={
     'road_style':['Automatic','Town','Country'],

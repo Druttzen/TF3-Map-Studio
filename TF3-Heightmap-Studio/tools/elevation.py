@@ -8,7 +8,9 @@ import certifi
 import numpy as np
 import rasterio
 from rasterio import Affine
-from rasterio.warp import reproject, transform, Resampling
+from rasterio.warp import reproject, transform, transform_bounds, Resampling
+from rasterio.enums import MaskFlags
+from rasterio.windows import Window
 from alignment import mercator_bounds
 from job import Job
 
@@ -100,13 +102,50 @@ def load_source(path,options,stack):
  crs=src.crs or options['crs_override']
  if not crs:raise ValueError(path.name+' has no coordinate reference system. Enter its known EPSG code in Elevation settings.')
  band=options['band'];tags=src.tags()
- return {'source':rasterio.band(src,band),'transform':src.transform,'crs':crs,'nodata':src.nodatavals[band-1],
+ download=None;record=path.with_suffix('.download.json')
+ if record.exists():
+  try:
+   value=json.loads(record.read_text(encoding='utf-8'))
+   if isinstance(value,dict):download=value
+  except (OSError,ValueError):pass
+ return {'source':rasterio.band(src,band),'dataset':src,'band':band,'transform':src.transform,'crs':crs,'nodata':src.nodatavals[band-1],
          'scale':src.scales[band-1],'offset':src.offsets[band-1],'units':src.units[band-1] or '', 'path':str(path),
          'metadata':{'file':str(path),'format':src.driver,'shape':[src.height,src.width],'crs':str(crs),'band':band,
            'scale':src.scales[band-1],'offset':src.offsets[band-1],'units':src.units[band-1],
            'sourceResolutionMetres':resolution_metres(src.transform,crs,src.width,src.height),
            'verticalDatum':tags.get('VERTICAL_DATUM','Unknown / unchanged'),
+           'lidar':json.loads(tags['LIDAR_PROVENANCE']) if tags.get('LIDAR_PROVENANCE') else None,
+           'download':download,
            'synthetic':tags.get('SYNTHETIC','').lower() in {'true','yes','1'}}}
+
+
+def masked_source(source, destination_transform, shape, stack, job):
+ """Apply authoritative GDAL masks before warping, in bounded disk-backed rows.
+
+ An explicit mask can mark a nodata-valued pixel valid, or a normal pixel
+ invalid. Passing scalar src_nodata to GDAL alone loses that distinction.
+ Only the AOI and interpolation halo are read; the original is untouched.
+ """
+ src=source.get('dataset');band=source.get('band')
+ if src is None or not ({MaskFlags.per_dataset,MaskFlags.alpha}&set(src.mask_flag_enums[band-1])):return source
+ edges=rasterio.transform.array_bounds(*shape,destination_transform)
+ left,bottom,right,top=transform_bounds('EPSG:3857',source['crs'],*edges,densify_pts=41)
+ inv=~src.transform
+ corners=[inv*(x,y) for x in (left,right) for y in (bottom,top)]
+ c0=max(0,math.floor(min(p[0] for p in corners))-3);c1=min(src.width,math.ceil(max(p[0] for p in corners))+3)
+ r0=max(0,math.floor(min(p[1] for p in corners))-3);r1=min(src.height,math.ceil(max(p[1] for p in corners))+3)
+ if c1<=c0 or r1<=r0:return {**source,'source':np.full((1,1),np.nan),'nodata':np.nan}
+ directory=stack.enter_context(tempfile.TemporaryDirectory(prefix='tf3-dem-mask-'))
+ path=Path(directory)/'masked.tif';affine=src.transform*Affine.translation(c0,r0)
+ with rasterio.open(path,'w',driver='GTiff',width=c1-c0,height=r1-r0,count=1,dtype='float64',crs=source['crs'],transform=affine,nodata=np.nan) as out:
+  rows=max(1,min(128,8_000_000//max(1,c1-c0)))
+  for row in range(r0,r1,rows):
+   job.check();n=min(rows,r1-row);window=Window(c0,row,c1-c0,n)
+   data=src.read(band,window=window).astype(np.float64)
+   data[src.read_masks(band,window=window)==0]=np.nan
+   out.write(data,1,window=Window(0,row-r0,c1-c0,n))
+ masked=stack.enter_context(rasterio.open(path))
+ return {**source,'source':rasterio.band(masked,1),'transform':affine,'nodata':np.nan}
 
 
 def sample_sources(paths,bounds,shape,options,job=None):
@@ -118,6 +157,7 @@ def sample_sources(paths,bounds,shape,options,job=None):
  with ExitStack() as stack, rasterio.Env(GDAL_CACHEMAX=128*1024*1024):
   sources=[load_source(path,options,stack) for path in paths]
   for i,source in enumerate(sources):
+   source=masked_source(source,destination_transform,shape,stack,job)
    job.check();meta=dict(source['metadata']);metadata.append(meta)
    units=source['units'].lower();factor=.3048 if options['source_units']=='Feet' or options['source_units']=='Auto / metres' and units in {'ft','foot','feet','international foot'} else 1.0
    meta['heightUnitMultiplier']=factor

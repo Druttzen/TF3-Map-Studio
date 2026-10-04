@@ -1,6 +1,11 @@
 # TRF3 Mod Converter
 
-A local desktop app and command-line tool, version **0.10.0**, with a removable mod queue, metadata/layout conversion and **TF2 vehicle, cargo and resource export profiles**. Missing required vehicle data can be completed from a sufficiently similar object in the selected TF3 installation. It never executes source Lua. Exported mods remain drafts until tested in TF3.
+A local desktop app and command-line tool, version **0.11.0**, with a removable mod queue, metadata/layout conversion and **TF2 vehicle, cargo and resource export profiles**. Missing required vehicle data can be completed from a sufficiently similar object in the selected TF3 installation. It never executes source Lua. Exported mods remain drafts until tested in TF3.
+
+Version 0.11 fixes ordered cargo exclusions/reinclusions, rejects shadowed
+localization helpers and invalid/version-1 native donors, and checks the TF3
+mount inventory plus SHA-256 fingerprints of used resource/donor inputs when
+resuming a queue. Earlier version receipts require a fresh export folder.
 
 ## Windows app
 

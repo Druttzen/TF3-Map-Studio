@@ -1,5 +1,5 @@
 TF3-OSM-Importer-Mod
-Companion Preview 0.12 | Mod revision 6 | GPL-3.0 | 3 October 2026
+Companion Preview 0.13 | Mod revision 7 | GPL-3.0 | 4 October 2026
 
 INSTALL
 Copy this tf3_osm_importer_mod folder into:
@@ -137,7 +137,7 @@ checks accepted heights. Older started saves keep their previous height rules.
 Terrain alignment is applied by TF3 when each network segment is constructed.
 
 MAPPED SMALL WATER - EXPERIMENTAL
-Reconvert the original OSM XML with converter Preview 0.12. The converter
+Reconvert the original OSM XML with converter Preview 0.13. The converter
 prepares boundaries; this mod performs terrain changes only when built.
 Select Mapped small waters, then Check map and resources and Start import.
 This selection is initially off while native validation is pending.

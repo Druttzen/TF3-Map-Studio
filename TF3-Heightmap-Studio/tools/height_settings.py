@@ -15,6 +15,7 @@ DEFAULTS={
  'range_mode':'Automatic (preserve all heights)','range_min':-100.0,'range_max':1000.0,'clip_heights':False,
  'opentopo_dataset':'COP30','dem_urls':'','download_max_mb':512,
  'public_max_tiles':16,'source_credit':'','vertical_datum':'Unknown / unchanged',
+ 'lidar_max_points':100000000,
  'biomes':False,'biome_climate':'Temperate','biome_mode':'Height, slope and OSM','biome_source':'',
  'biome_base':BIOME_CHOICES[2],'biome_highland':BIOME_CHOICES[3],'biome_rock':BIOME_CHOICES[4],
  'biome_forest':BIOME_CHOICES[1],'biome_shrubs':BIOME_CHOICES[3],'biome_grass':BIOME_CHOICES[2],
@@ -40,9 +41,10 @@ RANGES={
  'road_width':(1,500),'road_blend':(0,1000),'road_smoothing':(0,1000),'road_grade':(0,100),
  'rail_width':(1,500),'rail_blend':(0,1000),'rail_smoothing':(0,1000),'rail_grade':(0,100),
  'download_max_mb':(1,4096),'range_min':(-20000,20000),'range_max':(-20000,20000),'public_max_tiles':(1,64),
+ 'lidar_max_points':(1,2000000000),
  'biome_highland_m':(-20000,20000),'biome_alpine_m':(-20000,20000),'biome_rock_slope':(0,90),
 }
-INTEGERS={'pixels_x','pixels_y','band','public_max_tiles'}
+INTEGERS={'pixels_x','pixels_y','band','public_max_tiles','lidar_max_points'}
 # Gigantomaniac 1:2 needs 5,121 x 10,241 vertices (52,444,161).
 # Cover every native TF3 4 m grid while retaining a bounded working grid.
 MAX_GRID_PIXELS=53_000_000

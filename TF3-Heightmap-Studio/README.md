@@ -1,9 +1,14 @@
 # TF3 Heightmap Studio
 
-Preview 0.6 is the terrain companion to OSM-TF3-Vanilla-Converter. It uses the
+Preview 0.7 is the terrain companion to OSM-TF3-Vanilla-Converter. It uses the
 converter's JSON report, exported Lua and original OSM file to align measured
 elevation with a Transport Fever 3 map. It supports local and public elevation
 sources, terrain editing, and optional vanilla biome exports.
+
+Preview 0.7 adds map-coordinate data discovery, direct ground DEM downloads and
+classified local LAS/LAZ/COPC import. Open the **LiDAR** tab to find data for the
+selected map. See [sources, access and measured limitations](LIDAR-SOURCES.md).
+It also fixes current OSM-report compatibility and authoritative GeoTIFF masks.
 
 This folder contains the application source, existing tests, pinned dependencies,
 portable synthetic examples and licence notices. Native TF3 heightmap and biome

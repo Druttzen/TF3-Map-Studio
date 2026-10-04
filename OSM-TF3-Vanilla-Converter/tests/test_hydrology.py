@@ -53,6 +53,53 @@ class HydrologyTests(unittest.TestCase):
         self.assertIn('waterFeatures',lua(d))
         self.assertTrue(any('approximation' in w for w in d['warnings']))
 
+    def test_closed_linear_waterways_keep_dry_interiors_and_join_the_closure(self):
+        nodes={'1':(-10,-10),'2':(10,-10),'3':(10,10),'4':(-10,10)}
+        for waterway in ('canal','stream','river','ditch','drain'):
+            for explicit_area in ({},{'area':'no'}):
+                with self.subTest(waterway=waterway,area=explicit_area):
+                    d=self.convert(fixture(nodes,[('11',['1','2','3','4','1'],
+                        {'waterway':waterway,'width':'1',**explicit_area})]))
+                    f=d['waterFeatures'][0]
+                    faces=[item['face'] for item in d['scenery'] if item['category']=='waterways']
+                    self.assertEqual(f['status'],'prepared')
+                    self.assertEqual(f['rings'],[])
+                    self.assertEqual(f['outerRingCount'],0)
+                    self.assertEqual(len(f['centreline']),5)
+                    self.assertEqual(f['centreline'][0],f['centreline'][-1])
+                    self.assertEqual(f['width'],1)
+                    self.assertFalse(any(inside((0,0),face) for face in faces))
+                    self.assertLess(sum(signed_area(face) for face in faces),100)
+                    # Outside both adjoining rectangles, these corner points
+                    # require a join disk, including the first/last vertex.
+                    for p in f['centreline'][:-1]:
+                        corner=(p[0]+(.2 if p[0]>0 else -.2),
+                                p[1]+(.2 if p[1]>0 else -.2))
+                        self.assertTrue(any(inside(corner,face) for face in faces),corner)
+
+    def test_explicit_waterway_area_uses_polygon_instead_of_line_width(self):
+        d=self.convert(fixture({'1':(-10,-10),'2':(10,-10),'3':(10,10),'4':(-10,10)},[
+            ('11',['1','2','3','4','1'],{'waterway':'canal','area':'yes','width':'1'})]))
+        f=d['waterFeatures'][0]
+        self.assertEqual(f['status'],'prepared')
+        self.assertEqual(f['centreline'],[])
+        self.assertEqual(len(f['rings']),1)
+        self.assertNotIn('width',f)
+        self.assertAlmostEqual(sum(signed_area(i['face']) for i in d['scenery']),400,delta=.1)
+
+    def test_conflicting_area_no_and_water_area_tags_require_review(self):
+        nodes={'1':(-10,-10),'2':(10,-10),'3':(10,10),'4':(-10,10)}
+        for tags in ({'natural':'water','water':'pond'},
+                     {'natural':'water','water':'river'},
+                     {'waterway':'riverbank'},{'water':'lake'}):
+            with self.subTest(tags=tags):
+                d=self.convert(fixture(nodes,[('11',['1','2','3','4','1'],
+                                              {**tags,'area':'no'})]))
+                self.assertFalse(d['scenery'])
+                self.assertEqual(d['waterFeatures'][0]['status'],'needs-review')
+                self.assertIn('conflict',d['waterFeatures'][0]['reason'])
+                self.assertEqual(d['waterMetadata']['ways']['11']['tags'],{**tags,'area':'no'})
+
     def test_multipolygon_island_and_relation_members_are_not_double_imported(self):
         nodes={'1':(-20,-20),'2':(20,-20),'3':(20,20),'4':(-20,20),
                '5':(-5,-5),'6':(5,-5),'7':(5,5),'8':(-5,5)}

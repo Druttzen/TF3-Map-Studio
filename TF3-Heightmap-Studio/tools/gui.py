@@ -1,6 +1,6 @@
 """Standalone desktop heightmap studio for the second OSM map-building step. GPL-3.0."""
 from copy import deepcopy
-import json, math, os, queue, threading, time, webbrowser
+import json, math, os, queue, threading, time, webbrowser, tempfile
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -16,6 +16,7 @@ import biomes
 from osm_converter import atomic_write
 
 LABELS={
+ 'lidar_max_points':'Maximum points read per LiDAR file',
  'biome_climate':'Vanilla TF3 climate','biome_mode':'Biome source','biome_source':'Existing biome PNG',
  'biome_base':'Default / lowland region','biome_highland':'Highland region','biome_rock':'Alpine / steep-rock region',
  'biome_forest':'OSM forest / woodland','biome_shrubs':'OSM scrub / heath','biome_grass':'OSM grass / fields',
@@ -50,7 +51,7 @@ class App(tk.Tk):
   tk.Label(header,text='HEIGHTMAP STUDIO',bg='#163b46',fg='white',font=('Segoe UI',21,'bold')).pack(side='left')
   tk.Label(header,text='STEP 2 · AFTER OSM CONVERSION\nElevation import · terrain editing · 16-bit export',bg='#163b46',fg='#bbdee3',font=('Segoe UI',10),justify='right').pack(side='right')
   body=ttk.Frame(self,padding=(16,10));body.pack(fill='both',expand=True);body.columnconfigure(0,weight=1);body.columnconfigure(1,weight=1);body.rowconfigure(0,weight=1)
-  self.book=ttk.Notebook(body);self.book.grid(row=0,column=0,sticky='nsew',padx=(0,12));self.pages={name:self.page(name) for name in ['Project','Elevation','Terrain','OSM terrain','Biomes','Brush']}
+  self.book=ttk.Notebook(body);self.book.grid(row=0,column=0,sticky='nsew',padx=(0,12));self.pages={name:self.page(name) for name in ['Project','Elevation','LiDAR','Terrain','OSM terrain','Biomes','Brush']}
   self.report_path=tk.StringVar();self.osm_path=tk.StringVar();self.output_path=tk.StringVar();self.lua_path=tk.StringVar();self.lua_sha=None
   self.lua_path.trace_add('write',lambda *args:setattr(self,'lua_sha',None))
   self.values={key:tk.BooleanVar(value=value) if type(value) is bool else tk.StringVar(value=str(value)) for key,value in DEFAULTS.items()}
@@ -60,7 +61,7 @@ class App(tk.Tk):
   self.editing=tk.BooleanVar(value=False);self.overlay=tk.BooleanVar(value=True);self.before=tk.BooleanVar(value=False)
   self.biome_view=tk.BooleanVar(value=False);self.biome_editing=tk.BooleanVar(value=False)
   self.biome_brush=tk.StringVar(value=biomes.BIOME_CHOICES[1]);self.biome_radius=tk.StringVar(value='80')
-  self.build_project();self.build_elevation();self.build_terrain();self.build_osm();self.build_biomes();self.build_brush()
+  self.build_project();self.build_elevation();self.build_lidar();self.build_terrain();self.build_osm();self.build_biomes();self.build_brush()
   side=ttk.Frame(body);side.grid(row=0,column=1,sticky='nsew');side.columnconfigure(0,weight=1);side.rowconfigure(2,weight=1)
   ttk.Label(side,text='ALIGNED TERRAIN PREVIEW',font=('Segoe UI',11,'bold')).grid(row=0,column=0,sticky='w',pady=(0,6))
   toggles=ttk.Frame(side);toggles.grid(row=1,column=0,sticky='ew',pady=(0,5))
@@ -151,6 +152,60 @@ class App(tk.Tk):
    message+='\n'.join(r.get('tile',r.get('dataset','Direct GeoTIFF file')) for r in p['requests'])
    self.show(message);self.view.select(1)
   except (ValueError,OSError) as exc:messagebox.showerror('Check download area',str(exc),parent=self)
+
+ def build_lidar(self):
+  from lidar_sources import PROVIDERS
+  f=self.pages['LiDAR'];self.lidar_provider=tk.StringVar(value=PROVIDERS[0]);self.lidar_rows=[]
+  self.lidar_user=tk.StringVar();self.lidar_password=tk.StringVar();self.lidar_info=tk.StringVar(value='Choose your OSM/XML or converter report, then search its map area.')
+  self.field(f,0,'Data region',self.lidar_provider,PROVIDERS)
+  self.note(f,1,'Find ground elevation for this map. Fine LiDAR coverage is regional. Sweden uses Lantmäteriet; USGS provides free regional ground DEMs; OpenTopography searches surveys worldwide. No global 1-metre coverage is assumed.')
+  ttk.Button(f,text='Find data for this map',command=self.search_lidar).grid(row=2,column=0,columnspan=3,sticky='w',pady=6)
+  self.lidar_list=tk.Listbox(f,height=8,exportselection=False);self.lidar_list.grid(row=3,column=0,columnspan=3,sticky='ew');self.lidar_list.bind('<<ListboxSelect>>',self.describe_lidar)
+  ttk.Label(f,textvariable=self.lidar_info,wraplength=480).grid(row=4,column=0,columnspan=3,sticky='w',pady=8)
+  controls=ttk.Frame(f);controls.grid(row=5,column=0,columnspan=3,sticky='w',pady=6)
+  ttk.Button(controls,text='Download selected data',command=self.download_lidar).pack(side='left',padx=(0,6))
+  ttk.Button(controls,text='Open data provider',command=self.open_lidar).pack(side='left')
+  self.note(f,6,'Downloads become local elevation files. Build terrain crops them to the exact converter map. Raw LAS/LAZ/COPC files can be added in Elevation: only classified ground is used, and gaps stay visible. Roads and railways are not raised or flattened automatically.')
+  ttk.Label(f,text='Lantmäteriet API username (this session only)').grid(row=7,column=0,columnspan=3,sticky='w');ttk.Entry(f,textvariable=self.lidar_user).grid(row=8,column=0,columnspan=3,sticky='ew')
+  ttk.Label(f,text='Lantmäteriet API password (this session only)').grid(row=9,column=0,columnspan=3,sticky='w',pady=(8,0));ttk.Entry(f,textvariable=self.lidar_password,show='•').grid(row=10,column=0,columnspan=3,sticky='ew')
+  self.note(f,11,'Swedish downloads are free but require an approved Geotorget API order. Use its API credentials. They are kept in memory and never written into projects, reports or cache metadata. Open data needs no account.')
+  self.field(f,12,'lidar_max_points')
+
+ def lidar_cache(self):
+  return Path(os.environ.get('LOCALAPPDATA',tempfile.gettempdir()))/'Druttzen/TF3-Heightmap/cache/catalogs'
+
+ def search_lidar(self):
+  if self.busy:return
+  from lidar_sources import area_bounds,discover
+  from job import Job
+  try:bounds=area_bounds(self.report_path.get().strip(),self.osm_path.get().strip());options=self.options()
+  except (ValueError,OSError) as exc:messagebox.showerror('Choose map area',str(exc),parent=self);return
+  provider=self.lidar_provider.get();cache=self.lidar_cache()
+  self.start_worker(lambda progress:discover(bounds,provider,options,cache,Job(progress,self.cancel_event)),'lidar_search')
+
+ def selected_lidar(self):
+  selected=self.lidar_list.curselection()
+  if not selected:raise ValueError('Select a data source in the search results first.')
+  return self.lidar_rows[selected[0]]
+
+ def describe_lidar(self,event=None):
+  try:row=self.selected_lidar()
+  except ValueError:return
+  access={'open':'Open download; no account','account':'Free with approved API access','unknown':'Provider access is checked when downloading','portal':'Download raw data from provider, then Add files'}
+  self.lidar_info.set(row['resolution']+'\n'+access[row['access']]+'\n'+row['surface']+'\nVertical datum: '+row['verticalDatum'])
+
+ def open_lidar(self):
+  try:webbrowser.open(self.selected_lidar()['site'])
+  except ValueError as exc:messagebox.showerror('Select data',str(exc),parent=self)
+
+ def download_lidar(self):
+  if self.busy:return
+  from lidar_sources import area_bounds,download_selection
+  from job import Job
+  try:selection=deepcopy(self.selected_lidar());bounds=area_bounds(self.report_path.get().strip(),self.osm_path.get().strip());options=self.options()
+  except (ValueError,OSError) as exc:messagebox.showerror('Select map and data',str(exc),parent=self);return
+  credentials=(self.lidar_user.get().strip(),self.lidar_password.get());cache=self.lidar_cache()
+  self.start_worker(lambda progress:download_selection(selection,bounds,options,cache,Job(progress,self.cancel_event),credentials),'lidar_download')
 
  def open_provider(self):
   try:
@@ -248,7 +303,7 @@ class App(tk.Tk):
   if path:self.output_path.set(path)
 
  def add_sources(self):
-  paths=filedialog.askopenfilenames(parent=self,title='Add measured elevation files',filetypes=[('Elevation data','*.tif *.tiff *.asc *.hgt *.gz')])
+  paths=filedialog.askopenfilenames(parent=self,title='Add measured elevation or LiDAR files',filetypes=[('Elevation / LiDAR','*.tif *.tiff *.asc *.hgt *.gz *.las *.laz')])
   for path in paths:
    if path not in self.sources:self.sources.append(path)
   self.update_sources();self.changed()
@@ -388,6 +443,15 @@ class App(tk.Tk):
     self.show(f"Export complete\n\nPNG: {value['files']['png']}\n\nTF3 import values:\nMinimum: {value['importMinimumMetres']:g} m\nMaximum: {value['importMaximumMetres']:g} m\nWater: {value['waterLevelMetres']:g} m\n\n16-bit encoding step: {value['pngEncodingStepMetres']:.6f} m\nThis numeric step does not establish source measurement accuracy.\n\nAlso saved: edited-height GeoTIFF, preview, project, detailed report, attribution and import instructions.\n\n"+'\n\n'.join(value['warnings']))
     self.view.select(1)
     if value.get('biomes'):self.show(self.text.get('1.0','end').rstrip()+f"\n\nBiome PNG: {value['files']['biomes']}\nChoose {value['biomes']['climate']} in TF3 and follow the Biomes section in the import instructions.")
+   elif kind=='lidar_search':
+    self.lidar_rows=value['rows'];self.lidar_list.delete(0,'end')
+    for row in self.lidar_rows:self.lidar_list.insert('end',row['name'])
+    self.lidar_info.set(f"{len(self.lidar_rows)} sources found. "+('Some catalogs failed; see report.' if value['warnings'] else 'Select a source to inspect access and coverage.'))
+    self.status.set('Data search complete');self.show('Searched map bounds (S,W,N,E): '+str(value['bounds'])+'\n\n'+'\n'.join(value['warnings'] or ['No catalog errors. Regional data may cover only part of the map; Build terrain checks gaps.']))
+    if not self.lidar_rows:self.lidar_info.set('No fine ground data found for this area. Try another catalog or add local LAS/LAZ. Copernicus is available as a coarser source in Elevation.')
+   elif kind=='lidar_download':
+    self.sources.extend(str(p) for p in value if str(p) not in self.sources);self.update_sources();self.values['source_mode'].set('Local elevation files');self.changed()
+    self.status.set('Elevation downloaded · Build terrain to check map coverage');self.lidar_info.set(f'{len(value)} files downloaded. Ground coverage and gaps are checked when building terrain.')
    else:self.status.set('Cancelled' if kind=='cancelled' else 'Heightmap operation failed · see report');self.show(value);self.view.select(1)
    self.freeze(False)
    if self.close_when_done:self.destroy();return
@@ -496,4 +560,9 @@ class App(tk.Tk):
   if self.busy:self.close_when_done=True;self.cancel()
   else:self.destroy()
 
-if __name__=='__main__':App().mainloop()
+if __name__=='__main__':
+ import sys
+ if len(sys.argv)==3 and sys.argv[1]=='--self-check':
+  from runtime_check import check
+  raise SystemExit(check(sys.argv[2]))
+ App().mainloop()

@@ -247,6 +247,24 @@ class GameScriptTests(unittest.TestCase):
         self.event('retry'); self.finish()
         self.assertEqual(self.state.value.skipped,0)
 
+    def test_dataset_identity_error_cannot_skip_a_source_item(self):
+        self.event('start'); self.step()
+        original=self.lua.globals().dataset.id;cursor=self.state.value.cursor
+        self.lua.globals().dataset.id='different-map';self.step()
+        self.assertEqual(self.state.value.phase,'error')
+        self.event('skip');self.assertEqual(self.state.value.cursor,cursor)
+        self.assertEqual(self.state.value.skipped,0)
+        self.lua.globals().dataset.id=original;self.event('retry');self.finish()
+        self.assertEqual(self.state.value.builtScenery,117)
+
+    def test_model_xyz_journal_survives_naming_failure(self):
+        self.event('start');self.lua.globals().failNameNext=True;self.step()
+        record=self.state.value.sceneryRecords[1]
+        self.assertEqual(record.modelJournalSchema,1)
+        self.assertIsNotNone(record.modelPositions[1][3])
+        before=record.modelPositions[1][3];self.event('retry');self.finish()
+        self.assertEqual(self.state.value.sceneryRecords[1].modelPositions[1][3],before)
+
     def test_ownership_retry_does_not_duplicate_accepted_geometry(self):
         self.event('configure',{'vegetation':False,'surfaces':False,'objects':False,'places':False})
         self.event('start')

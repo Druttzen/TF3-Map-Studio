@@ -192,12 +192,15 @@ def prepare(data, nodes, ways, relations, positions, members_for, join_rings,
             line=[positions[n] for n in refs]
             if len(line)<2: raise ValueError('Too few water nodes')
             closed=len(refs)>3 and refs[0]==refs[-1]
-            area=category in {'lake','water-area'} or tags.get('natural')=='water' or tags.get('water') in {'pond','basin'} or tags.get('landuse')=='basin' or tags.get('waterway')=='riverbank' or tags.get('area')=='yes'
+            mapped_area=category in {'lake','water-area'} or tags.get('natural')=='water' or tags.get('water') in {'pond','basin'} or tags.get('landuse')=='basin' or tags.get('waterway')=='riverbank'
+            if tags.get('area')=='no' and mapped_area:
+                raise ValueError('Water area tags conflict with area=no')
+            area=mapped_area or tags.get('area')=='yes'
             if area and not closed: raise ValueError('Water area boundary is not closed')
-            rings=[line[:-1]] if closed else None
-            centreline=None if closed else line
+            rings=[line[:-1]] if area else None
+            centreline=None if area else line
             feature.update(rings=[[list(p) for p in ring] for ring in (rings or [])],
-                           centreline=[list(p) for p in (centreline or [])],outerRingCount=1 if closed else 0)
+                           centreline=[list(p) for p in (centreline or [])],outerRingCount=1 if area else 0)
             candidates.append((feature,rings,centreline))
         except (ValueError,KeyError) as exc:
             invalid(feature,exc)
@@ -262,7 +265,8 @@ def prepare(data, nodes, ways, relations, positions, members_for, join_rings,
                         quad=[(a[0]-nx,a[1]-ny),(b[0]-nx,b[1]-ny),(b[0]+nx,b[1]+ny),(a[0]+nx,a[1]+ny)]
                         yield from triangulate([quad])
                     # Round joins fill corners without a disconnected gap.
-                    for p in line[1:-1]:
+                    joins=line[:-1] if len(line)>2 and line[0]==line[-1] else line[1:-1]
+                    for p in joins:
                         job.check()
                         ring=[(p[0]+width/2*math.cos(i*math.tau/8),p[1]+width/2*math.sin(i*math.tau/8)) for i in range(8)]
                         yield from triangulate([ring])

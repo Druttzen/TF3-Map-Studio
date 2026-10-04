@@ -40,7 +40,9 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
       onClose=close,content=text("Waiting for the importer to initialise. Close and reopen the panel if needed."),
     }
   end
-  local ruleState={phase=snapshot.phase,datasetId=snapshot.started and snapshot.datasetId or nil,labels=snapshot.labels,waterBusy=snapshot.waterBusy,waterBuilt=snapshot.waterBuilt}
+  local ruleState={phase=snapshot.phase,datasetId=snapshot.started and snapshot.datasetId or nil,labels=snapshot.labels,waterBusy=snapshot.waterBusy,waterBuilt=snapshot.waterBuilt,
+    errorKind=snapshot.errorKind,datasetMatches=snapshot.datasetMatches,pendingAccepted=snapshot.pendingAccepted,
+    acceptedUnjournalled=snapshot.acceptedUnjournalled}
   local rows={text("Commands","font-scale-headline")}
   for _,command in ipairs(controls.commands) do
     local key=command.key

@@ -105,13 +105,14 @@ def load_lua_table(text: str, *, constant_numbers: bool = False) -> dict[str, An
 
     if any(not isinstance(statement, (lua.Return, lua.Function, lua.LocalFunction)) for statement in tree.body.body):
         raise ValueError("Lua metadata uses executable top-level statements. Replace them with literal metadata before conversion")
-    if constant_numbers:
-        for node in ast.walk(tree):
-            bindings = node.targets if isinstance(node,(lua.Assign,lua.LocalAssign)) else []
-            if isinstance(node,(lua.Function,lua.LocalFunction,lua.AnonymousFunction)):
-                bindings = [*node.args, getattr(node,'name',None)]
-            if any(isinstance(binding,lua.Name) and binding.id == 'math' for binding in bindings):
-                raise ValueError('Cannot fold numeric expressions with a shadowed math binding')
+    for node in ast.walk(tree):
+        bindings = node.targets if isinstance(node,(lua.Assign,lua.LocalAssign)) else []
+        if isinstance(node,(lua.Function,lua.LocalFunction,lua.AnonymousFunction)):
+            bindings = [*node.args, getattr(node,'name',None)]
+        if any(isinstance(binding,lua.Name) and binding.id == '_' for binding in bindings):
+            raise ValueError('Cannot read translation keys with a shadowed localization helper (_)')
+        if constant_numbers and any(isinstance(binding,lua.Name) and binding.id == 'math' for binding in bindings):
+            raise ValueError('Cannot fold numeric expressions with a shadowed math binding')
     returns = [statement for statement in tree.body.body if isinstance(statement, lua.Return)]
     data_functions = [
         statement for statement in tree.body.body

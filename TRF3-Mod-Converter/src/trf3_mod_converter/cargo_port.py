@@ -16,7 +16,7 @@ import math
 from pathlib import PurePosixPath
 from typing import Any, Callable, Mapping
 
-from .lua_metadata import UnsupportedValue, load_lua_table
+from .lua_metadata import TranslatedString, UnsupportedValue, load_lua_table
 
 
 SPECIFIC_FREIGHT_CLASSES = frozenset({'BULK', 'LIQUID', 'GOODS', 'FLATBED'})
@@ -85,12 +85,15 @@ class CargoCatalog:
 
     def __init__(self, types: Mapping[str, CargoType], *, classes: Mapping[str, str],
                  formats: Mapping[str, str], native=None,
-                 aliases: Mapping[str, list[str]] | None = None):
+                 aliases: Mapping[str, list[str]] | None = None, resource_dependencies=None):
         self.types = dict(types)
         self.classes = dict(classes)
         self.formats = dict(formats)
         self.native = native
         self.aliases = dict(aliases or {})
+        self.resource_dependencies = dict(resource_dependencies or {})
+        if self.resource_dependencies and hasattr(native, 'track_dependencies'):
+            native.track_dependencies(self.resource_dependencies)
         self._paths = {entry.path: entry.key for entry in self.types.values()}
         for key, entry in self.types.items():
             if key != entry.key or not entry.classes or entry.classes - self.classes.keys():
@@ -102,10 +105,11 @@ class CargoCatalog:
     @classmethod
     def from_native(cls, native, *, aliases=None):
         """Read loose/zipped resources through NativeInventory, never copy them."""
-        types, classes, formats = {}, {}, {}
+        types, classes, formats, dependencies = {}, {}, {}, []
         for path in sorted(native.files):
             if not path.endswith(('.cargo.lua', '.cargoclass.lua', '.cmf.lua')):
                 continue
+            dependencies.append(path)
             data = load_lua_table(native.read(path).decode('utf-8-sig'), constant_numbers=True)
             resource = path[:-4]
             if path.endswith('.cargo.lua'):
@@ -127,7 +131,9 @@ class CargoCatalog:
                 target[tag] = resource
         if not types:
             raise ValueError('Selected TF3 installation has no verified cargo definitions')
-        return cls(types, classes=classes, formats=formats, native=native, aliases=aliases)
+        fingerprints = native.fingerprints(dependencies) if hasattr(native, 'fingerprints') else {}
+        return cls(types, classes=classes, formats=formats, native=native, aliases=aliases,
+                   resource_dependencies=fingerprints)
 
     def reference(self, key: str) -> str:
         entry = self.types[key]
@@ -165,11 +171,20 @@ class CargoCatalog:
             return {key}, 'same cargo identifier'
         raise ValueError(f'Unknown/custom TF2 cargo {old_type!r}; provide an explicit verified TF3 cargo mapping')
 
-    def resolve_set(self, data: dict) -> tuple[set[str], dict, set[str], set[str]]:
+    def evaluate_set(self, data: dict) -> tuple[set[str], dict, set[str], set[str]]:
+        """Apply TF3's ordered class/type filters without registering references.
+
+        Explicit types can restore members removed by a class exclusion. Only
+        the final type exclusions remove those explicitly restored members.
+        Donor matching and export must use exactly the same eligibility rule.
+        """
         data = _dict(data, 'cargoTypeSet')
         allowed = {'cargoClassesIncluded', 'cargoClassesExcluded', 'cargoTypesIncluded', 'cargoTypesExcluded'}
         _unknown(data, allowed, 'cargoTypeSet')
         normalized = {field: _list(deepcopy(data.get(field, [])), f'cargoTypeSet/{field}') for field in allowed}
+        for field, tokens in normalized.items():
+            if any(not isinstance(token, str) or not token or isinstance(token, TranslatedString) for token in tokens):
+                raise ValueError(f'cargoTypeSet/{field}: requires non-localized literal cargo identifiers')
         keys, excluded_classes, excluded_keys = set(), set(), set()
         for tag in normalized['cargoClassesIncluded']:
             keys.update(self.class_types(tag))
@@ -183,6 +198,10 @@ class CargoCatalog:
             selected, _ = self.keys(token)
             excluded_keys.update(selected)
             keys.difference_update(selected)
+        return keys, normalized, excluded_classes, excluded_keys
+
+    def resolve_set(self, data: dict) -> tuple[set[str], dict, set[str], set[str]]:
+        keys, normalized, excluded_classes, excluded_keys = self.evaluate_set(data)
         # Retain exclusions and their ordering semantics; canonical references
         # prevent relative cargo paths from resolving beside the vehicle.
         for field in ('cargoTypesIncluded', 'cargoTypesExcluded'):

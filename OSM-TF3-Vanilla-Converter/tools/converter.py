@@ -337,7 +337,7 @@ def convert(path,bounds,size,spacing=18,max_trees=100000,*,options=None,progress
             warn('Third/fourth-rail electrification is represented by vanilla overhead electrified track.')
 
     areas=[]; covered=set()
-    def members_for(id,role='outer',active=None,used=None):
+    def members_for(id,role='outer',active=None,used=None,outer_used=None):
         active=set() if active is None else set(active)
         used=set() if used is None else used
         if id in active: raise ValueError('Cyclic multipolygon relation '+id)
@@ -352,8 +352,9 @@ def convert(path,bounds,size,spacing=18,max_trees=100000,*,options=None,progress
             if member['type']=='way':
                 if member['ref'] not in ways: raise ValueError('Missing multipolygon way '+member['ref'])
                 result[effective].append(ways[member['ref']][0]); used.add(member['ref'])
+                if effective=='outer' and outer_used is not None: outer_used.add(member['ref'])
             elif member['type']=='relation':
-                nested=members_for(member['ref'],effective,active,used)
+                nested=members_for(member['ref'],effective,active,used,outer_used)
                 for key in result: result[key].extend(nested[key])
         return result
     for i,(id,(members,tags)) in enumerate(relations.items()):
@@ -361,12 +362,14 @@ def convert(path,bounds,size,spacing=18,max_trees=100000,*,options=None,progress
         category=area_kind(tags)
         if tags.get('type')!='multipolygon' or not category: continue
         try:
-            used=set()
-            parts=members_for(id,used=used)
+            outer_used=set()
+            parts=members_for(id,outer_used=outer_used)
             outer=join_rings(parts['outer']); inner=join_rings(parts['inner'])
             if not outer: raise ValueError('No outer ring')
             areas.append((category,tags,outer,inner,id))
-            covered.update(used)
+            # Inner boundaries may have their own independently tagged land use.
+            # Suppress only outlines already represented by the enclosing area.
+            covered.update(outer_used)
         except ValueError as exc: warn(f'Relation {id}: {exc}; area skipped.')
     for i,(id,(refs,tags)) in enumerate(ways.items()):
         job.portion(56,60,i,len(ways),'Finding scenery areas')
@@ -486,7 +489,7 @@ def write_outputs(source,data_path,report_path,bounds,size,spacing,max_trees,opt
             'report':str(report_path),'sourceSha256':job.source_sha256,
             'alignment':{'projection':'EPSG:3857 scaled to map size','origin':'centre',
                          'north':'positiveY','pngRows':'north to south'}}
-    staged=[]
+    staged=[]; retained=set()
     try:
         # Prepare both outputs before replacing either existing file.
         data_path.parent.mkdir(parents=True,exist_ok=True)
@@ -530,13 +533,19 @@ def write_outputs(source,data_path,report_path,bounds,size,spacing,max_trees,opt
         os.replace(staged[0],data_path)
         try: os.replace(staged[1],report_path)
         except OSError:
-            if backup: os.replace(backup,data_path)
-            else: data_path.unlink()
+            try:
+                if backup: os.replace(backup,data_path)
+                else: data_path.unlink()
+            except OSError as restore:
+                if backup:
+                    retained.add(backup)
+                    raise RuntimeError(f'Could not restore the previous export. Backup retained at {backup}') from restore
+                raise RuntimeError(f'Could not remove the uncommitted export at {data_path}; its report was not saved') from restore
             raise
         job.update(100,'Conversion complete',force=True)
     finally:
         for temporary in staged:
-            if temporary.exists(): temporary.unlink()
+            if temporary not in retained and temporary.exists(): temporary.unlink()
     report['_preview']=preview_data(data)
     return report
 

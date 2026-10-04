@@ -80,7 +80,7 @@ def cargo_catalog(native):
     if catalog is None:
         catalog = owner._cargo_catalog = CargoCatalog.from_native(native)
     return CargoCatalog(catalog.types, classes=catalog.classes, formats=catalog.formats,
-                        aliases=catalog.aliases, native=native)
+                        aliases=catalog.aliases, native=native, resource_dependencies=catalog.resource_dependencies)
 
 
 def _scalar_fields(model):

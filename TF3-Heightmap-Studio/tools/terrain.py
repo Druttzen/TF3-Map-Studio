@@ -123,6 +123,10 @@ def prepare(report_path,osm_path,source_files,options=None,strokes=None,cache=No
   cache=cache or Path(os.environ.get('LOCALAPPDATA',tempfile.gettempdir()))/'Druttzen/TF3-Heightmap/cache'
   paths,provider_plan,provider_credits=acquire(context['bounds'],options,cache,job,api_key)
  else:job.update(35,'Opening local elevation files')
+ if any(p.suffix.lower() in {'.las','.laz'} for p in paths):
+  from lidar import prepare_sources
+  cache=cache or Path(os.environ.get('LOCALAPPDATA',tempfile.gettempdir()))/'Druttzen/TF3-Heightmap/cache'
+  paths=prepare_sources(paths,context['bounds'],(ny,nx),options,Path(cache)/'lidar',job)
  terrain,geo_transform,source_meta=sample_sources(paths,context['bounds'],(ny,nx),options,job)
  coverage=fill_gaps(terrain,size,options,job);base_min=float(terrain.min());base_max=float(terrain.max())
  terrain*=options['vertical_scale'];terrain+=options['height_offset']

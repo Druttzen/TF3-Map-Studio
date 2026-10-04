@@ -86,6 +86,9 @@ dataset={id="fixture",nodes={a={pos={0,0}},b={pos={50,0}},c={pos={100,0}},x={pos
  {model="::/assets/fountain.mdl",pos={20,20},category="objects"},
  {texture="::/surface.gtex",face={{0,0},{10,0},{0,10}}}},labels={{name="Fixture village",pos={30,40}}}}
 value={phase="finished",datasetId="fixture",nodes={a=10,b=11,c=12,x=20,y=21},builtEdges=3,builtScenery=3,labels=1,skipped=0}
+value.sceneryRecords={
+ {name="OSM scenery fixture 1",phase="scenery",first=1,last=3,entities={200},modelJournalSchema=1,modelPositions={[1]={10,20,10},[2]={20,20,10}}},
+ {name="Fixture village",phase="labels",first=1,last=1,entities={201},modelJournalSchema=1,modelPositions={[1]={30,40,10}}}}
 '''
 
 
@@ -301,10 +304,10 @@ class WorldAuditTests(unittest.TestCase):
           world[210]={[7]={},[8]={thinInstances={{modelId=1,pos={x=10.000001,y=19.999999,z=10},rot=2*math.pi,scale=1}}},
             [5]={name="OSM scenery fixture 1"},[3]={player=42}}
           world[211]={[7]={},[8]={fatInstances={{modelId=3,transf={
-            cols=function(_,index) assert(index==0,"Native first column is zero-based"); return {x=1,y=0,z=0} end,
+            cols=function(_,index) assert(index>=0 and index<=2,"Native columns are zero-based"); return {x=index==0 and 1 or 0,y=index==1 and 1 or 0,z=index==2 and 1 or 0} end,
             getTransl=function() return {x=30,y=40,z=10} end}}}},
             [5]={name="Fixture village"},[3]={player=42}}
-          value.sceneryRecords={{name="OSM scenery fixture 1",phase="scenery",entities={200,210}},{name="Fixture village",phase="labels",entities={211}}}
+          value.sceneryRecords[1].entities={200,210}; value.sceneryRecords[2].entities={211}
         ''')
 
     def test_flattened_models_and_marker_are_checked_by_live_transforms(self):
@@ -315,6 +318,25 @@ class WorldAuditTests(unittest.TestCase):
         self.assertEqual(report.current.labels,1)
         self.assertEqual(report.current.assetGroups,2)
         self.assertEqual(self.lua.globals().commandCalls,0)
+
+    def test_live_vertical_displacement_is_rejected(self):
+        for mutation in ['world[210][8].thinInstances[1].pos.z=510',
+                         'world[211][8].fatInstances[1].transf.getTransl=function() return {x=30,y=40,z=-1000} end']:
+            with self.subTest(mutation=mutation):
+                self.setUp();self.flatten_models();self.lua.execute(mutation)
+                self.assertFalse(self.inspect().ok)
+
+    def test_sheared_or_tilted_full_transform_is_rejected(self):
+        self.flatten_models()
+        self.lua.execute('world[211][8].fatInstances[1].transf.cols=function(_,i) return {x=i==0 and 1 or 0,y=i==1 and 1 or 0,z=i==2 and 1 or .5} end')
+        self.assertFalse(self.inspect().ok)
+
+    def test_older_save_without_xyz_is_explicitly_partial(self):
+        self.lua.execute('value.sceneryRecords=nil')
+        report=self.inspect()
+        self.assertFalse(report.ok);self.assertTrue(report.partial)
+        self.assertEqual(report.missingModelHeights,3)
+        self.assertIn('partially verified',self.audit.format(report))
 
     def test_missing_or_changed_journalled_assets_cannot_pass(self):
         for mutation in ['world[210]=nil','value.sceneryRecords[2].name="Wrong village"','world[210][3].player=7',
@@ -352,6 +374,7 @@ class WorldAuditTests(unittest.TestCase):
         self.lua.execute('''
           value.options={roads=false,vegetation=false,objects=false,surfaces=false,places=false}
           value.builtEdges=1; value.builtScenery=0; value.labels=0
+          value.sceneryRecords={}
           world[200]=nil; world[201]=nil
         ''')
         report = self.inspect()
@@ -376,6 +399,7 @@ class WorldAuditTests(unittest.TestCase):
           dataset.nodes.c.pos={500,0}; world[12][T.BASE_NODE].position.x=499.99
           dataset.scenery[1].pos={500,20}; world[200][T.CONSTRUCTION].params.items[1].pos={499.99,20,10}
           dataset.labels[1].pos={30,500}; world[201][T.CONSTRUCTION].params.items[1].pos={30,499.99,10}
+          value.sceneryRecords[1].modelPositions[1]={499.99,20,10}; value.sceneryRecords[2].modelPositions[1]={30,499.99,10}
           dataset.scenery[3].face[2]={500,0}; world[200][T.CONSTRUCTION].params.items[3].face[2]={499.99,0,10}
         ''')
         before=plain(self.lua.globals().dataset),plain(self.lua.globals().world)

@@ -3,7 +3,7 @@ from datetime import datetime,timezone
 import hashlib,json,math,os,ssl,tempfile
 from pathlib import Path
 from urllib.parse import urlencode,urlsplit
-from urllib.request import Request,urlopen
+from urllib.request import Request,urlopen,build_opener,HTTPSHandler,HTTPRedirectHandler
 from urllib.error import HTTPError,URLError
 import certifi,rasterio
 from rasterio.warp import transform_bounds
@@ -60,15 +60,31 @@ def validate_geotiff(path):
   src.read(1,window=rasterio.windows.Window(max(0,src.width-16),max(0,src.height-16),min(16,src.width),min(16,src.height)))
 
 
-def fetch_geotiff(url,target,job,index,total,maximum_mb,label,metadata):
+class ScopedRedirect(HTTPRedirectHandler):
+ def redirect_request(self,req,fp,code,msg,headers,newurl):
+  before=urlsplit(req.full_url);after=urlsplit(newurl)
+  if after.scheme!='https':raise ValueError('Elevation server redirected to a non-HTTPS address.')
+  redirected=super().redirect_request(req,fp,code,msg,headers,newurl)
+  if (before.hostname,before.port)!=(after.hostname,after.port):redirected.remove_header('Authorization')
+  return redirected
+
+def file_sha(path):
+ with Path(path).open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
+
+def fetch_geotiff(url,target,job,index,total,maximum_mb,label,metadata,headers=None):
  target=Path(target);target.parent.mkdir(parents=True,exist_ok=True)
  if target.exists():
-  try:validate_geotiff(target);job.update(21+14*(index+1)/total,'Using cached elevation',label);return target
+  try:
+   validate_geotiff(target)
+   info=target.with_suffix('.download.json')
+   if info.exists() and json.loads(info.read_text()).get('sha256')!=file_sha(target):raise ValueError('Cached elevation checksum differs.')
+   job.update(21+14*(index+1)/total,'Using cached elevation',label);return target
   except (OSError,ValueError,rasterio.errors.RasterioError):pass
  fd,tmp=tempfile.mkstemp(prefix='.download-',suffix='.tif',dir=target.parent);temporary=Path(tmp)
  try:
   try:
-   with os.fdopen(fd,'wb') as output,urlopen(Request(url,headers={'User-Agent':'TF3-Heightmap-Studio/0.2'}),timeout=30,context=ssl.create_default_context(cafile=certifi.where())) as response:
+   context=ssl.create_default_context(cafile=certifi.where());request=Request(url,headers={'User-Agent':'TF3-Heightmap-Studio/0.7',**(headers or {})})
+   with os.fdopen(fd,'wb') as output,(build_opener(HTTPSHandler(context=context),ScopedRedirect()).open(request,timeout=30) if headers else urlopen(request,timeout=30,context=context)) as response:
     if hasattr(response,'geturl') and urlsplit(response.geturl()).scheme!='https':raise ValueError('Elevation server redirected to a non-HTTPS address.')
     size=int(response.headers.get('Content-Length','0'));limit=maximum_mb*1024*1024;received=0
     if size>limit:raise ValueError(f'{label}: exceeds the {maximum_mb:g} MB per-file download limit.')
@@ -88,7 +104,7 @@ def fetch_geotiff(url,target,job,index,total,maximum_mb,label,metadata):
   try:validate_geotiff(temporary)
   except (OSError,rasterio.errors.RasterioError):raise ValueError(f'{label}: response is not a readable elevation GeoTIFF. Check that this is a direct file URL and that the provider request succeeded.') from None
   job.check();os.replace(temporary,target)
-  info={**metadata,'downloadedUtc':datetime.now(timezone.utc).isoformat(),'bytes':received,'sha256':hashlib.sha256(target.read_bytes()).hexdigest()}
+  info={**metadata,'downloadedUtc':datetime.now(timezone.utc).isoformat(),'bytes':received,'sha256':file_sha(target)}
   target.with_suffix('.download.json').write_text(json.dumps(info,indent=2)+'\n',encoding='utf-8')
  finally:
   if temporary.exists():temporary.unlink()
