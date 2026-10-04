@@ -1,5 +1,5 @@
 TF3 HEIGHTMAP STUDIO - STEP 2
-Preview 0.6 | GPL-3.0 | 2 October 2026
+Preview 0.8 | GPL-3.0 | 4 October 2026
 
 VANILLA BIOMES
 The Biomes tab can export a native TF3 biome PNG alongside the heightmap.
@@ -64,10 +64,16 @@ LOCAL ELEVATION
 Supported: .tif/.tiff GeoTIFF DEM, .asc georeferenced ASCII grids,
 geographically named .hgt and .hgt.gz SRTM-compatible tiles.
 Example HGT name: N59E018.hgt.gz (the southwest corner is 59 N, 18 E).
-Add several files to cover the area. Earlier files take priority; later files
-fill gaps. Files remain local. The chosen DEM band, its scale and offset,
+Add several files to cover the area, including local detailed GeoTIFF DEMs
+alongside a public background download. Finest elevation first is the default
+for new projects. Other sources fill real gaps; File list order gives manual
+priority, and older projects retain that policy. Reports show actual contribution
+per source and approximate source cell spacing near your OSM area.
+Files remain local. The chosen DEM band, its scale and offset,
 nodata and coordinate reference system are honored. Auto units recognizes
-metres and international feet; override units if the file metadata is absent.
+metres, international feet and US survey feet; override known units if metadata
+is absent. Image/colour bands are rejected. Use ground DEM/DTM height data;
+GeoTIFF is a file format and does not itself establish terrain accuracy.
 If a source lacks a CRS, enter its known EPSG code. Do not guess the CRS.
 Default missing data handling stops with an explanation. Optional nearest
 filling is limited by the configured distance, reported in game metres.

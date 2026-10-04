@@ -24,6 +24,7 @@ LABELS={
  'biome_alpine_m':'Alpine regions start (metres)','biome_rock_slope':'Steep-rock slope (degrees)',
  'source_mode':'Elevation source','grid':'Output grid','pixels_x':'Custom width (pixels)','pixels_y':'Custom height (pixels)',
  'resampling':'Elevation interpolation','band':'DEM band','source_units':'Elevation units','crs_override':'Missing CRS override (EPSG code)',
+ 'source_priority':'Overlapping elevation files',
  'missing_data':'Missing elevation','max_gap_m':'Maximum fill distance (game metres)',
  'vertical_scale':'Vertical scale','height_offset':'Height offset (metres)','smoothing_m':'Terrain smoothing radius (metres)',
  'water_level':'Game water level (metres)','lake_depth':'Lake depth below water level (metres)','lake_feather':'Lake bank blend (metres)',
@@ -142,8 +143,8 @@ class App(tk.Tk):
   self.source_list.grid(row=9,column=0,columnspan=3,sticky='ew',pady=(12,0))
   controls=ttk.Frame(f);controls.grid(row=10,column=0,columnspan=3,sticky='w',pady=7)
   for text,fn in [('Add files…',self.add_sources),('Remove',self.remove_sources),('Move up',lambda:self.move_source(-1)),('Move down',lambda:self.move_source(1))]:ttk.Button(controls,text=text,command=fn).pack(side='left',padx=(0,6))
-  self.note(f,11,'Earlier files take priority where DEMs overlap; later files fill gaps. Elevation data needs a valid coordinate reference system. No files are uploaded. Public download plans can include a border margin for interpolation; the exported map bounds stay exact.')
-  for row,key in enumerate(['resampling','band','source_units','crs_override','missing_data','max_gap_m','public_max_tiles','download_max_mb','source_credit','vertical_datum'],12):self.field(f,row,key)
+  self.note(f,11,'Add detailed GeoTIFF DEMs here even with a public download selected. By default the finest elevation cells take priority, and other files fill gaps. Use File list order to control overlaps manually. Every source uses the exact OSM map bounds. Colours in aerial images are not elevation data.')
+  for row,key in enumerate(['source_priority','resampling','band','source_units','crs_override','missing_data','max_gap_m','public_max_tiles','download_max_mb','source_credit','vertical_datum'],12):self.field(f,row,key)
 
  def show_plan(self):
   try:
@@ -430,9 +431,11 @@ class App(tk.Tk):
     self.lua_sha=value['context']['convertedLua']['sha256'] if value['context'].get('convertedLua') else None
     self.result=value;self.strokes=value['strokes'];self.undo=[];self.dirty=False;self.progress['value']=100;self.percent.set('100%');self.status.set('Terrain ready · inspect, edit or export')
     self.biome_strokes=value['biomeStrokes'];self.biome_undo=[]
-    ny,nx=value['terrain'].shape;res=value['sources'][0]['sourceResolutionMetres'];size=value['context']['size']
-    self.quality.set(f'Source cell (approx.): {res[0]:.1f} × {res[1]:.1f} m\nGame grid: {size[0]/(nx-1):.2f} × {size[1]/(ny-1):.2f} m · {nx:,} × {ny:,} pixels')
-    self.refresh_alignment();self.show(f"Coordinate match: converter bounds and TF3 size verified.\nTF3 map: {size[0]:g} × {size[1]:g} m\nTerrain: {nx:,} × {ny:,} pixels\nHeight: {float(value['terrain'].min()):.3f} to {float(value['terrain'].max()):.3f} m\nConverter dataset: {value['context']['report']['dataset']}\n\nSource files:\n"+'\n'.join(Path(s['file']).name for s in value['sources'])+'\n\nNotes:\n'+'\n\n'.join(value['warnings']))
+    ny,nx=value['terrain'].shape;size=value['context']['size'];used=[s for s in value['sources'] if s['contributedSamples']]
+    cells=[max(s['sourceResolutionMetres']) for s in used]
+    self.quality.set(f'Contributing source cells (approx.): {min(cells):.1f}–{max(cells):.1f} m\nGame grid: {size[0]/(nx-1):.2f} × {size[1]/(ny-1):.2f} m · {nx:,} × {ny:,} pixels')
+    source_lines=[f"{Path(s['file']).name}: {s['coveragePercent']:.2f}% of map; cell approx. {s['sourceResolutionMetres'][0]:.2f} × {s['sourceResolutionMetres'][1]:.2f} m" for s in value['sources']]
+    self.refresh_alignment();self.show(f"Coordinate match: converter bounds and TF3 size verified.\nTF3 map: {size[0]:g} × {size[1]:g} m\nTerrain: {nx:,} × {ny:,} pixels\nHeight: {float(value['terrain'].min()):.3f} to {float(value['terrain'].max()):.3f} m\nConverter dataset: {value['context']['report']['dataset']}\n\nElevation priority: {value['options']['source_priority']}\nSource contributions:\n"+'\n'.join(source_lines)+'\n\nNotes:\n'+'\n\n'.join(value['warnings']))
     self.view.select(0);self.render()
     if value['context'].get('convertedLua'):
      info=value['context']['convertedLua'];self.show(self.text.get('1.0','end').rstrip()+f"\n\nConverted Lua: {Path(info['file']).name}\n{info['roadSegments']} road segments, {info['railSegments']} rail segments; {info['corridorPolylines']} joined corridors\nLua/report checksum: {'verified' if info['reportChecksumVerified'] else 'older report without checksum'}\nRoad/rail guides come from the converted map. Water features come from original OSM.")

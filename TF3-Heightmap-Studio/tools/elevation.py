@@ -8,8 +8,9 @@ import certifi
 import numpy as np
 import rasterio
 from rasterio import Affine
+from pyproj import CRS
 from rasterio.warp import reproject, transform, transform_bounds, Resampling
-from rasterio.enums import MaskFlags
+from rasterio.enums import MaskFlags, ColorInterp
 from rasterio.windows import Window
 from alignment import mercator_bounds
 from job import Job
@@ -82,8 +83,9 @@ def haversine(a,b):
  return 6371008.8*2*math.asin(min(1,math.sqrt(x)))
 
 
-def resolution_metres(affine,crs,width,height):
- p=[affine*(width/2+.5,height/2+.5),affine*(width/2+1.5,height/2+.5),affine*(width/2+.5,height/2+1.5)]
+def resolution_metres(affine,crs,width,height,at=None):
+ col,row=at if at is not None else (width/2,height/2)
+ p=[affine@(col,row),affine@(col+1,row),affine@(col,row+1)]
  lon,lat=transform(crs,'EPSG:4326',[v[0] for v in p],[v[1] for v in p])
  return [haversine((lat[0],lon[0]),(lat[i],lon[i])) for i in [1,2]]
 
@@ -102,6 +104,16 @@ def load_source(path,options,stack):
  crs=src.crs or options['crs_override']
  if not crs:raise ValueError(path.name+' has no coordinate reference system. Enter its known EPSG code in Elevation settings.')
  band=options['band'];tags=src.tags()
+ if src.colorinterp[band-1] in {ColorInterp.red,ColorInterp.green,ColorInterp.blue,ColorInterp.alpha,ColorInterp.palette}:
+  raise ValueError(path.name+' contains an image/colour band, not a DEM height band. Choose measured elevation GeoTIFF data; image colours cannot be used as terrain heights.')
+ if np.issubdtype(np.dtype(src.dtypes[band-1]),np.complexfloating):raise ValueError(path.name+' contains complex values, not scalar terrain heights.')
+ original_crs=CRS.from_user_input(crs)
+ vertical=next((c for c in original_crs.sub_crs_list if c.is_vertical),None) if original_crs.is_compound else None
+ horizontal=next((c for c in original_crs.sub_crs_list if c.is_projected or c.is_geographic),None) if original_crs.is_compound else original_crs
+ if horizontal is None:raise ValueError(path.name+' has no horizontal coordinate reference system.')
+ # Warp XY only. Keep measured Z and its datum; never silently apply a geoid shift.
+ crs=horizontal.to_2d().to_wkt()
+ units=src.units[band-1] or (vertical.axis_info[0].unit_name if vertical and vertical.axis_info else '')
  download=None;record=path.with_suffix('.download.json')
  if record.exists():
   try:
@@ -109,14 +121,33 @@ def load_source(path,options,stack):
    if isinstance(value,dict):download=value
   except (OSError,ValueError):pass
  return {'source':rasterio.band(src,band),'dataset':src,'band':band,'transform':src.transform,'crs':crs,'nodata':src.nodatavals[band-1],
-         'scale':src.scales[band-1],'offset':src.offsets[band-1],'units':src.units[band-1] or '', 'path':str(path),
-         'metadata':{'file':str(path),'format':src.driver,'shape':[src.height,src.width],'crs':str(crs),'band':band,
-           'scale':src.scales[band-1],'offset':src.offsets[band-1],'units':src.units[band-1],
+         'scale':src.scales[band-1],'offset':src.offsets[band-1],'units':units, 'path':str(path),
+         'metadata':{'file':str(path),'format':src.driver,'shape':[src.height,src.width],'crs':original_crs.to_string(),'horizontalCrs':horizontal.to_2d().to_string(),'band':band,
+           'scale':src.scales[band-1],'offset':src.offsets[band-1],'units':units,
            'sourceResolutionMetres':resolution_metres(src.transform,crs,src.width,src.height),
-           'verticalDatum':tags.get('VERTICAL_DATUM','Unknown / unchanged'),
+           'verticalDatum':tags.get('VERTICAL_DATUM',vertical.name if vertical else 'Unknown / unchanged'),
            'lidar':json.loads(tags['LIDAR_PROVENANCE']) if tags.get('LIDAR_PROVENANCE') else None,
            'download':download,
            'synthetic':tags.get('SYNTHETIC','').lower() in {'true','yes','1'}}}
+
+
+def map_resolution(source,bounds):
+ """Measure source cell spacing near this OSM area, rather than a distant tile centre."""
+ minx,miny,maxx,maxy=mercator_bounds(bounds)
+ x,y=transform('EPSG:3857',source['crs'],[(minx+maxx)/2],[(miny+maxy)/2])
+ col,row=(~source['transform'])@(x[0],y[0]);height,width=source['metadata']['shape']
+ at=(min(max(.5,col),width-.5),min(max(.5,row),height-.5))
+ return resolution_metres(source['transform'],source['crs'],width,height,at)
+
+
+def unit_multiplier(units,selection):
+ if selection=='Feet':return .3048
+ if selection=='Metres':return 1.0
+ unit=units.strip().lower()
+ if unit in {'ft','foot','feet','international foot'}:return .3048
+ if unit in {'us survey foot','us_survey_foot','foot_us'}:return 1200/3937
+ if unit in {'','m','metre','meter','metres','meters'}:return 1.0
+ raise ValueError('Unsupported elevation unit '+repr(units)+'. Choose the known Metres or Feet units, or convert this DEM first.')
 
 
 def masked_source(source, destination_transform, shape, stack, job):
@@ -156,11 +187,17 @@ def sample_sources(paths,bounds,shape,options,job=None):
  if not paths:raise ValueError('Add an elevation file, or choose public-data download.')
  with ExitStack() as stack, rasterio.Env(GDAL_CACHEMAX=128*1024*1024):
   sources=[load_source(path,options,stack) for path in paths]
+  for index,source in enumerate(sources):
+   source['metadata']['fileListPosition']=index+1
+   source['metadata']['sourceResolutionMetres']=map_resolution(source,bounds)
+  if options['source_priority']=='Finest elevation first':
+   sources.sort(key=lambda s:round(max(s['metadata']['sourceResolutionMetres']),6))
   for i,source in enumerate(sources):
    source=masked_source(source,destination_transform,shape,stack,job)
    job.check();meta=dict(source['metadata']);metadata.append(meta)
-   units=source['units'].lower();factor=.3048 if options['source_units']=='Feet' or options['source_units']=='Auto / metres' and units in {'ft','foot','feet','international foot'} else 1.0
+   factor=unit_multiplier(source['units'],options['source_units'])
    meta['heightUnitMultiplier']=factor
+   meta.update(priority=i+1,availableSamples=0,contributedSamples=0,resampling=options['resampling'],resolutionMeasuredAt='Near OSM area; nearest source cell if outside its footprint')
    for row in range(0,ny,128):
     job.update(35+30*(i+row/ny)/len(sources),'Sampling elevation',f'{Path(source["path"]).name}; row {row+1}/{ny}')
     count=min(128,ny-row);chunk=np.full((count,nx),np.nan,dtype=np.float64)
@@ -171,6 +208,8 @@ def sample_sources(paths,bounds,shape,options,job=None):
               resampling={'Bilinear':Resampling.bilinear,'Cubic':Resampling.cubic,'Nearest':Resampling.nearest}[options['resampling']],
               num_threads=2,warp_mem_limit=128,tolerance=0.0,XSCALE=1.0,YSCALE=1.0)
     chunk=(chunk*source['scale']+source['offset'])*factor
-    part=result[row:row+count];fill=~np.isfinite(part)&np.isfinite(chunk);part[fill]=chunk[fill]
+    part=result[row:row+count];valid=np.isfinite(chunk);fill=~np.isfinite(part)&valid;part[fill]=chunk[fill]
+    meta['availableSamples']+=int(np.count_nonzero(valid));meta['contributedSamples']+=int(np.count_nonzero(fill))
+   meta['coveragePercent']=100*meta['contributedSamples']/(nx*ny)
  job.update(65,'Elevation sampled')
  return result,destination_transform,metadata

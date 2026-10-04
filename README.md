@@ -50,4 +50,4 @@ Licenses apply per tool. OSM-TF3-Vanilla-Converter, TF3-Heightmap-Studio, and TF
 
 TRF3-Mod-Converter originated in [Druttzen/TRF3-mod-converter](https://github.com/Druttzen/TRF3-mod-converter). This combined project includes the local desktop edition and keeps the original repository available separately.
 
-Current Heightmap Studio source is Preview 0.7, with AOI-based LiDAR/ground-model discovery and classified LAS/LAZ import. See [LiDAR sources and access](TF3-Heightmap-Studio/LIDAR-SOURCES.md). Published downloads above remain the earlier releases; new local Windows packages are in `outputs/`. All four tools now run through root GitHub Actions workflows.
+Current Heightmap Studio source is Preview 0.8, with AOI-based LiDAR/ground-model discovery, classified LAS/LAZ import and detailed GeoTIFF enhancement over local or downloaded background terrain. See [LiDAR sources and access](TF3-Heightmap-Studio/LIDAR-SOURCES.md) and [GeoTIFF detail](TF3-Heightmap-Studio/GEOTIFF-DETAIL.md). Published downloads above remain the earlier releases; new local Windows packages are in `outputs/`. All four tools now run through root GitHub Actions workflows.

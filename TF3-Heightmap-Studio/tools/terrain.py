@@ -9,7 +9,7 @@ import rasterio
 from rasterio import Affine
 from rasterio.features import rasterize
 from alignment import load_context, geographic, osm, alignment_summary
-from elevation import download_tiles, sample_sources, PUBLIC_DOC, PUBLIC_LICENSE
+from elevation import download_tiles, sample_sources, resolution_metres, PUBLIC_DOC, PUBLIC_LICENSE
 from height_settings import normalize, dimensions, validate_stroke
 from providers import acquire
 from job import Job, Cancelled
@@ -119,16 +119,23 @@ def prepare(report_path,osm_path,source_files,options=None,strokes=None,cache=No
  if strokes is not None and (not isinstance(strokes,list) or len(strokes)>10000):raise ValueError('At most 10,000 brush stamps are supported.')
  strokes=[validate_stroke(v,size) for v in (strokes or [])]
  paths=[Path(p) for p in source_files];public=options['source_mode'].startswith('Download');provider_plan=None;provider_credits=[]
+ selected_paths=list(dict.fromkeys(p.resolve() for p in paths))
  if public:
   cache=cache or Path(os.environ.get('LOCALAPPDATA',tempfile.gettempdir()))/'Druttzen/TF3-Heightmap/cache'
-  paths,provider_plan,provider_credits=acquire(context['bounds'],options,cache,job,api_key)
+  downloaded,provider_plan,provider_credits=acquire(context['bounds'],options,cache,job,api_key)
+  paths.extend(downloaded)
  else:job.update(35,'Opening local elevation files')
+ paths=list(dict.fromkeys(p.resolve() for p in paths))
  input_paths=list(paths)
  if any(p.suffix.lower() in {'.las','.laz'} for p in paths):
   from lidar import prepare_sources
   cache=cache or Path(os.environ.get('LOCALAPPDATA',tempfile.gettempdir()))/'Druttzen/TF3-Heightmap/cache'
   paths=prepare_sources(paths,context['bounds'],(ny,nx),options,Path(cache)/'lidar',job)
  terrain,geo_transform,source_meta=sample_sources(paths,context['bounds'],(ny,nx),options,job)
+ source_detail={'priorityPolicy':options['source_priority'],'bounds':list(context['bounds']),
+                'outputGridCellGroundMetres':resolution_metres(geo_transform,'EPSG:3857',nx,ny),
+                'totalSamples':nx*ny,'sourceCoveredSamples':sum(s['contributedSamples'] for s in source_meta),
+                'geotiffSamples':sum(s['contributedSamples'] for s in source_meta if s['format']=='GTiff')}
  coverage=fill_gaps(terrain,size,options,job);base_min=float(terrain.min());base_max=float(terrain.max())
  terrain*=options['vertical_scale'];terrain+=options['height_offset']
  dx=size[0]/(nx-1);dy=size[1]/(ny-1)
@@ -152,6 +159,10 @@ def prepare(report_path,osm_path,source_files,options=None,strokes=None,cache=No
  warnings=list(context['warnings'])
  if public:warnings.append('Public terrain tiles have regional source-dependent resolution and accuracy. A finer grid does not add measured detail. Use a local surveyed/LiDAR DEM for finer source data.')
  if any(s['synthetic'] for s in source_meta):warnings.append('SYNTHETIC DEM: this source is a demonstration, not measured real-world terrain.')
+ for s in source_meta:
+  if not s['availableSamples']:warnings.append(Path(s['file']).name+': no valid elevations in the selected OSM area; this source did not change the map.')
+ datums={s['verticalDatum'] for s in source_meta if s['contributedSamples'] and s['verticalDatum']!='Unknown / unchanged'}
+ if len(datums)>1:warnings.append('Contributing elevation files declare different vertical references: '+', '.join(sorted(datums))+'. Heights were not converted between these references; inspect source alignment before game import.')
  if nx%64!=1 or ny%64!=1:warnings.append('These pixel dimensions are not 64n+1. The converter map dimensions differ from the tiled TF3 native map grid; verify the target game map size before importing.')
  if options['grid'] in {'Fine grid (2 m)','Fine grid (1 m)','Custom pixels'}:warnings.append('TF3 map creation uses 4-metre terrain spacing. Finer exported grids can help editing, but the game may resample them.')
  if options['rivers']:warnings.append('River channels are terrain cuts following local elevation. TF3 has one water level; higher channels do not create flowing water.')
@@ -166,8 +177,9 @@ def prepare(report_path,osm_path,source_files,options=None,strokes=None,cache=No
          'biomeStrokes':[biomes.validate_paint(s,size) for s in (biome_strokes or [])],'biomes':None,'biomeSource':None,
          'alignment':alignment_summary(context['report'],options),'providerPlan':provider_plan,'providerCredits':provider_credits,
          'geoTransform':geo_transform,'sources':source_meta,'sourceFiles':[str(p.resolve()) for p in input_paths],
+         'selectedSourceFiles':[str(p) for p in selected_paths],
          'sampledSourceFiles':[str(p.resolve()) for p in paths],
-         'coverage':coverage,'sourceRange':[base_min,base_max],'maximumRefinementMetres':max_diff,'warnings':warnings,'public':public}
+         'sourceDetail':source_detail,'coverage':coverage,'sourceRange':[base_min,base_max],'maximumRefinementMetres':max_diff,'warnings':warnings,'public':public}
  if options['biomes']:
   job.update(94,'Building vanilla biome regions');biomes.ensure(result,job)
   result['warnings'].append('Biome regions are authored from height, slope, OSM land cover or a selected PNG. They are not measured ecological classifications. Choose the same vanilla climate in TF3; its import generator determines textures and vegetation.')
@@ -210,7 +222,7 @@ def project_dict(result,output=''):
  return {'format':'TF3-Heightmap-Studio','version':1,'converterReport':context['report']['reportPath'],'osmFile':context['osmPath'],
          'convertedLua':(context.get('convertedLua') or {}).get('file',''),'luaSha256':(context.get('convertedLua') or {}).get('sha256'),
          'converterDataset':context['report']['dataset'],'osmSha256':context['osmSha256'],'bounds':context['bounds'],'mapSize':context['size'],
-         'elevationFiles':result['sourceFiles'] if not result['public'] else [],'options':result['options'],'brushStrokes':result['strokes'],
+         'elevationFiles':result['selectedSourceFiles'],'options':result['options'],'brushStrokes':result['strokes'],
          'biomeStrokes':result.get('biomeStrokes',[]),'biomeSourceSha256':(result.get('biomeSource') or {}).get('sha256'),'output':output}
 
 
@@ -219,7 +231,11 @@ def load_project(path):
  if path.stat().st_size>16*1024*1024:raise ValueError('Heightmap project is too large (maximum 16 MB).')
  data=json.loads(path.read_text(encoding='utf-8-sig'))
  if not isinstance(data,dict) or data.get('format')!='TF3-Heightmap-Studio' or data.get('version')!=1:raise ValueError('Choose a version 1 TF3 Heightmap Studio project.')
- data['options']=normalize(data.get('options'))
+ saved_options=data.get('options')
+ # Earlier projects used explicit file ordering; reopening must keep that policy.
+ if saved_options is None:saved_options={}
+ if isinstance(saved_options,dict) and 'source_priority' not in saved_options:saved_options={**saved_options,'source_priority':'File list order'}
+ data['options']=normalize(saved_options)
  for key in ['converterReport','osmFile','output','convertedLua']:
   if not isinstance(data.get(key,''),str):raise ValueError('Project paths must be text.')
  if not isinstance(data.get('elevationFiles'),list) or any(not isinstance(p,str) for p in data['elevationFiles']):raise ValueError('Project elevation files must be a list of paths.')
@@ -305,7 +321,7 @@ def export(result,output,progress=None,cancel=None):
           'convertedLua':context.get('convertedLua'),'biomes':biome_report,'roadRailGeometrySource':'converted Lua' if context.get('convertedLua') else 'original OSM fallback',
           'coordinateMatch':result.get('alignment'),'downloadPlan':result.get('providerPlan'),'providerCredits':result.get('providerCredits',[]),
           'pixels':[nx,ny],'northUp':True,'alignment':'Same scaled Web Mercator rectangle as OSM converter; corner vertices at exact map bounds',
-          'gridSpacingGameMetres':[context['size'][0]/(nx-1),context['size'][1]/(ny-1)],'sources':result['sources'],
+          'gridSpacingGameMetres':[context['size'][0]/(nx-1),context['size'][1]/(ny-1)],'sources':result['sources'],'sourceDetail':result.get('sourceDetail'),
           'sourceElevationRangeMetres':result['sourceRange'],'finalElevationRangeMetres':[float(terrain.min()),float(terrain.max())],
           'pngBitDepth':16,'pngColorType':'grayscale','importMinimumMetres':lo,'importMaximumMetres':hi,'waterLevelMetres':options['water_level'],
           'pngEncodingStepMetres':(hi-lo)/65535,'nativeMapCreationSpacingMetres':4,'nativeMapCreationHeightStepMetres':.05,
@@ -327,7 +343,14 @@ def export(result,output,progress=None,cancel=None):
     credits=(Path(sys._MEIPASS) if getattr(sys,'frozen',False) else Path(__file__).resolve().parents[1])/'third-party/Mapzen-provider-attribution.md'
     if not credits.is_file():raise ValueError('The bundled public terrain provider attribution is missing; export stopped.')
     attribution+='\nFull provider attribution supplied by the terrain provider:\n'+credits.read_text(encoding='utf-8')+'\n'
-  else:attribution+='Local elevation provider: '+(options['source_credit'] or 'User-supplied DEM; retain its provider licence and attribution.')+'\n'
+  if result['selectedSourceFiles']:attribution+='Local elevation provider: '+(options['source_credit'] or 'User-supplied DEM; retain its provider licence and attribution.')+'\n'
+  seen=set()
+  for source in result['sources']:
+   record=source.get('download')
+   if not record:continue
+   credit=json.dumps(record,sort_keys=True)
+   if credit in seen:continue
+   seen.add(credit);attribution+='\nSource: '+Path(source['file']).name+'\n'+json.dumps(record,ensure_ascii=False,indent=2)+'\n'
   attribution+='Vertical datum: '+options['vertical_datum']+' (no automatic vertical datum conversion).\n'
   (staging/targets['attribution'].name).write_text(attribution,encoding='utf-8')
   job.update(95,'Checking exported heightmap')
