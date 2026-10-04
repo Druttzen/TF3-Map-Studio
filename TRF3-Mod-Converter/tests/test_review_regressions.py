@@ -34,6 +34,12 @@ def test_version_one_native_donor_cannot_complete_data():
  with pytest.raises(ValueError,match='no verified'):
   NativeDonorCatalog.from_native(Native({'vehicle/old.mdl.lua':data}))
 
+def test_empty_resource_folder_keeps_metadata_only_export(tmp_path):
+ source=tmp_path/'metadata';source.mkdir();(source/'res').mkdir()
+ (source/'mod.lua').write_text('function data() return {info={name="Metadata only"}} end')
+ result=batch.convert_queue(batch.scan_mods(source)['items'],tmp_path/'output',tf3_game=tmp_path/'unused-game')
+ assert result['counts']['completed']==1
+
 @pytest.mark.parametrize('storage',['loose','zip'])
 def test_resume_requires_current_native_bytes(tmp_path,monkeypatch,storage):
  source=tmp_path/'mod';source.mkdir();(source/'mod.lua').write_text('function data() return {info={name="Fixture"}} end')

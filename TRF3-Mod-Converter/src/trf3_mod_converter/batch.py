@@ -372,7 +372,7 @@ def convert_queue(items: list[QueueItem], destination: str | Path, *, tf3_game: 
                 before = file_fingerprint(root)
                 receipt = state['receipts'].get(item.key, {})
                 native=None
-                if tf3_game and (root/'res').is_dir():
+                if tf3_game and (root/'res').is_dir() and any(p.is_file() for p in (root/'res').rglob('*')):
                     game_key=str(Path(tf3_game).resolve())
                     if game_key not in native_cache:native_cache[game_key]=NativeInventory(Path(tf3_game))
                     native=native_cache[game_key]

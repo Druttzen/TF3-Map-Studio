@@ -180,8 +180,8 @@ Detaljerad tÃ¤ckning finns Ã¤ven i [OSM-delrapporten](F:/TF3-Map-Studio/work/rev
 - OSM Converter: 234 passerade tester, inklusive bundlade importerfall.
 - Heightmap Studio: 150 passerade tester, inklusive LiDAR och faktisk aktuell OSM-export.
 - Fristående importer: 134 passerade tester.
-- Mod Converter: 646 passerade, 2 hoppade över för Windows-länkbehörighet.
-- Totalt 1 164 körda testfall i fyra sviter; importerfallen förekommer i två verktyg och är inte alla unika.
+- Mod Converter: 647 passerade, 2 hoppade över för Windows-länkbehörighet.
+- Totalt 1 165 körda testfall i fyra sviter; importerfallen förekommer i två verktyg och är inte alla unika.
 - Installerade TF3: 39 av 39 vanilla-resurser och 6 UI-moduler hittade.
 - Skärpt donatorkatalog: 341 modeller godkända; 14 avvisade med diagnoser.
 - Riktig anonym USGS-hämtning och öppna svenska/globala kataloger kontrollerade.
