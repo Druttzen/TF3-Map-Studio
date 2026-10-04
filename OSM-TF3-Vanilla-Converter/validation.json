@@ -1,8 +1,8 @@
 {
-  "version": "0.12-preview",
+  "version": "0.14-preview",
   "gameBuildInspected": "25533170",
   "automatedTests": {
-    "passed": 221,
+    "passed": 265,
     "failed": 0,
     "scope": [
       "OSM XML conversion",
@@ -68,9 +68,16 @@
       "OSM water source graph retained independently of geometry selection; raw tags, WGS84 coordinates, node order, member roles and nested relation topology",
       "Water metadata roundtrip through downloaded XML, persisted Lua and JSON report; original height/datum tags and matching checksums",
       "Missing references, untyped water, dam/weir and point metadata; broken multipolygon outer suppression, shared/nested members and deeply nested or cyclic source retention",
-      "Display-name and installation-folder rename; original mod/resource identity preserved, archive layout and new/legacy folder dataset updates checked"
+      "Display-name and installation-folder rename; original mod/resource identity preserved, archive layout and new/legacy folder dataset updates checked",
+      "Per-category and per-present-object-kind checkboxes, counts and selection locks",
+      "OSM building polygons, source IDs/tags, explicit height units and settlement type retention",
+      "Deterministic vanilla-first static-model matching, ID zero and active-game repository-only mod fallback",
+      "No-scaling footprint fit including concave cuts; native model origin offsets and XYZ journals",
+      "Native Map.Town preparation and world-position preflight using installed map-editor contract",
+      "Accepted-town journal, rejected growth command retry/reload without duplication, unknown outcomes blocked",
+      "Native town limits, duplicate names, unchanged existing town policies and simulated-building audit"
     ],
-    "subtestsPassed": 190,
+    "subtestsPassed": 208,
     "modules": {
       "test_converter": 23,
       "test_desktop": 18,
@@ -365,9 +372,9 @@
     "cancelAndRollback": "passed",
     "openstreetmapAccountRequired": false,
     "providerRateAndResourceLimits": "public service limits apply; busy/failed/incomplete responses reported and previous files preserved",
-    "attribution": "© OpenStreetMap contributors / ODbL 1.0"
+    "attribution": "Â© OpenStreetMap contributors / ODbL 1.0"
   },
-  "validationDate": "2026-10-03",
+  "validationDate": "2026-10-04",
   "nativeLargeMapPilot": {
     "testedModRevision": 5,
     "status": "paused for native water research; boundary correction not yet retested in the large map",
@@ -457,5 +464,35 @@
     "installedDatasetAndRuntimeUnchanged": true,
     "nativeModBrowserNameVerified": false,
     "definition": "https://wiki.transportfever3.com/doku.php?id=modding:general:moddefinition"
+  },
+  "revision8Validation": {
+    "physicalTF3TestRun": false,
+    "vanillaResourceNamesChecked": 45,
+    "missingResources": [],
+    "uiModulesChecked": 6,
+    "missingUiModules": [],
+    "modelBoundsProbe": {
+      "modelsRead": 1867,
+      "classesMatched": [
+        "bench",
+        "post_box",
+        "street_lamp",
+        "rock",
+        "memorial",
+        "lighthouse",
+        "storage_tank",
+        "residential",
+        "commercial",
+        "industrial"
+      ],
+      "nativeEngineExecution": false
+    },
+    "townRoadOnlyGrowthSwitch": false,
+    "disabledRoadPolicy": "Freeze all automatic growth of newly imported towns; initial roads can still be generated",
+    "needsNativeValidation": [
+      "Model placements/collisions on real maps",
+      "Native initial town generation and simulated buildings",
+      "Initial streets, automatic growth and save/reload"
+    ]
   }
 }

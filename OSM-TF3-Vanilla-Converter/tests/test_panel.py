@@ -112,6 +112,8 @@ class PanelTests(unittest.TestCase):
             'druttzen_osm_vanilla::/osm/dataset.lua':self.lua.globals().dataset,
             'druttzen_osm_vanilla::/osm/controls.lua':self.lua.execute((CONTENT/'controls.lua').read_text(encoding='utf-8')),
             'druttzen_osm_vanilla::/osm/water.lua':self.lua.execute((CONTENT/'water.lua').read_text(encoding='utf-8')),
+            'druttzen_osm_vanilla::/osm/object_matcher.lua':self.lua.execute((CONTENT/'object_matcher.lua').read_text(encoding='utf-8')),
+            'druttzen_osm_vanilla::/osm/towns.lua':self.lua.execute((CONTENT/'towns.lua').read_text(encoding='utf-8')),
         })
         self.lua.execute(MOCK)
         self.lua.globals().modules['druttzen_osm_vanilla::/osm/world_audit.lua']=self.lua.execute(
@@ -232,6 +234,7 @@ class PanelTests(unittest.TestCase):
         self.assertTrue(self.node('command-placeNames').params.meta.enabled)
 
     def test_legacy_marker_warning_is_presented_without_changing_dataset(self):
+        self.lua.execute('dataset.warnings[1]="Place names become named vanilla marker constructions. Select a marker to read its name."')
         original=list(self.lua.globals().dataset.warnings.values())
         helper=self.lua.globals().modules['druttzen_osm_vanilla::/osm/ui_snapshot.lua']
         box=self.lua.globals().api.engine.terrain.getBoundingBox()

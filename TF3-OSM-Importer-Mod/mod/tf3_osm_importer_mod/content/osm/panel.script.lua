@@ -40,13 +40,14 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
       onClose=close,content=text("Waiting for the importer to initialise. Close and reopen the panel if needed."),
     }
   end
-  local ruleState={phase=snapshot.phase,datasetId=snapshot.started and snapshot.datasetId or nil,labels=snapshot.labels,waterBusy=snapshot.waterBusy,waterBuilt=snapshot.waterBuilt,
+  local ruleState={phase=snapshot.phase,datasetId=snapshot.started and snapshot.datasetId or nil,labels=snapshot.labels,builtTowns=snapshot.builtTowns,waterBusy=snapshot.waterBusy,waterBuilt=snapshot.waterBuilt,
     errorKind=snapshot.errorKind,datasetMatches=snapshot.datasetMatches,pendingAccepted=snapshot.pendingAccepted,
     acceptedUnjournalled=snapshot.acceptedUnjournalled}
-  local rows={text("Commands","font-scale-headline")}
+  local rows={}
+  local commandRows={}
   for _,command in ipairs(controls.commands) do
     local key=command.key
-    rows[#rows+1]=builtin.Button{
+    commandRows[#commandRows+1]=builtin.Button{
       meta={id="druttzen-osm-command-"..key,localKey=key,class="osm-import-command",
         tooltip=command.help,enabled=controls.enabled(key,ruleState) and not (key=="waterBuild" and snapshot.waterBuilt)},
       content=text(command.label),onClick=function() send(key) end,
@@ -54,14 +55,51 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
   end
   rows[#rows+1]=text("What to import","font-scale-headline")
   rows[#rows+1]=text(snapshot.started and "Selections are saved and locked for this import." or "Choose the parts to build before pressing Start import.")
+  if not snapshot.hasMappedObjectMetadata then
+    rows[#rows+1]=text("This map file comes from an older converter. Reconvert the original XML for building outlines, extra objects and functioning-town tags. Keep the current file if this import has already started.","osm-import-note")
+  end
   for _,category in ipairs(controls.categories) do
     local key=category.key
     rows[#rows+1]=builtin.CheckBox{
       meta={id="druttzen-osm-option-"..key,localKey=key,enabled=not snapshot.started and not snapshot.checking},
-      label=category.label,value=snapshot.options[key] and 1 or 0,
+      label=category.label.." ("..tostring(snapshot.available[key] or 0)..")",value=snapshot.options[key] and 1 or 0,
       onValueChange=function(value) send("configure",{[key]=value==1}) end,
     }
   end
+  rows[#rows+1]=text("Mapped object types present in this file","font-scale-headline")
+  for _,kind in ipairs(controls.objectKinds) do
+    local key="object_"..kind.key
+    local count=snapshot.objectKinds[kind.key] or 0
+    if count>0 then
+      rows[#rows+1]=builtin.CheckBox{
+        meta={id="druttzen-osm-option-"..key,localKey=key,enabled=not snapshot.started and not snapshot.checking},
+        label=kind.label.." ("..tostring(count)..")",value=snapshot.options[key] and 1 or 0,
+        onValueChange=function(value) send("configure",{[key]=value==1}) end,
+      }
+    end
+  end
+  rows[#rows+1]=text("Each object type also requires its category above to be selected.","osm-import-note")
+  rows[#rows+1]=text("Object matching and town behaviour","font-scale-headline")
+  for _,policy in ipairs(controls.policies) do
+    local key=policy.key
+    rows[#rows+1]=builtin.CheckBox{
+      meta={id="druttzen-osm-option-"..key,localKey=key,enabled=not snapshot.started and not snapshot.checking},
+      label=policy.label,value=snapshot.options[key] and 1 or 0,
+      onValueChange=function(value) send("configure",{[key]=value==1}) end,
+    }
+  end
+  rows[#rows+1]=text("Vanilla matches take priority. Only models loaded by active mods are searched. Building substitutes are decorative; they do not become simulated homes, stations or industries.","osm-import-note")
+  rows[#rows+1]=text("Town creation can generate initial streets. Turning off new town roads freezes ALL automatic town growth, including buildings. This TF3 build has no verified road-only growth switch. Existing towns are unaffected.","osm-import-note")
+  if snapshot.matchSummary then
+    local m=snapshot.matchSummary
+    rows[#rows+1]=text(string.format("Object check: %d vanilla, %d active mod, %d without a safe match (left unbuilt).",m.vanilla,m.mods,m.unmatched),"osm-import-note")
+    for _,example in ipairs(m.examples) do rows[#rows+1]=text(example,"osm-import-note") end
+  else rows[#rows+1]=text("Press Check map and match objects to preview the replacements before Start import.","osm-import-note") end
+  for _,entry in ipairs(snapshot.unavailableObjects) do
+    rows[#rows+1]=text(string.format("Kept for reference, no supported automatic build: %s (%d).",entry.tag,entry.count),"osm-import-note")
+  end
+  rows[#rows+1]=text("Commands","font-scale-headline")
+  for _,row in ipairs(commandRows) do rows[#rows+1]=row end
   rows[#rows+1]=text("Adjust import pace","font-scale-headline")
   rows[#rows+1]=text("Automatically pause after successful build steps")
   rows[#rows+1]=text("One step builds one road/rail segment, one scenery batch or one marker. Resume starts another run.")
@@ -140,12 +178,13 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
     text(string.format("Roads / rails: %d / %d    Scenery: %d / %d    Markers: %d / %d",
       snapshot.builtEdges,snapshot.totals.edges,snapshot.builtScenery,snapshot.totals.scenery,snapshot.labels,snapshot.totals.labels)),
     text("Skipped steps: "..snapshot.skipped),
+    text(string.format("Functioning towns: %d / %d",snapshot.builtTowns,snapshot.totals.towns)),
     text("Recorded experimental water patches: "..snapshot.waterCount),
   }
   if snapshot.error then header[#header+1]=text(snapshot.error,"osm-import-note, font-scale-body") end
   if snapshot.notice then header[#header+1]=text(snapshot.notice,"osm-import-note, font-scale-body") end
   return builtin.Window{
-    meta={class="osm-import-panel"},id=panelId,title="OSM Importer · Vanilla",closable=true,movable=true,
+    meta={class="osm-import-panel"},id=panelId,title="TF3 OSM Importer",closable=true,movable=true,
     onClose=close,initialX=40,initialY=80,
     content=builtin.BoxLayout{
       orientation=builtin.type.Orientation.Vertical,

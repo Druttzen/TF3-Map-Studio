@@ -104,6 +104,7 @@ class WorldAuditTests(unittest.TestCase):
         controls = self.lua.execute((CONTENT / "controls.lua").read_text(encoding="utf-8"))
         self.lua.globals().modules = self.lua.table_from({
             "druttzen_osm_vanilla::/osm/controls.lua": controls,
+            "druttzen_osm_vanilla::/osm/towns.lua": self.lua.execute((CONTENT / "towns.lua").read_text(encoding="utf-8")),
         })
         self.lua.execute("function ug_require(name) return assert(modules[name]) end")
         self.lua.execute(FIXTURE)

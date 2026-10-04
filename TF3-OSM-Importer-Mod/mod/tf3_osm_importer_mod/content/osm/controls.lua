@@ -7,10 +7,29 @@ controls.categories={
   {key="surfaces",label="Ground surfaces"},
   {key="waterways",label="Mapped small waters: 0.5 m bed + Water Dirty"},
   {key="objects",label="Fountains, bollards and advertising columns"},
+  {key="mappedObjects",label="Other mapped objects: match loaded game models"},
+  {key="buildings",label="Building footprints: decorative model substitutes"},
   {key="places",label="Named place markers"},
+  {key="towns",label="Functioning towns from city, town, village and hamlet tags"},
+}
+controls.policies={
+  {key="useActiveMods",label="Search active mods when vanilla has no suitable object"},
+  {key="townRoadGrowth",label="Allow new town roads and automatic town growth"},
+}
+controls.objectKinds={
+  {key="tree",label="Individually mapped trees"},{key="fountain",label="Fountains"},
+  {key="bollard",label="Bollards"},{key="advertising_column",label="Advertising columns"},
+  {key="bench",label="Benches"},{key="waste_basket",label="Waste baskets"},
+  {key="drinking_water",label="Drinking water points"},{key="post_box",label="Post boxes"},
+  {key="bicycle_parking",label="Bicycle parking"},{key="street_lamp",label="Street lamps"},
+  {key="rock",label="Mapped rocks"},{key="memorial",label="Memorials"},{key="monument",label="Monuments"},
+  {key="water_tower",label="Water towers"},{key="lighthouse",label="Lighthouses"},
+  {key="storage_tank",label="Storage tanks"},{key="power_tower",label="Power towers"},
+  {key="residential",label="Residential building outlines"},{key="commercial",label="Commercial building outlines"},
+  {key="industrial",label="Industrial building outlines"},{key="building",label="Buildings with unspecified use"},
 }
 controls.commands={
-  {key="validate",label="Check map and resources",help="Check coordinates and vanilla resources before starting."},
+  {key="validate",label="Check map and match objects",help="Check coordinates and loaded resources, then preview vanilla-first object matches before starting."},
   {key="start",label="Start import",help="Build the selected parts of the prepared dataset. Use a new test map first."},
   {key="pause",label="Pause import / cancel check",help="Stop building and keep progress, or cancel a running map check without building."},
   {key="resume",label="Resume import",help="Continue a paused import from its saved position."},
@@ -30,7 +49,9 @@ function controls.options(source)
   local result={batchSize=100,interval=0,stepLimit=0}
   for _,category in ipairs(controls.categories) do result[category.key]=true end
   -- Native depth/paint validation is pending; select this experiment explicitly.
-  result.waterways=false
+  result.waterways=false; result.buildings=false; result.towns=false
+  for _,policy in ipairs(controls.policies) do result[policy.key]=true end
+  for _,kind in ipairs(controls.objectKinds) do result["object_"..kind.key]=true end
   for key,_ in pairs(result) do
     if source and source[key]~=nil then result[key]=source[key] end
   end
@@ -53,6 +74,8 @@ function controls.configure(source,patch,locked)
     else
       local known=false
       for _,category in ipairs(controls.categories) do if key==category.key then known=true; break end end
+      for _,policy in ipairs(controls.policies) do if key==policy.key then known=true; break end end
+      for _,kind in ipairs(controls.objectKinds) do if key=="object_"..kind.key then known=true; break end end
       assert(known,"Unknown import setting: "..tostring(key))
       assert(type(value)=="boolean","Import selections must be true or false")
       assert(not locked or value==result[key],"Import selections are locked after starting; use a new map to change them")
@@ -63,11 +86,57 @@ function controls.configure(source,patch,locked)
 end
 
 function controls.sceneryCategory(item)
+  if item.category=="buildings" or item.category=="mappedObjects" then return item.category end
   if item.category=="waterways" then return "waterways" end
   if item.category=="surfaces" or item.category=="vegetation" or item.category=="objects" then return item.category end
   if item.texture then return "surfaces" end
   if item.model and item.model:find("::/assets/vegetation/",1,true)==1 then return "vegetation" end
   return "objects"
+end
+
+function controls.placeMode(label,options)
+  local place=label.place or (label.osm and label.osm.tags and label.osm.tags.place)
+  if options.towns and (place=="city" or place=="town" or place=="village" or place=="hamlet") then return "town" end
+  if options.places then return "marker" end
+end
+
+function controls.resolvedItem(item,index,value)
+  if not item.match then return item end
+  local match=value.matches and value.matches[index]
+  if not match then return item.model and item or nil end
+  if match.unmatched then return nil end
+  local result={}
+  for key,v in pairs(item) do result[key]=v end
+  result.model=match.model; result.pos=match.pos; result.rotation=match.rotation
+  return result
+end
+
+function controls.selectedScenery(item,options)
+  return options[controls.sceneryCategory(item)] and not item.unmatched
+    and (not item.match or options["object_"..item.match.kind]~=false)
+end
+
+local availabilityCache={}
+function controls.available(dataset)
+  local signature=tostring(#dataset.edges)..":"..tostring(#dataset.scenery)..":"..tostring(#dataset.labels)
+  local cached=availabilityCache[dataset]
+  if cached and cached.signature==signature then return cached.counts,cached.kinds end
+  local counts={}
+  local kinds={}
+  for _,category in ipairs(controls.categories) do counts[category.key]=0 end
+  for _,edge in ipairs(dataset.edges or {}) do
+    local key=edge.kind=="TRACK" and "railways" or "roads"; counts[key]=counts[key]+1
+  end
+  for _,item in ipairs(dataset.scenery or {}) do
+    local key=controls.sceneryCategory(item); counts[key]=counts[key]+1
+    if item.match then local kind=item.match.kind; kinds[kind]=(kinds[kind] or 0)+1 end
+  end
+  counts.places=#(dataset.labels or {})
+  for _,label in ipairs(dataset.labels or {}) do
+    if controls.placeMode(label,{towns=true})=="town" then counts.towns=counts.towns+1 end
+  end
+  availabilityCache[dataset]={signature=signature,counts=counts,kinds=kinds}
+  return counts,kinds
 end
 
 function controls.position(p,box)
@@ -102,7 +171,7 @@ end
 
 function controls.skippable(value)
   return value.phase=="error" and value.datasetMatches~=false
-    and not value.pendingOwnership and not value.pendingScenery and not value.pendingAccepted
+    and not value.pendingOwnership and not value.pendingScenery and not value.pendingTown and not value.pendingAccepted
     and not value.acceptedUnjournalled
     and (value.errorKind=="proposal_rejected" or value.errorKind=="preparation")
 end
@@ -119,7 +188,7 @@ function controls.enabled(command,value)
   if command=="retry" then return phase=="error" and value.datasetMatches~=false
     and not value.acceptedUnjournalled and value.errorKind~="command_state" end
   if command=="verify" then return phase=="finished" end
-  if command=="placeNames" then return (value.labels or 0)>0 end
+  if command=="placeNames" then return (value.labels or 0)+(value.builtTowns or 0)>0 end
   return command=="validate" or command=="status" or command=="mapSize" or command=="waterSupport"
 end
 
@@ -132,7 +201,10 @@ function controls.placeNames(dataset,value)
       entries[#entries+1]=string.format("%s (x %.0f m, y %.0f m)",record.name,source.pos[1],source.pos[2])
     end
   end
-  if #entries==0 then return "No recorded place markers. Older saves may need their original dataset for names.",0 end
+  for _,record in ipairs(value.townRecords or {}) do
+    entries[#entries+1]=string.format("%s (functioning town, x %.0f m, y %.0f m)",record.name,record.pos[1],record.pos[2])
+  end
+  if #entries==0 then return "No recorded place markers or towns. Older saves may need their original dataset for names.",0 end
   local pages=math.ceil(#entries/20)
   local page=(value.placeNamesPage or 0)%pages
   local shown={}
@@ -155,14 +227,20 @@ local totalsCache={}
 function controls.totals(dataset,options)
   local key=""
   for _,category in ipairs(controls.categories) do key=key..(options[category.key] and "1" or "0") end
+  for _,kind in ipairs(controls.objectKinds) do key=key..(options["object_"..kind.key]~=false and "1" or "0") end
   totalsCache[dataset]=totalsCache[dataset] or {}
   if totalsCache[dataset][key] then return totalsCache[dataset][key] end
-  local totals={edges=0,scenery=0,labels=options.places and #dataset.labels or 0}
+  local totals={edges=0,scenery=0,labels=0,towns=0}
+  for _,label in ipairs(dataset.labels or {}) do
+    local mode=controls.placeMode(label,options)
+    if mode=="town" then totals.towns=totals.towns+1
+    elseif mode=="marker" then totals.labels=totals.labels+1 end
+  end
   for _,edge in ipairs(dataset.edges) do
     if options[edge.kind=="TRACK" and "railways" or "roads"] then totals.edges=totals.edges+1 end
   end
   for _,item in ipairs(dataset.scenery) do
-    if options[controls.sceneryCategory(item)] then totals.scenery=totals.scenery+1 end
+    if controls.selectedScenery(item,options) then totals.scenery=totals.scenery+1 end
   end
   totalsCache[dataset][key]=totals
   return totals

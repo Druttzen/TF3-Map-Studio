@@ -1,20 +1,21 @@
 {
   "component": "TF3-OSM-Importer-Mod",
-  "validationDate": "2026-10-03",
+  "validationDate": "2026-10-04",
   "provenance": {
     "source": "TF3-OSM-Importer-Mod/mod/tf3_osm_importer_mod",
-    "companionVersion": "0.12-preview",
+    "companionVersion": "0.14-preview",
     "modId": "druttzen_osm_vanilla",
-    "modRevision": 6,
+    "modRevision": 8,
     "runtimeMetadataAndSampleDatasetUnchanged": false,
     "previousResourceAuditGameBuild": "25533170",
-    "changeScope": "Saved road/rail height references at construction time, accepted-height audit, experimental mapped shallow-water beds and independent decorative water patches; incremental preflight, automatic pause and boundary fix retained",
-    "fictionalSampleDatasetUnchanged": true,
+    "changeScope": "In-game category/type selections, loaded-resource object matching and optional native town creation with explicit all-growth freeze limitation",
+    "fictionalSampleDatasetUnchanged": false,
     "displayName": "TF3-OSM-Importer-Mod",
-    "installFolder": "tf3_osm_importer_mod"
+    "installFolder": "tf3_osm_importer_mod",
+    "fictionalSampleGeometryUnchanged": true
   },
   "automatedTests": {
-    "passed": 129,
+    "passed": 158,
     "failed": 0,
     "luaAndStateMachine": 55,
     "panelAndResourceEntrypoints": 21,
@@ -47,17 +48,24 @@
       "Accepted water ownership retry without rebuilding, retained independent patch heights, overlap prevention and settings locks",
       "OSM pond/waterway preparation with islands, width provenance, network corridors, geometry budget and complete-feature omission",
       "Saved 0.5 m shallow-bed samples, Water Dirty resource, read-only height/depth audit and existing network protection",
-      "Display-name and installation-folder rename; original mod/resource identity preserved, archive layout and new/legacy folder dataset updates checked"
+      "Display-name and installation-folder rename; original mod/resource identity preserved, archive layout and new/legacy folder dataset updates checked",
+      "Per-category and per-present-object-kind checkboxes, counts and selection locks",
+      "OSM building polygons, source IDs/tags, explicit height units and settlement type retention",
+      "Deterministic vanilla-first static-model matching, ID zero and active-game repository-only mod fallback",
+      "No-scaling footprint fit including concave cuts; native model origin offsets and XYZ journals",
+      "Native Map.Town preparation and world-position preflight using installed map-editor contract",
+      "Accepted-town journal, rejected growth command retry/reload without duplication, unknown outcomes blocked",
+      "Native town limits, duplicate names, unchanged existing town policies and simulated-building audit"
     ],
     "worldAudit": 24,
-    "subtestsPassed": 85,
+    "subtestsPassed": 87,
     "experimentalWater": 17,
     "shallowWater": 6
   },
   "freshVanillaResourceAudit": {
     "run": true,
     "resultFile": "resource-audit.json",
-    "checkedVanillaResources": 39,
+    "checkedVanillaResources": 47,
     "missing": [],
     "checkedUiModules": 6,
     "uiMissing": [],
@@ -215,5 +223,36 @@
     "installedDatasetAndRuntimeUnchanged": true,
     "nativeModBrowserNameVerified": false,
     "definition": "https://wiki.transportfever3.com/doku.php?id=modding:general:moddefinition"
+  },
+  "version": "revision-8",
+  "revision8Validation": {
+    "physicalTF3TestRun": false,
+    "vanillaResourceNamesChecked": 47,
+    "missingResources": [],
+    "uiModulesChecked": 6,
+    "missingUiModules": [],
+    "modelBoundsProbe": {
+      "modelsRead": 1867,
+      "classesMatched": [
+        "bench",
+        "post_box",
+        "street_lamp",
+        "rock",
+        "memorial",
+        "lighthouse",
+        "storage_tank",
+        "residential",
+        "commercial",
+        "industrial"
+      ],
+      "nativeEngineExecution": false
+    },
+    "townRoadOnlyGrowthSwitch": false,
+    "disabledRoadPolicy": "Freeze all automatic growth of newly imported towns; initial roads can still be generated",
+    "needsNativeValidation": [
+      "Model placements/collisions on real maps",
+      "Native initial town generation and simulated buildings",
+      "Initial streets, automatic growth and save/reload"
+    ]
   }
 }

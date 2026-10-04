@@ -116,6 +116,8 @@ class GameScriptTests(unittest.TestCase):
             'druttzen_osm_vanilla::/osm/dataset.lua':self.lua.globals().dataset,
             'druttzen_osm_vanilla::/osm/controls.lua':self.lua.execute((CONTENT/'controls.lua').read_text(encoding='utf-8')),
             'druttzen_osm_vanilla::/osm/water.lua':self.lua.execute((CONTENT/'water.lua').read_text(encoding='utf-8')),
+            'druttzen_osm_vanilla::/osm/object_matcher.lua':self.lua.execute((CONTENT/'object_matcher.lua').read_text(encoding='utf-8')),
+            'druttzen_osm_vanilla::/osm/towns.lua':self.lua.execute((CONTENT/'towns.lua').read_text(encoding='utf-8')),
         })
         self.lua.execute(MOCK)
         self.lua.globals().modules['druttzen_osm_vanilla::/osm/ui_snapshot.lua']=self.lua.execute(

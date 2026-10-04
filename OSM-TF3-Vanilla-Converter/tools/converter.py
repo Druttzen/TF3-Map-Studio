@@ -18,6 +18,7 @@ import xml.etree.ElementTree as ET
 from settings import normalize_options, SPECIES, MODELS, MATERIALS
 from job import Job, Cancelled
 from hydrology import prepare as prepare_water
+from map_objects import prepare as prepare_objects
 
 MOD_ID = 'druttzen_osm_vanilla'
 MOD_FOLDER = 'tf3_osm_importer_mod'
@@ -421,13 +422,14 @@ def convert(path,bounds,size,spacing=18,max_trees=100000,*,options=None,progress
         if not on_map(p): continue
         category='tree' if tags.get('natural')=='tree' else 'fountain' if tags.get('amenity')=='fountain' else 'bollard' if tags.get('barrier')=='bollard' else 'advertising_column' if tags.get('advertising')=='column' else None
         if category and features[{'tree':'tree_nodes','fountain':'fountains','bollard':'bollards','advertising_column':'advertising_columns'}[category]]:
-            data['scenery'].append({'model':MODELS[options['object_models'][category]],'pos':list(p),'rotation':math.radians(options['object_rotation']),'category':'vegetation' if category=='tree' else 'objects'})
-        if features['place_markers'] and tags.get('place') in {'city','town','village','suburb','quarter','neighbourhood'} and tags.get('name'):
-            data['labels'].append({'pos':list(p),'name':tags['name']})
+            data['scenery'].append({'model':MODELS[options['object_models'][category]],'pos':list(p),'rotation':math.radians(options['object_rotation']),'category':'vegetation' if category=='tree' else 'objects',
+                                    'match':{'kind':category},'osm':{'type':'node','id':str(id),'tags':dict(tags)}})
+    prepare_objects(data,nodes,ways,relations,positions,members_for,join_rings,on_map,job,warn)
+    if not features['place_markers']: data['labels']=[]
     if data['labels']:
-        warn('Place markers are decorative models, not simulated towns. Read their recorded names and coordinates with Show place names.')
-    if any(tags.get('building') not in {None,'no'} for _,tags in ways.values()):
-        warn('OSM building footprints are not imported. Add vanilla buildings and functioning towns with the game tools.')
+        warn('Place names can become markers or optional functioning towns in the in-game importer. Suburbs and neighbourhoods remain markers.')
+    if any(item.get('category')=='buildings' for item in data['scenery']):
+        warn('Building footprints and tags are retained for optional decorative matching in TF3; substitutes are not functional town buildings.')
     if any(e['bridge'] or e['tunnel'] for e in data['edges']):
         warn('Bridge/tunnel heights are estimated from terrain at endpoints; inspect grades and clearances after import.')
     prepare_water(data,nodes,ways,relations,positions,members_for,join_rings,triangulate,
@@ -484,6 +486,7 @@ def write_outputs(source,data_path,report_path,bounds,size,spacing,max_trees,opt
     report={'dataset':data['id'],'input':source.name,'bounds':data['bounds'],'mapSize':data['size'],
             'edges':len(data['edges']),'sceneryItems':len(data['scenery']),'placeLabels':len(data['labels']),
             'waterFeatures':len(data.get('waterFeatures',[])),
+            'objectMetadata':data.get('objectMetadata',{}),'unavailableObjects':data.get('unavailableObjects',[]),
             'waterMetadata':{**data['waterMetadata'],'features':data['waterFeatures']},
             'warnings':data['warnings'],'settings':data['conversionSettings'],'output':str(data_path),
             'report':str(report_path),'sourceSha256':job.source_sha256,

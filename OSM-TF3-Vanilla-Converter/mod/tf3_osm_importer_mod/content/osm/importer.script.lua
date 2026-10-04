@@ -3,6 +3,8 @@ local dataset = ug_require "druttzen_osm_vanilla::/osm/dataset.lua"
 local controls = ug_require "druttzen_osm_vanilla::/osm/controls.lua"
 local worldAudit = ug_require "druttzen_osm_vanilla::/osm/world_audit.lua"
 local water = ug_require "druttzen_osm_vanilla::/osm/water.lua"
+local matcher = ug_require "druttzen_osm_vanilla::/osm/object_matcher.lua"
+local towns = ug_require "druttzen_osm_vanilla::/osm/towns.lua"
 local script = {}
 local eventId = "druttzen_osm_vanilla"
 local sceneryName = "druttzen_osm_vanilla::/osm/scenery.con"
@@ -53,7 +55,8 @@ local function newCheck(value,starting)
   assert(dataset.schema==1 and type(dataset.id)=="string" and dataset.id~="", "Prepare an OSM dataset with the converter first.")
   assert(#dataset.edges+#dataset.scenery+#dataset.labels>0, "Dataset has no supported roads, tracks or scenery.")
   local totals=controls.totals(dataset,value.options)
-  assert(totals.edges+totals.scenery+totals.labels>0,"No dataset items match your import selections.")
+  assert(totals.edges+totals.scenery+totals.labels+totals.towns>0,"No dataset items match your import selections.")
+  if totals.towns>0 then towns.checkLimit(totals.towns) end
   local box=api.engine.terrain.getBoundingBox()
   local width,height=box.max.x-box.min.x,box.max.y-box.min.y
   assert(type(dataset.size)=="table" and type(dataset.size[1])=="number" and type(dataset.size[2])=="number"
@@ -62,7 +65,7 @@ local function newCheck(value,starting)
     string.format("Prepared area %.0f x %.0f m is larger than this map (%.0f x %.0f m). Reconvert OSM and heightmap with matching dimensions; do not scale only one file.",
       dataset.size[1],dataset.size[2],width,height))
   return {datasetId=dataset.id,starting=starting,returnPhase=value.phase,section=1,cursor=1,checked=0,
-    total=#dataset.edges+#dataset.scenery+#dataset.labels,resources={}}
+    total=#dataset.edges+#dataset.scenery+#dataset.labels,resources={},matches={},townNames={}}
 end
 
 local function advanceCheck(value,job,budget)
@@ -77,8 +80,9 @@ local function advanceCheck(value,job,budget)
       string.format("Dataset coordinate x %.3f, y %.3f is outside this map; check converter map width and height.",p[1],p[2]))
   end
   local checked=job.resources
-  local function resource(rep,name)
-    assert(type(name)=="string" and (name:sub(1,3)=="::/" or name=="druttzen_osm_vanilla::/osm/dirty_water.gtex"),"Non-vanilla reference rejected: "..tostring(name))
+  local function resource(rep,name,matched)
+    assert(type(name)=="string" and (name:sub(1,3)=="::/" or name=="druttzen_osm_vanilla::/osm/dirty_water.gtex"
+      or matched and value.options.useActiveMods and name:match("^[^:]+::/")),"Unapproved resource reference: "..tostring(name))
     if not checked[name] then requireResource(rep,name); checked[name]=true end
   end
   local function checkEdge(edge)
@@ -100,8 +104,14 @@ local function advanceCheck(value,job,budget)
     end
   end
   local function checkScenery(item)
-    if value.options[controls.sceneryCategory(item)] then
-      if item.model then resource(api.res.modelRep,item.model) end
+    if controls.selectedScenery(item,value.options) then
+      if item.match then
+        checkPosition(item.pos)
+        local match=matcher.resolve(item,value.options); job.matches[job.cursor]=match
+        if match.unmatched then return end
+        item=controls.resolvedItem(item,job.cursor,{matches=job.matches})
+      end
+      if item.model then resource(api.res.modelRep,item.model,item.match~=nil) end
       if item.model then checkPosition(item.pos) end
       if item.texture then
         if item.category=="waterways" then
@@ -123,7 +133,15 @@ local function advanceCheck(value,job,budget)
       local item=list[job.cursor]
       if job.section==1 then checkEdge(item)
       elseif job.section==2 then checkScenery(item)
-      elseif value.options.places then checkPosition(item.pos); resource(api.res.modelRep,markerName) end
+      else
+        local mode=controls.placeMode(item,value.options)
+        if mode then checkPosition(item.pos) end
+        if mode=="town" then
+          assert(not job.townNames[item.name],"Duplicate selected town name: "..item.name)
+          job.townNames[item.name]=true; towns.check(item)
+          towns.prepare({name=item.name,pos=controls.position(item.pos,box)},job.datasetId..":"..tostring(job.cursor))
+        elseif mode=="marker" then resource(api.res.modelRep,markerName) end
+      end
       job.cursor=job.cursor+1; job.checked=job.checked+1; used=used+1
     end
   end
@@ -141,13 +159,15 @@ local function beginImport(value)
   -- alignments from their height reference, including future water basins.
   value.heightPolicy="base-v1"; value.heightReference={}; value.nodeHeights={}
   value.notice="Import started."; value.error=nil
-  message("Starting vanilla import. No existing roads, trees or towns will be deleted.")
+  message("Starting selected OSM import with saved progress.")
 end
 
 local function finishCheck(value,job)
   value.check=nil; value.phase=job.returnPhase
+  value.matches=job.matches; value.matchSummary=matcher.summary(job.matches)
   if job.starting then beginImport(value)
-  else value.notice="Map and vanilla resource checks passed." end
+  else value.notice=string.format("Map/resource checks passed. Object matches: %d vanilla, %d active mod, %d without a safe match (left unbuilt).",
+    value.matchSummary.vanilla,value.matchSummary.mods,value.matchSummary.unmatched) end
 end
 
 local function requestCheck(value,starting)
@@ -319,18 +339,19 @@ local function sceneryProposal(value)
   while last<#dataset.scenery and included<value.options.batchSize and scanned<checkBudget do
     last=last+1
     scanned=scanned+1
-    if value.options[controls.sceneryCategory(dataset.scenery[last])] then included=included+1 end
+    if controls.selectedScenery(dataset.scenery[last],value.options) and controls.resolvedItem(dataset.scenery[last],last,value) then included=included+1 end
   end
   -- A preparation failure belongs to this explicit candidate batch, even if
   -- terrain/resource checks stop before a native proposal can be submitted.
   value.failedLast=last
   for i=value.cursor,last do
-    local source=dataset.scenery[i]
-    if value.options[controls.sceneryCategory(source)] and source.model then
+    local source=controls.resolvedItem(dataset.scenery[i],i,value)
+    if source and controls.selectedScenery(source,value.options) and source.model then
+      requireResource(api.res.modelRep,source.model)
       local pos=controls.position(source.pos,api.engine.terrain.getBoundingBox())
       items[#items+1]={model=source.model,rotation=source.rotation,
         pos={pos[1],pos[2],terrainZ(pos)}}
-    elseif value.options[controls.sceneryCategory(source)] and source.texture then
+    elseif source and controls.selectedScenery(source,value.options) and source.texture then
       local face={}
       local shallow=source.category=="waterways"
       if shallow then water.checkEmpty(source.face,20) end
@@ -376,8 +397,8 @@ local function proposedModelPositions(value,phase,last,proposal)
   else
     local itemIndex=0
     for index=value.cursor,last do
-      local source=dataset.scenery[index]
-      if value.options[controls.sceneryCategory(source)] and (source.model or source.texture) then
+      local source=controls.resolvedItem(dataset.scenery[index],index,value)
+      if source and controls.selectedScenery(source,value.options) and (source.model or source.texture) then
         itemIndex=itemIndex+1
         if source.model then save(index,items[itemIndex]) end
       end
@@ -490,6 +511,7 @@ function script.handleEvent(_userParams, state, _src, id, name, param)
   if name=="osm.configure" then
     local ok,options=pcall(controls.configure,value.options,param,value.datasetId~=nil)
     if ok then value.options=options; value.notice="Import settings saved."
+      if not value.datasetId then value.matches=nil; value.matchSummary=nil end
     else value.notice=tostring(options) end
     state:set(value); return
   end
@@ -576,7 +598,7 @@ function script.handleEvent(_userParams, state, _src, id, name, param)
       value.notice="A dataset identity failure cannot skip source items. Restore the original dataset, then Retry."
       state:set(value); message(value.notice); return
     end
-    if value.pendingOwnership or value.pendingScenery then
+    if value.pendingOwnership or value.pendingScenery or value.pendingTown then
       value.notice="This accepted object already exists. Retry to complete ownership and naming; it cannot be skipped."
       state:set(value); message(value.notice); return
     end
@@ -636,6 +658,13 @@ function script.postUpdate(_userParams, state, _dt, _result)
       state:set(value); status(value); return
     end
   end
+  if value.pendingTown then
+    local ok,err=pcall(towns.finalize,value)
+    if not ok then
+      value.resumePhase=value.phase; value.phase="error"; value.error=tostring(err); value.errorKind="finalization"
+      state:set(value); status(value); return
+    end
+  end
   value.cooldown=math.max(0,(value.cooldown or 0)-math.max(0,_dt or 0))
   if value.cooldown>0 then state:set(value); return end
   if value.phase=="scenery" and value.cursor>#dataset.scenery then
@@ -652,7 +681,14 @@ function script.postUpdate(_userParams, state, _dt, _result)
   if value.phase=="edges" and value.cursor>#dataset.edges then
     value.phase="labels"; value.cursor=1; state:set(value)
   end
-  if value.phase=="labels" and (not value.options.places or value.cursor>#dataset.labels) then
+  if value.phase=="labels" then
+    local scanned=0
+    while value.cursor<=#dataset.labels and not controls.placeMode(dataset.labels[value.cursor],value.options) and scanned<checkBudget do
+      value.cursor=value.cursor+1; scanned=scanned+1
+    end
+    if value.cursor<=#dataset.labels and not controls.placeMode(dataset.labels[value.cursor],value.options) then state:set(value); return end
+  end
+  if value.phase=="labels" and value.cursor>#dataset.labels then
     value.phase="finished"; value.notice="Import finished. Check the map before continuing."; state:set(value); status(value); return
   end
   if value.options.stepLimit>0 and (value.runSteps or 0)>=value.options.stepLimit then
@@ -664,6 +700,12 @@ function script.postUpdate(_userParams, state, _dt, _result)
   local submitted,accepted=false,false
   value.failedFirst=value.cursor; value.failedLast=value.cursor
   local ok,err=pcall(function()
+    if phase=="labels" and controls.placeMode(dataset.labels[value.cursor],value.options)=="town" then
+      local source=dataset.labels[value.cursor]
+      local pos=controls.position(source.pos,api.engine.terrain.getBoundingBox())
+      towns.build(value,state,{name=source.name,pos=pos})
+      return
+    end
     local proposal,last,included
     local edge
     if phase=="edges" then

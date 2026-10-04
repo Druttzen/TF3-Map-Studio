@@ -1,10 +1,17 @@
 {
-  "provenance": "Vanilla mappings supported by companion OSM-TF3-Vanilla-Converter Preview 0.9; previously audited against TF3 build 25533170",
+  "provenance": "Revision 8 literal vanilla mappings, audited against installed TF3 build 40408 / Steam build 25533170",
   "resourceNames": [
     "::/assets/buildings/com/advertisements/column_c_01.mdl",
+    "::/assets/industries/tanks/oil_storage_medium.mdl",
     "::/assets/landmarks/msc/fountain.mdl",
+    "::/assets/landmarks/msc/lion_statue.mdl",
     "::/assets/markers/marker_locate.mdl",
+    "::/assets/rocks/gr_rck_01/gr_rck_01.mdl",
+    "::/assets/stations/rail/era_c_trashcan.mdl",
+    "::/assets/stations/street/bench_era_c_rep_1.mdl",
     "::/assets/stations/water/mooring_bollard_passengers.mdl",
+    "::/assets/streets/mailbox_eu_c.mdl",
+    "::/assets/streets/street_light_eu_c.mdl",
     "::/assets/vegetation/trees/azalea_01/azalea_01.mdl",
     "::/assets/vegetation/trees/confr_01/confr_01.mdl",
     "::/assets/vegetation/trees/eu_lnd_01/eu_lnd_01.mdl",
@@ -35,10 +42,11 @@
     "::/infrastructure/track/standard/standard.street_template",
     "::/infrastructure/track/standard/standard_catenary.street_template",
     "::/infrastructure/tunnel/tunnel_c.tunnel",
+    "::/landmarks/hq/modules/mat/hq_water_tile.mtl",
+    "::/landmarks/lighthouse/lighthouse.mdl",
     "::/terrain/materials/asphalt_01/asphalt_01.gtex",
     "::/terrain/materials/dirt/dirt.gtex",
     "::/terrain/materials/grass_cutted_01/grass_cutted_01.gtex",
-    "::/landmarks/hq/modules/mat/hq_water_tile.mtl",
     "::/terrain/materials/water_dirty/water_dirty.tmat"
   ],
   "uiModules": [

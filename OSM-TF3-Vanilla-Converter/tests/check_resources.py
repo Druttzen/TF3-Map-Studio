@@ -38,6 +38,9 @@ def check(game):
             for electric in ['no','contact_line']:
                 required.add(c.choose_template({'railway':railway,'maxspeed':limit,'electrified':electric})[0])
     required.update(['::/infrastructure/bridge/steel.bridge','::/infrastructure/tunnel/tunnel_c.tunnel','::/assets/markers/marker_locate.mdl'])
+    # Curated static-model substitutions in the bundled runtime are audited too.
+    import re
+    required.update(re.findall(r'::/[^"\s]+\.mdl',(ROOT/'mod/tf3_osm_importer_mod/content/osm/object_matcher.lua').read_text(encoding='utf8')))
     missing=sorted(required-available)
     ui_modules=['::/gui/main/react.lua','::/gui/main/builtin.lua','::/gui/main/main_mod_button_area.tl',
                 '::/gui/main/game_react_globals.tl','::/gui/main/engine_react_util.tl','::/gui/main/stylesheetutil.lua']

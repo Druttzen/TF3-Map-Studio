@@ -1,5 +1,5 @@
 TF3-OSM-Importer-Mod
-Companion Preview 0.13 | Mod revision 7 | GPL-3.0 | 4 October 2026
+Companion Preview 0.14 | Mod revision 8 | GPL-3.0 | 4 October 2026
 
 INSTALL
 Copy this tf3_osm_importer_mod folder into:
@@ -15,7 +15,7 @@ FIRST TEST
 Enable the mod on a fresh, flat test map. The included fictional dataset
 is 1000 x 1000 metres, with 10 road/rail segments, 117 scenery items and
 one named marker. Its geometry fits within 500 metres of the map centre.
-Click OSM Import in the mod button area, then Check map and resources.
+Click OSM Import in the mod button area, then Check map and match objects.
 Start import begins the selected import. Use a temporary map first.
 
 DATASET PREPARATION
@@ -30,7 +30,7 @@ OSM Import toggles a movable window. Scroll its list for commands/settings.
 The window shows progress, notices and errors; its close button closes
 the panel. No debug mode or console is required for these controls.
 
-- Check map and resources checks without building. Large datasets are
+- Check map and match objects checks without building. Large datasets are
   checked in blocks of at most 1000 items; progress is saved and displayed.
   Pause cancels a running check without building. Selections lock during
   checking. No geometry is built until every selected item passes.
@@ -92,8 +92,9 @@ Narrow gauge is approximated with standard gauge. Trees, shrubs and
 ground surfaces use vanilla resources; bollards use a mooring bollard.
 Place markers and their recorded names are not functioning towns. Bridge/tunnel heights are
 estimated from terrain endpoints: inspect grades and clearances.
-Signals, buildings, stations, depots, functioning towns and water features
-require the game tools. Terrain comes from a separate heightmap.
+Functional signals, stations and depots require the game tools. Decorative
+building substitutes and functioning towns are optional, described below.
+Terrain comes from a separate heightmap.
 Imported geometry does not automatically snap to existing map nodes.
 
 PREVIEW STATUS
@@ -137,9 +138,9 @@ checks accepted heights. Older started saves keep their previous height rules.
 Terrain alignment is applied by TF3 when each network segment is constructed.
 
 MAPPED SMALL WATER - EXPERIMENTAL
-Reconvert the original OSM XML with converter Preview 0.13. The converter
+Reconvert the original OSM XML with converter Preview 0.14. The converter
 prepares boundaries; this mod performs terrain changes only when built.
-Select Mapped small waters, then Check map and resources and Start import.
+Select Mapped small waters, then Check map and match objects and Start import.
 This selection is initially off while native validation is pending.
 Ponds/basins and small stream/river/ditch/drain/canal zones receive a 0.5 m
 bed below saved base-terrain samples and the exact Landscaping Water Dirty
@@ -171,3 +172,27 @@ A surface at 20 m was visibly rendered and saved/reloaded in TF3. This proves
 elevated decorative appearance, not ship navigation or shallow-water terrain.
 No original game textures, materials or models are redistributed.
 See WATER-RESEARCH.md in the repository for the exact native evidence.
+
+MAPPED OBJECTS AND TOWNS (REVISION 8)
+Category checkboxes show available source counts before Start import.
+Check map and match objects previews vanilla-first static-model matches,
+then looks in loaded active mods if enabled. No safe match means no build;
+its count and reason remain visible. Optional building substitutes must fit
+the source footprint without scaling. They are decorative, not simulated
+homes, industries or stations. Original tags/IDs and height data are retained.
+The new category requires a dataset converted with Preview 0.14.
+
+Named place=city/town/village/hamlet tags can create native functioning towns
+instead of markers. Other place tags stay markers. Town creation uses TF3's
+own preparation/settings and may generate initial streets. Turning off
+Allow new town roads and automatic town growth freezes ALL future town
+development, including buildings; a separate road-only switch is unavailable
+in the inspected API. Existing towns are unaffected. Accepted towns are
+journalled before growth policy is applied; Retry will not create duplicates.
+
+The new object matching, town placement/growth and save/reload still require
+physical TF3 tests. Prior native sample imports do not validate revision 8.
+Reconvert original OSM/XML for new categories on a fresh import. Preserve
+the dataset of an import that has already started. Upgrade runtime files
+while preserving content/osm/dataset.lua and import-report.json.
+See TOWNS-OBJECTS-RESEARCH.md in the repository for API evidence and limits.

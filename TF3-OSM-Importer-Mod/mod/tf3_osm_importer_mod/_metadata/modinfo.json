@@ -1,7 +1,7 @@
 {
   "name": "TF3-OSM-Importer-Mod",
-  "summary": "OSM import with road/rail height priority and experimental mapped small water.",
-  "description": "Preview OSM importer. New imports use base terrain or explicitly sourced game elevations for networks, preserving accepted node heights. Mapped small waters use an experimental 0.5 m shallow bed and Landscaping Water Dirty; native validation is pending. Lake metadata is retained without flooding because no supported local sea-level command was found. A separate elevated flat model surface was rendered and reloaded in TF3; it is decorative, not navigable water. The old raised basin is disabled after native terrain spikes. Large real-world import still requires validation. No external mod dependencies. See README.txt.",
+  "summary": "OSM category selections, vanilla-first loaded-model matching and optional functioning towns.",
+  "description": "Preview OSM importer revision 8. Choose available dataset categories before starting. Preview static-model matches from vanilla first, then active mods. Building substitutes are decorative. Named city/town/village/hamlet tags can create native functioning towns. Disabling future town roads freezes all automatic town growth; initial streets can still be generated. New object matching and towns await physical TF3 validation. Existing network-height priority and experimental small-water logic are retained. No game assets are bundled. See README.txt.",
   "authors": [
     {
       "name": "VacuumTube",

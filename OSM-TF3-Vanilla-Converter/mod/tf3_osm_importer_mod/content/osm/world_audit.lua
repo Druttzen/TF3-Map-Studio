@@ -68,6 +68,17 @@ end
 
 function audit.inspect(dataset,value)
   value=value or {}
+  -- Resolve persisted matches without rewriting the source dataset or its ID.
+  local prepared={}
+  for key,v in pairs(dataset) do prepared[key]=v end
+  prepared.scenery={}
+  local unmatched=0
+  for index,item in ipairs(dataset.scenery or {}) do
+    local resolved=controls.resolvedItem(item,index,value)
+    prepared.scenery[index]=resolved or {unmatched=true,category=item.category}
+    if not resolved and value.options and controls.selectedScenery(item,value.options) then unmatched=unmatched+1 end
+  end
+  dataset=prepared
   local box=api.engine.terrain.getBoundingBox()
   local rawCoordinate,rawItemKey=coordinate,itemKey
   local function coordinate(p) return rawCoordinate(p,box) end
@@ -99,6 +110,10 @@ function audit.inspect(dataset,value)
       problem("ownership",label.." is not owned by the current player.")
     end
   end
+  if unmatched>0 then problem("unmatched",tostring(unmatched).." selected mapped objects have no saved safe resource match.") end
+  local townReport=(ug_require "druttzen_osm_vanilla::/osm/towns.lua").inspect(dataset,value)
+  report.expected.towns=townReport.expected; report.current.towns=townReport.current
+  for _,issue in ipairs(townReport.problems) do problem("towns",issue) end
 
   if report.phase~="finished" then problem("progress","Import is "..report.phase.."; verification requires a finished import.") end
   if value.datasetId~=dataset.id then problem("progress","Saved import does not match the current dataset.") end
@@ -287,7 +302,7 @@ function audit.inspect(dataset,value)
     return false
   end
   for index,item in ipairs(dataset.scenery or {}) do
-    if options[controls.sceneryCategory(item)] then
+    if not item.unmatched and controls.selectedScenery(item,options) then
       local key=itemKey(item)
       if key then expectedItems[key]=(expectedItems[key] or 0)+1
       else problem("wrongScenery","A selected dataset scenery item has invalid saved parameters.") end
@@ -300,6 +315,7 @@ function audit.inspect(dataset,value)
   end
   if options.places then
     for index,label in ipairs(dataset.labels or {}) do
+      if controls.placeMode(label,options)=="marker" then
       local pos=coordinate(label.pos)
       local key=pos and "label|"..label.name.."|"..pos
       if key then expectedItems[key]=(expectedItems[key] or 0)+1
@@ -307,6 +323,7 @@ function audit.inspect(dataset,value)
       labelNames[label.name]=true
       report.expected.labels=report.expected.labels+1
       if key then expectPosition(label,key,index,"labels") end
+      end
     end
   end
   local prefix="OSM scenery "..tostring(dataset.id).." "
@@ -415,11 +432,13 @@ function audit.inspect(dataset,value)
   end
   if #assetEntities>0 then
     for index,item in ipairs(dataset.scenery or {}) do
-      if item.model and options[controls.sceneryCategory(item)] then expectAsset(item,itemKey(item),nil,index,"scenery") end
+      if item.model and controls.selectedScenery(item,options) then expectAsset(item,itemKey(item),nil,index,"scenery") end
     end
     if options.places then
       for index,label in ipairs(dataset.labels or {}) do
-        expectAsset({model=markerName,pos=label.pos,rotation=0},"label|"..label.name.."|"..coordinate(label.pos),label.name,index,"labels")
+        if controls.placeMode(label,options)=="marker" then
+          expectAsset({model=markerName,pos=label.pos,rotation=0},"label|"..label.name.."|"..coordinate(label.pos),label.name,index,"labels")
+        end
       end
     end
   end
@@ -472,7 +491,7 @@ function audit.inspect(dataset,value)
       end
     end
   end
-  if report.expected.edges+report.expected.scenery+report.expected.labels==0 then
+  if report.expected.edges+report.expected.scenery+report.expected.labels+report.expected.towns==0 then
     problem("progress","No dataset items are selected for verification.")
   end
   for key,count in pairs(expectedItems) do
@@ -498,6 +517,7 @@ function audit.format(report)
     report.ok and "Saved built objects verified" or (#report.problems==0 and report.partial and "Built objects partially verified" or "Built objects need attention"),
     c.nodes,e.nodes,c.streets,e.streets,c.tracks,e.tracks,c.usableEdges,e.usableEdges,c.models,e.models,
     c.surfaces,e.surfaces,c.labels,e.labels,c.components,e.components)
+  text=text..string.format(" | functioning towns %d/%d",c.towns or 0,e.towns or 0)
   if #report.problems>0 then
     local shown={}
     for i=1,math.min(3,#report.problems) do shown[#shown+1]=report.problems[i] end
