@@ -28,7 +28,7 @@ FEATURES={
     'disused_tracks':'Disused railway tracks','bridges':'Bridges','tunnels':'Tunnels',
     'forests':'Forests','shrubs':'Shrub areas','tree_nodes':'Individually tagged trees',
     'surfaces':'Ground surfaces','waterways':'Small mapped waters (0.5 m bed, Water Dirty)','fountains':'Fountains','bollards':'Bollards',
-    'advertising_columns':'Advertising columns','place_markers':'Named place markers',
+    'advertising_columns':'Advertising columns','place_markers':'Named places (markers or optional in-game towns)',
 }
 DEFAULTS={
     'features':{key:True for key in FEATURES},
