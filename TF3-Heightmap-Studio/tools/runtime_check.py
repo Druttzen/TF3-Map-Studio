@@ -12,6 +12,9 @@ def check(output):
   from elevation import sample_sources
   from alignment import mercator_bounds
   from rasterio import Affine
+  from game_paths import detect,GamePaths
+  from terrain import prepare,export
+  import hashlib
   with tempfile.TemporaryDirectory(prefix='tf3-lidar-runtime-') as folder:
    folder=Path(folder);header=laspy.LasHeader(point_format=6,version='1.4');header.add_crs(CRS.from_epsg(3857))
    data=laspy.LasData(header);data.x=[0,5,10,5];data.y=[0,5,10,5];data.z=[10,20,30,999];data.classification=[2,2,2,6]
@@ -32,7 +35,16 @@ def check(output):
    assert enhanced[4,4]==49 and enhanced[5,5]==10 and enhanced[0,0]==10
    assert metadata[0]['file']==str(files[1].resolve())
    assert np.allclose(affine@(.5,.5),(x0,y1))
-   result={'ok':True,'laspy':laspy.__version__,'lazCompression':'round-trip passed','projection':'EPSG:3857 verified','groundFiltering':'building excluded','geotiff':'written and read','geotiffDetail':'priority, nodata fallback and OSM bounds passed'}
+   xml=folder/'fictional.osm';xml.write_text('<osm version="0.6"><bounds minlat="0" minlon="0" maxlat=".0001" maxlon=".0001"/><node id="1" lat=".00005" lon=".00005"/></osm>',encoding='utf-8')
+   context=folder/'fictional.report.json';context.write_text(json.dumps({'dataset':'fictional-runtime','input':xml.name,'bounds':bounds,'mapSize':[128,128],'sourceSha256':hashlib.sha256(xml.read_bytes()).hexdigest(),'settings':{}}),encoding='utf-8')
+   terrain=prepare(context,xml,files,{'biomes':True});local=folder/'fictional-game-local'
+   exported=export(terrain,local/'heightmaps/fictional.png',game_paths=GamePaths(local=local))
+   assert len(list((local/'heightmaps').iterdir()))==1 and len(list((local/'biomes').iterdir()))==1
+   assert Path(exported['files']['project']).parent==local/'heightmap_studio/fictional'
+   installed=detect()
+   result={'ok':True,'laspy':laspy.__version__,'lazCompression':'round-trip passed','projection':'EPSG:3857 verified','groundFiltering':'building excluded','geotiff':'written and read','geotiffDetail':'priority, nodata fallback and OSM bounds passed',
+           'nativeExportRouting':'heightmap, biomes and companions separated; fictional temporary folders only',
+           'tf3RegistryDiscovery':{'installationFound':installed.installation is not None,'userFolderSelected':installed.local is not None}}
  except Exception as exc:result['error']=str(exc)
  finally:
   Path(output).write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')

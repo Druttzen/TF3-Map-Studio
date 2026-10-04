@@ -1,5 +1,17 @@
 TF3 HEIGHTMAP STUDIO - STEP 2
-Preview 0.8 | GPL-3.0 | 4 October 2026
+Preview 0.9 | GPL-3.0 | 4 October 2026
+
+AUTOMATIC GAME FOLDERS
+The app reads the installed TF3 and Steam Windows registry paths, checks the
+game installation, then selects the active Steam account or the only existing
+TF3 profile. It fills the PNG export path automatically. Use Find TF3 folders
+to restore automatic selection, or Choose TF3 user folder for a manual profile.
+When exporting to TF3: the heightmap PNG goes into local/heightmaps and the biome
+PNG into local/biomes. GeoTIFF, previews, reports, project, attribution and import
+instructions go into local/heightmap_studio/<map>. Defaults choose a new name
+when an export already exists. Manually chosen/saved destinations remain usable.
+The registry is not edited. Export creates import files; it does not change a
+game save. See GAME-FOLDERS.md for selection, fallback and failure handling.
 
 VANILLA BIOMES
 The Biomes tab can export a native TF3 biome PNG alongside the heightmap.

@@ -1,6 +1,6 @@
 # TF3 Heightmap Studio
 
-Preview 0.8 is the terrain companion to OSM-TF3-Vanilla-Converter. It uses the
+Preview 0.9 is the terrain companion to OSM-TF3-Vanilla-Converter. It uses the
 converter's JSON report, exported Lua and original OSM file to align measured
 elevation with a Transport Fever 3 map. It supports local and public elevation
 sources, terrain editing, and optional vanilla biome exports.
@@ -10,7 +10,7 @@ classified local LAS/LAZ/COPC import. Open the **LiDAR** tab to find data for th
 selected map. See [sources, access and measured limitations](LIDAR-SOURCES.md).
 It also fixes current OSM-report compatibility and authoritative GeoTIFF masks.
 
-Preview 0.8 combines detailed GeoTIFF DEMs with downloaded or local background
+Preview 0.8 added detailed GeoTIFF DEMs over downloaded or local background
 elevation, within the exact OSM converter bounds. **Finest elevation first** is
 the default for new projects: finer source cells take precedence and other
 sources fill their real gaps. **File list order** retains manual priority;
@@ -31,6 +31,16 @@ Different declared vertical references are reported for contributing files;
 align these references before game import. Unrecognized unit labels require an explicit
 known unit choice. No source accuracy is inferred from the GeoTIFF file format.
 See [GeoTIFF processing and verified references](GEOTIFF-DETAIL.md).
+
+Preview 0.9 finds the installed TF3 game through Windows registry keys and
+selects the current Steam account's user folder, or the only existing TF3
+profile. The PNG destination is filled automatically. Native exports place
+the heightmap in **local/heightmaps**, a biome PNG in **local/biomes**, and
+GeoTIFFs, reports, previews, projects and instructions in
+**local/heightmap_studio/<map>**. Default names preserve existing exports.
+Saved/manual paths remain available; **Find TF3 folders** restores automatic
+selection. Multiple unidentified profiles require selecting the user folder.
+The registry is read without changes. See [automatic game export](GAME-FOLDERS.md).
 
 This folder contains the application source, existing tests, pinned dependencies,
 portable synthetic examples and licence notices. Native TF3 heightmap and biome
@@ -56,6 +66,10 @@ To export the example without the GUI:
 ```powershell
 .\.venv\Scripts\python.exe tools\cli.py examples\Synthetic-demo.heightmap-project.json --output outputs\synthetic-heightmap.png
 ```
+
+Add `--to-tf3` instead of `--output` to export into the automatically selected
+installed game's user folders. This places import files; it does not import
+them into a running game or change an existing game save.
 
 ## Test and build
 

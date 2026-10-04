@@ -12,6 +12,7 @@ from alignment import load_context, geographic, osm, alignment_summary
 from elevation import download_tiles, sample_sources, resolution_metres, PUBLIC_DOC, PUBLIC_LICENSE
 from height_settings import normalize, dimensions, validate_stroke
 from providers import acquire
+from game_paths import export_destination
 from job import Job, Cancelled
 import biomes
 
@@ -278,20 +279,21 @@ def read_project_report(data):
  return report
 
 
-def export(result,output,progress=None,cancel=None):
+def export(result,output,progress=None,cancel=None,game_paths=None):
  output=Path(output).resolve();job=Job(progress,cancel)
  if output.suffix.lower()!='.png':raise ValueError('Heightmap output must end in .png.')
  context=result['context'];options=result['options'];terrain=result['terrain'];ny,nx=terrain.shape
  lo,hi,clipped=encoding_range(terrain,options);base=output.with_suffix('')
  targets={'png':output}
+ destination=export_destination(output,game_paths)
  suffixes={'dem':'.dem.tif','preview':'.preview.png','report':'.heightmap-report.json','project':'.heightmap-project.json','instructions':'.import.txt','attribution':'.attribution.txt'}
- targets.update({key:output.with_name(output.stem+suffix) for key,suffix in suffixes.items()})
+ targets.update({key:destination['details']/(output.stem+suffix) for key,suffix in suffixes.items()})
  if options['biomes']:
-  targets.update({key:output.with_name(output.stem+suffix) for key,suffix in {'biomes':'.biomes.png','biomePreview':'.biomes.preview.png','biomeGeoTiff':'.biomes.tif'}.items()})
+  targets.update({key:(destination['biomes'] if key=='biomes' else destination['details'])/(output.stem+suffix) for key,suffix in {'biomes':'.biomes.png','biomePreview':'.biomes.preview.png','biomeGeoTiff':'.biomes.tif'}.items()})
  protected={Path(context['osmPath']).resolve(),Path(context['report']['reportPath']).resolve(),*[Path(p).resolve() for p in result['sourceFiles']],*[Path(p).resolve() for p in result.get('sampledSourceFiles',[])]}
  if context.get('convertedLua'):protected.add(Path(context['convertedLua']['file']).resolve())
  if options['biome_source']:protected.add(Path(options['biome_source']).resolve())
- if any(target in protected for target in targets.values()):raise ValueError('Output files must not replace source elevation, OSM or converter-report files.')
+ if any(target.resolve() in protected for target in targets.values()):raise ValueError('Output files must not replace source elevation, OSM or converter-report files.')
  output.parent.mkdir(parents=True,exist_ok=True);staging=Path(tempfile.mkdtemp(prefix='.tf3-heightmap-export-',dir=output.parent)).resolve()
  replaced=[];backups={};retain_staging=False
  try:
@@ -327,13 +329,24 @@ def export(result,output,progress=None,cancel=None):
           'pngEncodingStepMetres':(hi-lo)/65535,'nativeMapCreationSpacingMetres':4,'nativeMapCreationHeightStepMetres':.05,
           'clippedPngSamples':clipped,'coverage':result['coverage'],'brushStrokes':len(result['strokes']),'settings':options,
           'maximumChangeFromScaledSmoothedDemMetres':float(np.max(np.abs(terrain-result['baseline']))),
-          'files':{k:str(p) for k,p in targets.items()},'warnings':result['warnings'],'nativeTF3ImportVerified':False}
+          'files':{k:str(p) for k,p in targets.items()},'gameExport':{'nativeFolders':destination['native'],'location':destination['location'],
+          'heightmapFolder':str(output.parent),'detailsFolder':str(destination['details']),'biomeFolder':str(destination['biomes']) if options['biomes'] else None},
+          'warnings':result['warnings'],'nativeTF3ImportVerified':False}
   for key,value in [('report',report),('project',project_dict(result,str(output)))]:
    (staging/targets[key].name).write_text(json.dumps(value,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
   instructions=f'''TF3 HEIGHTMAP IMPORT\n\nPNG: {output.name}\nPixels: {nx} x {ny} (16-bit grayscale)\nGame map: {context['size'][0]:g} x {context['size'][1]:g} metres\nMinimum height: {lo:g} metres\nMaximum height: {hi:g} metres\nWater level: {options['water_level']:g} metres\n\n1. Copy the PNG into TF3 userdata/<Steam user>/3493540/local/heightmaps.\n2. In the map editor, use the same map dimensions as the OSM converter.\n3. Import Heightmap: select this PNG and enter the exact minimum, maximum\n   and water level above. Verify north/south orientation with the preview.\n4. Review terrain, then import the matching OSM Lua dataset on this map.\n\nThe float64 GeoTIFF preserves elevations before PNG range clipping.\nAn exported heightmap does not create a game save or automatically install.\nNative TF3 import still requires an in-game verification session.\n'''
   if clipped:instructions+=f'\nManual-range clipping affected {clipped:,} PNG pixels.\n'
+  if destination['native']:
+   instructions=instructions.replace('1. Copy the PNG into TF3 userdata/<Steam user>/3493540/local/heightmaps.',
+     '1. The PNG is already exported into the TF3 heightmaps folder: '+str(output.parent))
+   instructions=instructions.replace('An exported heightmap does not create a game save or automatically install.',
+     'Export writes the import files into the selected TF3 user folders; it does not create or change a game save.')
+   instructions+='\nProject, GeoTIFF, preview, report and attribution: '+str(destination['details'])+'\n'
   if biome_report:
    instructions+=f'''\nVANILLA BIOMES\nCreate the map with the {options['biome_climate']} climate.\nBiome PNG: {targets['biomes'].name} ({nx} x {ny}, 8-bit grayscale)\nCodes: Biome 0=0, Biome 1=63, Biome 2=127, Biome 3=191, Biome 4=255.\n1. Copy the biome PNG to TF3 userdata/<Steam user>/3493540/local/biomes.\n2. After importing the heightmap, open the map editor's Biomes tab.\n3. Choose the matching {options['biome_climate']} (Import) generator and biome PNG.\n4. Inspect the game preview, then Apply. The vanilla generator supplies\n   climate-specific terrain materials and vegetation; no extra mods needed.\nLeave additional layer selectors empty; no extra terrain-shape layers are exported.\nBiome IDs are regions within one climate; their colors in the preview are\neditor labels, not final terrain textures. Water is determined by game heights.\nThe .biomes.tif stores IDs 0-4 for GIS, not native PNG grayscale codes.\nNative biome import remains to be verified in the game.\n'''
+  if destination['native'] and biome_report:
+   instructions=instructions.replace('1. Copy the biome PNG to TF3 userdata/<Steam user>/3493540/local/biomes.',
+     '1. The biome PNG is already exported into TF3: '+str(targets['biomes']))
   (staging/targets['instructions'].name).write_text(instructions,encoding='utf-8')
   attribution='OSM geometry: © OpenStreetMap contributors, ODbL. https://www.openstreetmap.org/copyright\n'
   if result['public']:
@@ -363,6 +376,7 @@ def export(result,output,progress=None,cancel=None):
    with Image.open(staging/targets['biomes'].name) as check:
     if check.mode!='L' or check.size!=(nx,ny):raise ValueError('The exported biome PNG format or dimensions are incorrect.')
   for key,target in targets.items():
+   target.parent.mkdir(parents=True,exist_ok=True)
    if target.exists():
     backup=staging/('backup-'+target.name);shutil.copyfile(target,backup);backups[key]=backup
   job.update(98,'Saving heightmap files',force=True);job.check();job.cancel=None
