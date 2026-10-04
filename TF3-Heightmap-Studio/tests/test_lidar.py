@@ -91,6 +91,17 @@ def test_packaging_runtime_probe(tmp_path):
  path=tmp_path/'runtime.json';assert check(path)==0
  assert json.loads(path.read_text())['ok']
 
+def test_raw_lidar_project_keeps_original_sources(tmp_path):
+ from terrain import prepare,export,load_project
+ path,bounds,_=point_file(tmp_path,'.laz');xml=tmp_path/'map.osm'
+ xml.write_text('<osm><bounds minlat="0" minlon="0" maxlat=".01" maxlon=".01"/><node id="1" lat=".005" lon=".005"/></osm>')
+ report=tmp_path/'map.report.json';report.write_text(json.dumps({'dataset':'lidar-fixture','bounds':bounds,'mapSize':[256,256],'settings':{}}))
+ result=prepare(report,xml,[path],{'source_units':'Metres'},cache=tmp_path/'cache')
+ assert result['sourceFiles']==[str(path.resolve())]
+ assert result['sampledSourceFiles']!=result['sourceFiles']
+ exported=export(result,tmp_path/'output.png');project=load_project(exported['files']['project'])
+ assert project['elevationFiles']==[str(path.resolve())]
+
 def test_download_credentials_scope_and_no_saved_secrets(tmp_path):
  row={'provider':'Lantmäteriet','assets':[{'url':'https://dl1.lantmateriet.se/example.tif','bbox':[12,57,13,58]}]}
  with patch('lidar_sources.fetch_geotiff',return_value=tmp_path/'tile.tif') as fetch:

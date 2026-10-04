@@ -123,6 +123,7 @@ def prepare(report_path,osm_path,source_files,options=None,strokes=None,cache=No
   cache=cache or Path(os.environ.get('LOCALAPPDATA',tempfile.gettempdir()))/'Druttzen/TF3-Heightmap/cache'
   paths,provider_plan,provider_credits=acquire(context['bounds'],options,cache,job,api_key)
  else:job.update(35,'Opening local elevation files')
+ input_paths=list(paths)
  if any(p.suffix.lower() in {'.las','.laz'} for p in paths):
   from lidar import prepare_sources
   cache=cache or Path(os.environ.get('LOCALAPPDATA',tempfile.gettempdir()))/'Druttzen/TF3-Heightmap/cache'
@@ -164,7 +165,8 @@ def prepare(report_path,osm_path,source_files,options=None,strokes=None,cache=No
  result={'terrain':terrain,'baseline':baseline,'context':context,'options':options,'strokes':[dict(s) for s in (strokes or [])],
          'biomeStrokes':[biomes.validate_paint(s,size) for s in (biome_strokes or [])],'biomes':None,'biomeSource':None,
          'alignment':alignment_summary(context['report'],options),'providerPlan':provider_plan,'providerCredits':provider_credits,
-         'geoTransform':geo_transform,'sources':source_meta,'sourceFiles':[str(p.resolve()) for p in paths],
+         'geoTransform':geo_transform,'sources':source_meta,'sourceFiles':[str(p.resolve()) for p in input_paths],
+         'sampledSourceFiles':[str(p.resolve()) for p in paths],
          'coverage':coverage,'sourceRange':[base_min,base_max],'maximumRefinementMetres':max_diff,'warnings':warnings,'public':public}
  if options['biomes']:
   job.update(94,'Building vanilla biome regions');biomes.ensure(result,job)
@@ -270,7 +272,7 @@ def export(result,output,progress=None,cancel=None):
  targets.update({key:output.with_name(output.stem+suffix) for key,suffix in suffixes.items()})
  if options['biomes']:
   targets.update({key:output.with_name(output.stem+suffix) for key,suffix in {'biomes':'.biomes.png','biomePreview':'.biomes.preview.png','biomeGeoTiff':'.biomes.tif'}.items()})
- protected={Path(context['osmPath']).resolve(),Path(context['report']['reportPath']).resolve(),*[Path(p).resolve() for p in result['sourceFiles']]}
+ protected={Path(context['osmPath']).resolve(),Path(context['report']['reportPath']).resolve(),*[Path(p).resolve() for p in result['sourceFiles']],*[Path(p).resolve() for p in result.get('sampledSourceFiles',[])]}
  if context.get('convertedLua'):protected.add(Path(context['convertedLua']['file']).resolve())
  if options['biome_source']:protected.add(Path(options['biome_source']).resolve())
  if any(target in protected for target in targets.values()):raise ValueError('Output files must not replace source elevation, OSM or converter-report files.')

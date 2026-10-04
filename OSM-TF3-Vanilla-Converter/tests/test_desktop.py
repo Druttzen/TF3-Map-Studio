@@ -78,7 +78,7 @@ class DesktopTests(unittest.TestCase):
 
     def test_standalone_lua_and_report_without_game(self):
         with tempfile.TemporaryDirectory() as folder:
-            output=Path(folder)/'map.lua'
+            output=Path(folder).resolve()/'map.lua'
             report=c.export_file(SAMPLE,output,None,[1000,1000],options={'import_batch_size':17,'import_delay':.5})
             data=LuaRuntime().execute(output.read_text(encoding='utf-8'))
             self.assertEqual(len(data.edges),report['edges']); self.assertEqual(data.importOptions.batchSize,17)
@@ -86,11 +86,11 @@ class DesktopTests(unittest.TestCase):
             stored=json.loads(output.with_suffix('.report.json').read_text())
             self.assertEqual(stored['dataset'],data.id); self.assertNotIn('_preview',stored)
             self.assertEqual(stored['settings']['import_batch_size'],17)
-            self.assertEqual(set(p.name for p in Path(folder).iterdir()),{'map.lua','map.report.json'})
+            self.assertEqual(set(p.name for p in Path(folder).resolve().iterdir()),{'map.lua','map.report.json'})
 
     def test_progress_monotonic_reaches_completion_after_files_exist(self):
         with tempfile.TemporaryDirectory() as folder:
-            output=Path(folder)/'map.lua'; updates=[]
+            output=Path(folder).resolve()/'map.lua'; updates=[]
             def progress(pct,stage,detail):
                 updates.append(pct)
                 if pct==100: self.assertTrue(output.exists() and output.with_suffix('.report.json').exists())
@@ -101,29 +101,29 @@ class DesktopTests(unittest.TestCase):
     def test_cancel_at_each_stage_preserves_existing_outputs(self):
         for stage in ['Reading OSM','Building networks','Generating scenery','Writing Lua map','Saving output files']:
             with self.subTest(stage=stage), tempfile.TemporaryDirectory() as folder:
-                output=Path(folder)/'map.lua'; output.write_text('old lua'); report=output.with_suffix('.report.json'); report.write_text('old report')
+                output=Path(folder).resolve()/'map.lua'; output.write_text('old lua'); report=output.with_suffix('.report.json'); report.write_text('old report')
                 event=threading.Event(); updates=[]
                 def progress(pct,current,detail):
                     updates.append(pct)
                     if current==stage: event.set()
                 with self.assertRaises(Cancelled): c.export_file(SAMPLE,output,None,[1000,1000],progress=progress,cancel=event)
                 self.assertEqual(output.read_text(),'old lua'); self.assertEqual(report.read_text(),'old report')
-                self.assertNotIn(100,updates); self.assertEqual(len(list(Path(folder).iterdir())),2)
+                self.assertNotIn(100,updates); self.assertEqual(len(list(Path(folder).resolve().iterdir())),2)
 
     def test_report_commit_failure_rolls_back_dataset(self):
         with tempfile.TemporaryDirectory() as folder:
-            output=Path(folder)/'map.lua'; output.write_text('old lua'); report=output.with_suffix('.report.json'); report.write_text('old report')
+            output=Path(folder).resolve()/'map.lua'; output.write_text('old lua'); report=output.with_suffix('.report.json'); report.write_text('old report')
             replace=c.os.replace
             def fail_report(src,dst):
                 if Path(dst)==report: raise OSError('simulated locked report')
                 return replace(src,dst)
             with patch.object(c.os,'replace',side_effect=fail_report),self.assertRaises(OSError): c.export_file(SAMPLE,output,None,[1000,1000])
             self.assertEqual(output.read_text(),'old lua'); self.assertEqual(report.read_text(),'old report')
-            self.assertEqual(len(list(Path(folder).iterdir())),2)
+            self.assertEqual(len(list(Path(folder).resolve().iterdir())),2)
 
     def test_failed_dataset_restore_retains_backup_and_reports_its_path(self):
         with tempfile.TemporaryDirectory() as folder:
-            output=Path(folder)/'map.lua'; output.write_bytes(b'previous dataset')
+            output=Path(folder).resolve()/'map.lua'; output.write_bytes(b'previous dataset')
             report=output.with_suffix('.report.json'); report.write_bytes(b'previous report')
             replace=c.os.replace; progress=[]
             def fail_commit_and_restore(src,dst):
@@ -134,28 +134,28 @@ class DesktopTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError,'Backup retained at') as error:
                     c.export_file(SAMPLE,output,None,[1000,1000],
                                   progress=lambda pct,stage,detail:progress.append(pct))
-            backups=list(Path(folder).glob('map.lua.backup.*'))
+            backups=list(Path(folder).resolve().glob('map.lua.backup.*'))
             self.assertEqual(len(backups),1)
             self.assertEqual(backups[0].read_bytes(),b'previous dataset')
             self.assertIn(str(backups[0].resolve()),str(error.exception))
             self.assertEqual(report.read_bytes(),b'previous report')
             self.assertNotIn(100,progress)
-            self.assertEqual(set(Path(folder).iterdir()),{output,report,backups[0]})
+            self.assertEqual(set(Path(folder).resolve().iterdir()),{output,report,backups[0]})
 
     def test_report_commit_failure_removes_new_dataset_without_previous_export(self):
         with tempfile.TemporaryDirectory() as folder:
-            output=Path(folder)/'map.lua'; report=output.with_suffix('.report.json')
+            output=Path(folder).resolve()/'map.lua'; report=output.with_suffix('.report.json')
             replace=c.os.replace
             def fail_report(src,dst):
                 if Path(dst)==report: raise PermissionError('simulated locked report')
                 return replace(src,dst)
             with patch.object(c.os,'replace',side_effect=fail_report),self.assertRaises(OSError):
                 c.export_file(SAMPLE,output,None,[1000,1000])
-            self.assertEqual(list(Path(folder).iterdir()),[])
+            self.assertEqual(list(Path(folder).resolve().iterdir()),[])
 
     def test_new_mod_is_self_contained_and_does_not_overwrite(self):
         with tempfile.TemporaryDirectory() as folder:
-            target=Path(folder)/c.MOD_FOLDER
+            target=Path(folder).resolve()/c.MOD_FOLDER
             report=c.export_new_mod(SAMPLE,target,None,[1000,1000])
             self.assertEqual(target.name,'tf3_osm_importer_mod')
             self.assertEqual(json.loads((target/'mod.json').read_text())['modId'],'druttzen_osm_vanilla')
@@ -164,21 +164,21 @@ class DesktopTests(unittest.TestCase):
             self.assertEqual(Path(report['output']),target/'content/osm/dataset.lua')
             self.assertEqual(json.loads((target/'import-report.json').read_text())['output'],report['output'])
             with self.assertRaisesRegex(ValueError,'already exists'): c.export_new_mod(SAMPLE,target,None,[1000,1000])
-            self.assertEqual(len(list(Path(folder).iterdir())),1)
+            self.assertEqual(len(list(Path(folder).resolve().iterdir())),1)
 
     def test_cancel_new_mod_leaves_no_partial_mod(self):
         with tempfile.TemporaryDirectory() as folder:
-            target=Path(folder)/c.MOD_FOLDER; event=threading.Event()
+            target=Path(folder).resolve()/c.MOD_FOLDER; event=threading.Event()
             def progress(pct,stage,detail):
                 if stage=='Generating scenery': event.set()
             with self.assertRaises(Cancelled): c.export_new_mod(SAMPLE,target,None,[1000,1000],cancel=event,progress=progress)
-            self.assertFalse(target.exists()); self.assertEqual(list(Path(folder).iterdir()),[])
+            self.assertFalse(target.exists()); self.assertEqual(list(Path(folder).resolve().iterdir()),[])
 
     def test_existing_legacy_and_renamed_folders_accept_dataset_updates_by_mod_id(self):
         import shutil
         with tempfile.TemporaryDirectory() as folder:
             for name in ('druttzen_osm_vanilla','tf3_osm_importer_mod'):
-                target=Path(folder)/name
+                target=Path(folder).resolve()/name
                 shutil.copytree(c.template_folder(),target)
                 report=c.export(SAMPLE,target,None,[1000,1000])
                 self.assertEqual(Path(report['output']),target/'content/osm/dataset.lua')
@@ -200,7 +200,7 @@ class DesktopTests(unittest.TestCase):
             tags=f'<tag k="{key}" v="{value}"/>'+( '<tag k="highway" v="residential"/>' if key!='highway' and key!='railway' else '')
             xml+=f'<way id="{id}"><nd ref="1"/><nd ref="2"/>{tags}</way>'
         with tempfile.TemporaryDirectory() as folder:
-            file=Path(folder)/'features.osm'; file.write_text(xml+'</osm>')
+            file=Path(folder).resolve()/'features.osm'; file.write_text(xml+'</osm>')
             data=c.convert(file,None,[1000,1000],options={'features':{'bridges':False,'footpaths':False,'disused_tracks':False},'tunnel_depth':20})
             self.assertTrue(data['edges']); self.assertTrue(all(e['osmWay']=='b' for e in data['edges']))
             self.assertTrue(all(e['heightGuide']['depth']==20 for e in data['edges']))
