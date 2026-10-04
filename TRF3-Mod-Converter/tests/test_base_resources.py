@@ -3,7 +3,7 @@ import zipfile
 
 import pytest
 
-from trf3_mod_converter.base_resources import BaseResourceResolver, TF2Inventory, find_tf2_game
+from trf3_mod_converter.base_resources import BASE_MATERIALS, BaseResourceResolver, TF2Inventory, find_tf2_game
 from trf3_mod_converter.lua_metadata import load_lua_table
 from trf3_mod_converter.tf2_vehicle_port import emit, port_tf2_mod, snapshot
 from test_tf2_vehicle_port import fixture_mod
@@ -47,6 +47,20 @@ def test_known_roles_use_installed_tf3_asset_even_when_its_bytes_changed(tmp_pat
     assert resolver.replacements[0]['matchMethod'] == 'verified_role_mapping'
     assert resolver.replacements[0]['sourceOrigin'] == 'tf2_base'
     assert native.read(target) != legacy.read('textures/' + reference)
+
+
+def test_standard_emissive_material_role_requires_installed_target_and_does_not_match_custom_names(tmp_path):
+    reference='vehicle/car/emissive/car_brake_lights.mtl'
+    target=BASE_MATERIALS[reference]
+    legacy=tf2_inventory(tmp_path, {'models/material/'+reference:b'authored TF2 material placeholder'})
+    native=Installed({target:b'updated TF3 light material placeholder'})
+    resolver=BaseResourceResolver(native,legacy)
+    assert resolver.resolve('material',reference)=='::/'+target
+    assert resolver.replacements[0]['matchMethod']=='verified_role_mapping'
+    with pytest.raises(ValueError,match='No verified TF3 equivalent'):
+        BaseResourceResolver(Installed({}),legacy).resolve('material',reference)
+    with pytest.raises(ValueError,match='No verified TF3 equivalent'):
+        resolver.resolve('material','vehicle/custom/emissive/car_brake_lights.mtl')
 
 
 @pytest.mark.parametrize('name,family', [

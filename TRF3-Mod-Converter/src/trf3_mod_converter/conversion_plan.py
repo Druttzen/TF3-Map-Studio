@@ -188,7 +188,7 @@ def analyze_mod(source: str | Path) -> dict:
             "purpose": "Conversion requirements; does not claim automated export or TF3 compatibility.",
             "nativeTest": "not_run", "categories": counts, "resources": resources, "geometry": geometry,
             "problems": problems, "mixedMod": len(counts) > 1,
-            "implementedExport": "Metadata/layout conversion; separate strict electric-locomotive draft profile only.",
+            "implementedExport": "Metadata/layout and verified literal road/rail/tram/water/air, cargo, render/config and constant-asset draft profiles. Dynamic/API behavior needs manual migration.",
             "sharedSteps": ["Build one dependency/path/ID map for the entire mod, including external mods and base resources.",
                             "Apply category migrations together; preserve originals and report each changed field.",
                             "Resolve shared resources and computed references; unknowns must remain explicit.",

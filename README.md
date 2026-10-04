@@ -17,7 +17,7 @@ Download and extract the package for the tool you need, then open its `.exe`. Th
 - [TF3-Heightmap-Studio — Preview 0.6](https://github.com/Druttzen/TF3-Map-Studio/releases/download/preview-2026-10-02/TF3-Heightmap-Studio-Preview-0.6-Windows.zip)
 - [TRF3-Mod-Converter — 0.2.0](https://github.com/Druttzen/TF3-Map-Studio/releases/download/preview-2026-10-02/TRF3-Mod-Converter-Windows.zip)
 
-TRF3-Mod-Converter source is now **0.8.0**, with recursive scanning, a removable conversion queue and protected batch exports. The download above is the earlier published package. See [the current converter instructions and limitations](TRF3-Mod-Converter/README.md).
+TRF3-Mod-Converter source is now **0.9.0**, with road/rail/tram/water/air export profiles, automatic same-class TF3 freight additions and protected queued exports. Dynamic/API mods still require manual migration. The download above is the earlier published package. See [the current converter instructions and limitations](TRF3-Mod-Converter/EXPORT_PROFILES.md).
 
 The [preview release](https://github.com/Druttzen/TF3-Map-Studio/releases/tag/preview-2026-10-02) also includes checksums. Source archives are available on that page.
 
@@ -29,7 +29,7 @@ Current source is revision 6 (bundled with converter source Preview 0.12), addin
 
 Current source and new packages use the folder `tf3_osm_importer_mod` and the game display name **TF3-OSM-Importer-Mod**. The earlier revision 4 download above still contains `druttzen_osm_vanilla`. The internal mod ID is preserved for existing saves. Keep one installed copy and preserve your custom dataset when updating. See [the importer instructions](TF3-OSM-Importer-Mod/README.md) and [the revision 4 release and checksums](https://github.com/Druttzen/TF3-Map-Studio/releases/tag/importer-revision-4-2026-10-03).
 
-These are preview tools. The fictional OSM sample imports in TF3 Windows build 40408 and passes its built-object check after a full restart and save reload. Read [the native validation scope](TF3-OSM-Importer-Mod/NATIVE-VALIDATION.md): large real maps, bridges, tunnels and actual vehicle routes still need testing. Place names are stored by the importer and displayed in its panel. Heightmap Studio's native TF3 terrain import remains unverified. The mod converter handles metadata and layout; gameplay APIs, models, materials and translations may require manual porting.
+These are preview tools. The fictional OSM sample imports in TF3 Windows build 40408 and passes its built-object check after a full restart and save reload. Read [the native validation scope](TF3-OSM-Importer-Mod/NATIVE-VALIDATION.md): large real maps, bridges, tunnels and actual vehicle routes still need testing. Place names are stored by the importer and displayed in its panel. Heightmap Studio's native TF3 terrain import remains unverified. The mod converter exports verified literal vehicle/resource profiles and metadata/layout; arbitrary gameplay APIs and unverified schemas require manual porting. New profile exports still need native gameplay tests.
 
 ## Development
 

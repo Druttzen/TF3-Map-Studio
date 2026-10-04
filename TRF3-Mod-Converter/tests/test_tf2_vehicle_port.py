@@ -47,7 +47,8 @@ def fixture_mod(tmp_path):
         target=source/'res'/path; target.parent.mkdir(parents=True,exist_ok=True)
         target.write_bytes(value if isinstance(value,bytes) else value.encode())
     with zipfile.ZipFile(content/'resources.zip','w') as archive:
-        archive.writestr('rendering/physical.mat.lua','return {}')
+        archive.writestr('rendering/physical.mat.lua',emit({'properties':[
+            {'name':'map_albedo','id':'properties/map_albedo.prop'}]}))
         archive.writestr('rendering/properties/map_albedo.prop.lua',emit({'fragmentSamplers':[{'name':'albedoTex'}]}))
         for path in ('vehicle/train/shared/sound/train_electric_old.snd.lua',
                      'vehicle/train/shared/default_train.trf.lua',
@@ -137,7 +138,7 @@ def test_empty_blinking_lists_are_safe_but_active_blinking_is_blocked():
     assert port_model(d,lambda ref,kind:ref,Native())['version']==2
     assert d==before
     d['metadata']['railVehicle']['configs'][0]['blinkingLights1']=[1]
-    with pytest.raises(ValueError,match='Non-empty blinkingLights1'):
+    with pytest.raises(ValueError,match='Non-empty rail blinking lights'):
         port_model(d,lambda ref,kind:ref,Native())
 
 
@@ -149,11 +150,11 @@ def test_empty_old_compartment_schema_retains_load_config_structure():
     assert [len(c['loadConfigs']) for c in compartments]==[2,1]
     assert all(load['cargoEntry']['capacity']==0 for c in compartments for load in c['loadConfigs'])
     t['compartments']=[[{'capacity':10}]]
-    with pytest.raises(ValueError,match='capacity/load port'):
+    with pytest.raises(ValueError,match='must be a literal list'):
         port_model(d,lambda ref,kind:ref,Native())
 
 
-@pytest.mark.parametrize('kind',['unknown_metadata','capacity','node','hidden_node','emissions','diesel'])
+@pytest.mark.parametrize('kind',['unknown_metadata','capacity','node','hidden_node','emissions'])
 def test_unsupported_behavior_is_blocked(kind):
     d=model(); m=d['metadata']
     if kind == 'unknown_metadata': m['customScript'] = {}
@@ -161,8 +162,14 @@ def test_unsupported_behavior_is_blocked(kind):
     if kind == 'node': m['seatProvider']['seats'][0]['group'] = 99
     if kind == 'hidden_node': m['transportVehicle']['compartmentsList'][0]['loadConfigs'][0]['toHide']=[-1]
     if kind == 'emissions': m['emission']['idleEmission'] = 25
-    if kind == 'diesel': m['railVehicle']['engines'][0]['type'] = 'DIESEL'
     with pytest.raises(ValueError): port_model(d,lambda ref,kind:ref,Native())
+
+
+def test_diesel_rail_profile_is_supported_without_altering_power():
+    d=model();d['metadata']['railVehicle']['engines'][0]['type']='DIESEL'
+    target=port_model(d,lambda ref,kind:ref,Native())
+    assert target['metadata']['landVehicle']['engines'][0]['type']=='DIESEL'
+    assert target['metadata']['transportVehicle']['engineTransportModes']==['TRAIN','ELECTRIC_TRAIN']
 
 
 def test_serializer_retains_unicode_control_characters_and_translations():

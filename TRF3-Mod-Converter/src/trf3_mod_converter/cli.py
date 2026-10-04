@@ -31,7 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument("--mod-id", help="Mod id override (lowercase letters, digits, underscores)")
         sub.add_argument("--revision", type=int, help="Non-negative revision override")
         sub.add_argument("--summary", help="Summary override (100 characters maximum)")
-    port = commands.add_parser("port-tf2", help="Port supported TF2 electric locomotives to a separate TF3 draft")
+    port = commands.add_parser("port-tf2", help="Export verified TF2 vehicle and resource profiles to a separate TF3 draft")
     port.add_argument("source")
     port.add_argument("destination")
     port.add_argument("--tf3-game", required=True, help="Installed TF3 folder; native assets are referenced, never copied")

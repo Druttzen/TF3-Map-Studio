@@ -16,6 +16,10 @@ class UnsupportedValue:
     empty_callback: bool = False
 
 
+class TranslatedString(str):
+    """Literal key originally passed to _(); keep localization provenance."""
+
+
 def _value(node: lua.Node, constant_numbers: bool = False) -> Any:
     if isinstance(node, lua.String):
         value = node.s.decode("utf-8")
@@ -61,7 +65,8 @@ def _value(node: lua.Node, constant_numbers: bool = False) -> Any:
                 raise ValueError('Constant numeric expression is undefined or non-finite')
     if isinstance(node, lua.Call) and isinstance(node.func, lua.Name):
         if node.func.id == "_" and len(node.args) == 1:
-            return _value(node.args[0], constant_numbers)
+            value = _value(node.args[0], constant_numbers)
+            return TranslatedString(value) if isinstance(value, str) else value
     if isinstance(node, lua.Table):
         mapped: dict[Any, Any] = {}
         next_index = 1

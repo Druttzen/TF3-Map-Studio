@@ -25,6 +25,7 @@ def main() -> None:
         bundle.write(root / "README.md", "README.md")
         bundle.write(root / "VALIDATION.md", "VALIDATION.md")
         bundle.write(root / "GENERAL_CONVERSION.md", "GENERAL_CONVERSION.md")
+        bundle.write(root / "EXPORT_PROFILES.md", "EXPORT_PROFILES.md")
         bundle.write(root / "LICENSE", "LICENSE")
         for path in (root / "examples").rglob("*"):
             if path.is_file():

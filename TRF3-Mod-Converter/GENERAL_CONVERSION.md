@@ -10,7 +10,7 @@ The target is a converter for complete mod packages, including every vehicle fam
 trf3-mod-converter analyze "F:\TF2\mods\any_mod"
 ~~~
 
-The plan describes required migrations and explicitly reports `exportSupport: not_claimed_by_analysis` and `nativeTest: not_run`. Analysis does not add export support merely by recognizing a category. The current exporters remain metadata/layout conversion and the strict electric-locomotive draft profile.
+The plan describes required migrations and explicitly reports `exportSupport: not_claimed_by_analysis` and `nativeTest: not_run`. Analysis does not add export support merely by recognizing a category. Version 0.9 implements literal vehicle profiles for all five carriers and selected resource exporters; see [EXPORT_PROFILES.md](EXPORT_PROFILES.md). Arbitrary scripts and functional construction/API changes remain explicit manual migration requirements.
 
 A shared mesh validator now checks descriptor ranges, attribute component counts, every separate index stream, triangle counts and non-finite values. This applies to meshes from any mod category. Invalid ranges/indices block export before replacing existing output. Non-finite values are reported without changing the original. Unsupported descriptors are marked unverified, never passed. Payloads such as textures and audio still need their own format/engine checks.
 
@@ -23,11 +23,11 @@ A shared mesh validator now checks descriptor ranges, attribute component counts
 5. Validate the combined staged package, retaining originals and a report of each change. No unresolved component should be described as fully converted.
 6. Validate rendering and behavior in TF3. Buying a vehicle alone does not prove motion, loading, sound or animation. Test save/reload and affected inter-mod dependencies too.
 
-Steps 1–6 describe the complete intended pipeline. Version 0.5 implements category/requirement analysis, shared mesh checks, existing literal-reference checks and the previous exporters; a normalized model intermediate representation and the additional exporters still need implementation.
+Steps 1–6 describe the complete intended pipeline. Version 0.9 implements named-node vehicle normalization, all five carrier profiles, verified same-class cargo migration and selected configuration/infrastructure/constant-asset exporters. The following table also includes behavior classes that still require manual adapters; recognizing them does not imply successful export.
 
 ## Category-specific logic
 
-Version 0.6 implements a separate, reusable sound adapter for recognized TF2 update expressions. It emits static TF3 sound definitions using the installed native update script, preserves custom audio, checks base-audio targets and migrates clip paths and reference-weight units. It does not execute or translate arbitrary source scripts. Integration into complete packages currently uses the electric-locomotive exporter; other vehicle exporters still need implementation. Legacy inspection now distinguishes TF2 resource-type lookup from native TF3 relative lookup.
+Version 0.6 implements a separate, reusable sound adapter for recognized TF2 update expressions. It emits static TF3 sound definitions using the installed native update script, preserves custom audio, checks base-audio targets and migrates clip paths and reference-weight units. It does not execute or translate arbitrary source scripts. Integration into complete packages now uses the applicable road/rail/tram/water/air profile, with family-specific base resource resolution. Legacy inspection now distinguishes TF2 resource-type lookup from native TF3 relative lookup.
 
 | Content | Required adapter work |
 |---|---|

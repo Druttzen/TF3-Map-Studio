@@ -20,6 +20,8 @@ from .lua_metadata import load_lua_table, _value, UnsupportedValue
 from .resource_audit import parse_lua
 from .base_resources import TF2Inventory, find_tf2_game
 from .tf2_vehicle_port import NativeInventory, port_tf2_mod, snapshot, literal
+from .resource_profiles import classify_resource, load_resource_table
+from .vehicle_profiles import classify_model
 from . import __version__
 
 METADATA = ('mod.lua', 'modinfo.lua', 'modinfo.json', 'info.json', 'mod.json', '_metadata/modinfo.json')
@@ -286,25 +288,24 @@ def _preflight_profile(root: Path) -> None:
     content = root / 'res'
     if not content.is_dir():
         return
-    models, files = [], []
+    models = []
     for path in content.rglob('*'):
         if linked(path):
             raise ValueError(f'Linked resource is not supported: {path}')
         if path.is_file():
-            files.append(path)
             relative = path.relative_to(content).as_posix()
-            if path.suffix.lower() in ('.lua', '.tl', '.script', '.con', '.module', '.trf', '.snd'):
-                if not (relative.startswith('config/sound_set/') and path.suffix == '.lua'):
-                    raise ValueError(f'Custom behavior resource needs a manual port: {relative}')
+            if path.suffix.lower() in ('.zip','.7z','.rar','.pak','.dll','.exe','.bat','.cmd','.ps1','.sh'):
+                raise ValueError(f'Opaque resource archive/native executable requires unpacking or manual migration: {relative}')
+            kind = classify_resource(relative)
+            if kind in ('script', 'module', 'tunnel') or path.suffix.lower() in ('.trf', '.snd'):
+                raise ValueError(f'Custom behavior resource needs a manual port: {relative}')
             if path.suffix.lower() == '.mdl':
                 models.append(path)
-    if files and not models:
-        raise ValueError('This TF2 content needs a category exporter. No supported locomotive model found.')
     for path in sorted(models):
-        data = literal(load_lua_table(path.read_text(encoding='utf-8-sig'), constant_numbers=True))
-        engines = data.get('metadata', {}).get('railVehicle', {}).get('engines', []) if isinstance(data, dict) else []
-        if data.get('version') != 1 or not engines or any(e.get('type') != 'ELECTRIC' for e in engines):
-            raise ValueError(f'{path.name}: automated content export currently supports electric-locomotive packages only. This mod needs another category exporter.')
+        data = literal(load_resource_table(path.read_text(encoding='utf-8-sig')))
+        if data.get('version') != 1:
+            raise ValueError(f'{path.name}: expected TF2 model version 1')
+        classify_model(data.get('metadata', {}) or {}, path.relative_to(content).as_posix())
 
 
 def convert_queue(items: list[QueueItem], destination: str | Path, *, tf3_game: str | Path | None = None,

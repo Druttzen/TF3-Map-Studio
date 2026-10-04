@@ -15,7 +15,8 @@ from .filesystem import linked
 
 ROOTS = {'model': 'models/model', 'mesh': 'models/mesh', 'material': 'models/material',
          'animation': 'models/animation', 'texture': 'textures', 'audio': 'audio/effects',
-         'sound_set': 'config/sound_set'}
+         'sound_set': 'config/sound_set', 'ground_texture': 'config/ground_texture',
+         'terrain_material': 'config/terrain_material', 'grass': 'config/grass'}
 BASE_TEXTURES = {
     'models/vehicle/dirt_albedo.dds': 'vehicle/shared/mat/tex/dirt_albedo.dds',
     'models/vehicle/dirt_normal.dds': 'vehicle/shared/mat/tex/dirt_normal.dds',
@@ -30,7 +31,38 @@ BASE_TEXTURES = {
        ('particle_noise0', 'particle_noise1', 'particle_smoke', 'particle_smoke_normal')},
 }
 SOUND_FAMILIES = {'train': 'train', 'cabcar': 'train', 'tram': 'tram', 'waggon': 'waggon',
-                  'bus': 'bus', 'car': 'car', 'truck': 'truck', 'aircraft': 'plane', 'ship': 'ship'}
+                  'bus': 'bus', 'car': 'car', 'truck': 'truck', 'aircraft': 'plane', 'plane':'plane', 'ship': 'ship'}
+# Verified semantic role and installed location, rather than generic filename matching.
+BASE_MODELS = {f'characters/{name}.mdl': f'characters/{name}/{name}.mdl'
+               for name in ('era_a_driver_rail','era_a_driver_road','era_a_driver_water',
+                            'era_b_driver_air_indoor','era_b_driver_air_outdoor','era_b_driver_rail',
+                            'era_b_driver_road','era_b_driver_water','era_c_driver_air',
+                            'era_c_driver_rail','era_c_driver_road','era_c_driver_water')}
+BASE_MODELS.update({
+    'railroad/tracks/single_rail.mdl':'infrastructure/track/shared/single_rail.mdl',
+    'railroad/tracks/single_sleeper_base.mdl':'infrastructure/track/standard/single_sleeper_standard.mdl',
+    'railroad/tracks/single_sleeper_high_speed.mdl':'infrastructure/track/high_speed/single_sleeper_high_speed.mdl',
+    **{f'railroad/tracks/{size}m_base.mdl':f'infrastructure/track/standard/{size}m_standard.mdl' for size in (2,4,8,16)},
+    **{f'railroad/tracks/{size}m_high_speed.mdl':f'infrastructure/track/high_speed/{size}m_high_speed.mdl' for size in (2,4,8,16)},
+})
+BASE_MATERIALS = {'track/ballast.mtl':'infrastructure/track/shared/mat/ballast.mtl',
+                  'track/rail.mtl':'infrastructure/track/shared/mat/rail_tileable.mtl',
+                  'track/catenary.mtl':'infrastructure/shared/mat/catenary.mtl',
+                  'track/sleeper.mtl':'infrastructure/track/standard/mat/sleeper_standard_tileable.mtl',
+                  'track/sleeper_concrete.mtl':'infrastructure/track/high_speed/mat/sleeper_high_speed_tileable.mtl'}
+# Shipped TF2/TF3 light materials retain these specific roles and filenames.
+# TF3 supplies its own light-mask and emissive values; no game material is copied.
+BASE_MATERIALS.update({f'vehicle/{family}/emissive/{family}_{role}.mtl':
+                      f'vehicle/{family}/emissive/{family}_{role}.mtl'
+                      for family, roles in {
+                          'bus': ('add_lights','all_lights','blink_lights','brake_lights'),
+                          'car': ('all_lights','blink_lights','brake_lights'),
+                          'plane': ('all_lights','strobe_light'),
+                          'ship': ('add_lights','all_lights'),
+                          'train': ('all_lights','red_lights'),
+                          'tram': ('add_lights','all_lights','blink_lights','brake_lights'),
+                          'truck': ('all_lights','blink_lights','brake_lights'),
+                      }.items() for role in roles})
 BINARY_ENDINGS = {'texture': {'.dds', '.tga', '.hdr'}, 'audio': {'.wav', '.ogg'}, 'animation': {'.ani'}}
 
 
@@ -42,7 +74,10 @@ def validate_reference(reference: str) -> None:
 
 def source_resource(kind: str, reference: str) -> str:
     validate_reference(reference)
-    return ROOTS[kind] + '/' + reference + ('.lua' if kind == 'sound_set' else '')
+    if kind not in ROOTS:
+        raise ValueError(f'No verified source resource root for {kind}')
+    ending = '.lua' if kind in ('sound_set','ground_texture','terrain_material','grass') and not reference.endswith('.lua') else ''
+    return ROOTS[kind] + '/' + reference + ending
 
 
 class TF2Inventory:
@@ -102,7 +137,8 @@ class BaseResourceResolver:
                 self._audio_references.setdefault(reference, []).append(path)
 
     def is_borrowed(self, kind: str, reference: str, local: Path) -> bool:
-        if kind not in BINARY_ENDINGS and kind != 'sound_set':
+        known_descriptor = kind == 'model' and reference in BASE_MODELS or kind == 'material' and reference in BASE_MATERIALS
+        if kind not in BINARY_ENDINGS and kind != 'sound_set' and not known_descriptor:
             return False  # Resource descriptors need their own schema adapter.
         old = source_resource(kind, reference)
         return bool(self.tf2 and old in self.tf2.files
@@ -123,6 +159,10 @@ class BaseResourceResolver:
         target, method, digest = None, 'verified_role_mapping', None
         if kind == 'texture':
             target = BASE_TEXTURES.get(reference)
+        elif kind == 'model':
+            target = BASE_MODELS.get(reference)
+        elif kind == 'material':
+            target = BASE_MATERIALS.get(reference)
         elif kind == 'sound_set':
             family = SOUND_FAMILIES.get(reference.split('_', 1)[0])
             if family:
