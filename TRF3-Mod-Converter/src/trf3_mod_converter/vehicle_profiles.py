@@ -532,7 +532,7 @@ def _sound_port(sound, resolve):
 
 
 def adapt_vehicle_metadata(metadata: dict, lod_nodes: list[list[dict]], resolve, native,
-                           *, model_path: str = '', weight_max_payload: float = 0,
+                           *, model_path: str = '', weight_max_payload: float | None = 0,
                            node_world_transforms=None, animation_writer=None,
                            report: dict | None = None) -> tuple[dict, VehicleProfile]:
     """Migrate verified metadata and mutate caller-owned node animations only.
@@ -561,7 +561,8 @@ def adapt_vehicle_metadata(metadata: dict, lod_nodes: list[list[dict]], resolve,
         _known(physical, allowed, physical_key)
         _number(physical.get('topSpeed'), physical_key + '/topSpeed', minimum=0)
         _number(physical.get('weight'), physical_key + '/weight', minimum=0)
-        _number(weight_max_payload, 'weightMaxPayload', minimum=0)
+        if weight_max_payload is not None or physical_key != 'airVehicle':
+            _number(weight_max_payload, 'weightMaxPayload', minimum=0)
         if physical.get('blinkInterval', 500) != 500:
             raise ValueError('Non-default blinkInterval requires a custom TF3 transformator')
         combined, contacts, has_flaps = _config_port(physical, profile, lod_nodes, native,
@@ -579,7 +580,9 @@ def adapt_vehicle_metadata(metadata: dict, lod_nodes: list[list[dict]], resolve,
         else:
             target = {key: deepcopy(value) for key, value in physical.items()
                       if key not in ('configs', 'weight', 'maxPayload', 'maxTakeOffWeight')}
-            target['weightEmpty'], target['weightMaxPayload'] = physical['weight'], weight_max_payload
+            target['weightEmpty'] = physical['weight']
+            if weight_max_payload is not None:
+                target['weightMaxPayload'] = weight_max_payload
             if physical_key == 'airVehicle':
                 for key in ('maxThrust', 'idleThrust', 'timeToFullThrust', 'wingArea'):
                     if key in target:

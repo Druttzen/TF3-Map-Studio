@@ -283,6 +283,17 @@ def _export(item, target, tf3_game, native_cache, tf2_cache, progress):
     return convert_mod(root, target, mod_id=item.mod_id, name=item.display_name, progress=progress)
 
 
+def _tf3_data_added(report) -> bool:
+    """Expose recorded completions without treating every migration as a repair."""
+    if not isinstance(report, dict):
+        return False
+    audit = report.get('migrationAudit')
+    if not isinstance(audit, dict):
+        return False
+    return any(isinstance(audit.get(key), list) and any(isinstance(row, dict) and row for row in audit[key])
+               for key in ('dataCompletions', 'donorCompletions'))
+
+
 def _preflight_profile(root: Path) -> None:
     """Reject known unsupported packages before hashing gigabytes of assets."""
     content = root / 'res'
@@ -305,7 +316,8 @@ def _preflight_profile(root: Path) -> None:
         data = literal(load_resource_table(path.read_text(encoding='utf-8-sig')))
         if data.get('version') != 1:
             raise ValueError(f'{path.name}: expected TF2 model version 1')
-        classify_model(data.get('metadata', {}) or {}, path.relative_to(content).as_posix())
+        from .missing_data import classify_missing_model
+        classify_missing_model(data, path.relative_to(content).as_posix())
 
 
 def convert_queue(items: list[QueueItem], destination: str | Path, *, tf3_game: str | Path | None = None,
@@ -365,18 +377,21 @@ def convert_queue(items: list[QueueItem], destination: str | Path, *, tf3_game: 
                             and receipt.get('converterVersion') == __version__
                             and receipt.get('tf3Game') == (str(Path(tf3_game).resolve()) if tf3_game else None)
                             and receipt.get('outputFingerprint') == file_fingerprint(target)):
-                        item.message = 'Previous export verified'
+                        item.message = ('Previous export verified · TF3 data added'
+                                        if receipt.get('tf3DataAdded') is True else 'Previous export verified')
                     else:
                         raise ValueError('Output already exists or has changed. It was not overwritten; choose another output folder.')
                 else:
                     progress = (lambda message: event('progress', {'key': item.key, 'message': message})) if event else None
-                    _export(item, target, tf3_game, native_cache, tf2_cache, progress)
+                    report = _export(item, target, tf3_game, native_cache, tf2_cache, progress)
                     if file_fingerprint(root) != before:
                         raise ValueError('Source changed during conversion. Export needs review.')
+                    data_added = _tf3_data_added(report)
                     state['receipts'][item.key] = {'status': 'completed', 'modId': item.mod_id,
                                                   'sourceFingerprint': before, 'outputFingerprint': file_fingerprint(target),
-                                                  'converterVersion': __version__, 'tf3Game': str(Path(tf3_game).resolve()) if tf3_game else None}
-                    item.message = 'Export saved'
+                                                  'converterVersion': __version__, 'tf3Game': str(Path(tf3_game).resolve()) if tf3_game else None,
+                                                  'tf3DataAdded': data_added}
+                    item.message = 'Export saved · TF3 data added' if data_added else 'Export saved'
                 item.status = 'completed'
             except Exception as exc:
                 item.status, item.message = 'failed', str(exc)

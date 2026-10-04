@@ -84,7 +84,12 @@ def cargo_files():
 
 def test_cargo_export_retains_capacity_adds_only_same_class_and_per_mod_refs(fixture_mod, tmp_path):
     source, game, output=fixture_mod
-    native_files(game, cargo_files())
+    from test_native_donors import donor
+    native_model=donor(cargo='COAL',engine='ELECTRIC',payload=8000)
+    native_model['metadata']['extent']=deepcopy(model()['boundingInfo'])
+    native_model['metadata']['landVehicle'].update(weightEmpty=79500,topSpeed=25,
+        engines=[{'type':'ELECTRIC','power':1220,'tractiveEffort':120}])
+    native_files(game, {**cargo_files(),'vehicle/train/bulk/bulk.mdl':native_model})
     data=model(); data['metadata']['seatProvider']=[]
     data['metadata']['transportVehicle']['compartmentsList']=[{'loadConfigs':[{
         'cargoEntries':[{'type':'COAL','capacity':40}], 'toHide':[1]}]}]
@@ -99,7 +104,10 @@ def test_cargo_export_retains_capacity_adds_only_same_class_and_per_mod_refs(fix
         assert 'cargos/iron_ore/iron_ore.cargo' in report['baseGameResources']
         assert 'cargos/water/water.cargo' not in report['baseGameResources']
         target=load_lua_table((dest/'content/models/model/vehicle/train/test.mdl').read_text())
-        assert target['metadata']['landVehicle']['weightMaxPayload']==12000
+        assert target['metadata']['landVehicle']['weightMaxPayload']==8000
+        assert audit['payloadPolicy']=='matched_native_capacity_ratio'
+        assert report['migrationAudit']['dataCompletions'][0]['donorResource']=='vehicle/train/bulk/bulk.mdl'
+        assert 'vehicle/train/bulk/bulk.mdl' in report['baseGameResources']
         loads=target['metadata']['transportVehicle']['compartments'][0]['loadConfigs']
         assert [l['cargoEntry']['capacity'] for l in loads]==[40,40]
         assert all(l['toHide']==['body'] for l in loads)

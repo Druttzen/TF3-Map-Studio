@@ -196,22 +196,24 @@ def reject_unknown(data: dict, allowed: set[str], where: str) -> None:
 
 
 def port_model(data: dict, resolve, native: NativeInventory, *, model_path='',
-               report=None, animation_writer=None, expand_cargo_classes=True) -> dict:
+               report=None, animation_writer=None, expand_cargo_classes=True, progress=None) -> dict:
     """Port verified vehicle families and render assets; source remains intact."""
     from .cargo_port import CargoCatalog, port_compartments
     from .vehicle_profiles import classify_model, derive_lod_nodes, adapt_vehicle_metadata
     from .resource_profiles import port_static_model
     from .model_common import port_common_metadata, resolve_nodes
+    from .missing_data import complete_missing_model, complete_payload
 
     result = deepcopy(literal(data))
     if result.get('version') != 1:
         raise ValueError('Only TF2 model version 1 is supported')
     reject_unknown(result, {'version','boundingInfo','collider','lods','metadata'}, 'model')
+    log = report if report is not None else {}
+    result, donor_match = complete_missing_model(result, native, model_path=model_path, report=log, progress=progress)
     metadata = result.setdefault('metadata', {})
     if metadata == []:
         metadata = result['metadata'] = {}
     profile = classify_model(metadata, model_path)
-    log = report if report is not None else {}
     if profile.family == 'asset':
         derive_lod_nodes(result['lods'], metadata=metadata)
         extras = {key: metadata.pop(key) for key in
@@ -246,7 +248,8 @@ def port_model(data: dict, resolve, native: NativeInventory, *, model_path='',
             metadata['transportVehicle'], catalog=catalog, native=native, nodes=nodes[0], resolve=resolve,
             expand_classes=expand_cargo_classes, cargo_slot_provider=metadata.get('cargoSlotProvider'),
             seat_count=len(seat_provider.get('seats', [])))
-    payload = (cargo_audit or {}).get('maxCapacity', 0) * 300
+    payload, payload_policy = complete_payload(data, native, (cargo_audit or {}).get('maxCapacity', 0),
+        match=donor_match, model_path=model_path, report=log)
     metadata, profile = adapt_vehicle_metadata(metadata, nodes, resolve, native, model_path=model_path,
         weight_max_payload=payload, node_world_transforms=transforms, animation_writer=animation_writer, report=log)
     if converted_transport is not None:
@@ -258,11 +261,7 @@ def port_model(data: dict, resolve, native: NativeInventory, *, model_path='',
         metadata.pop('cargoSlotProvider', None)
         metadata.update(additions)
         log.setdefault('cargoMigrations', []).append({'model':model_path, **cargo_audit,
-            'payloadPolicy':'estimated_300kg_per_raw_capacity_requires_native_tuning', 'weightMaxPayload':payload})
-        if payload:
-            log.setdefault('balancingEstimates', []).append({'model':model_path, 'field':'weightMaxPayload',
-                'value':payload, 'reason':'TF2 does not provide a directly equivalent native payload value; native TF3 ratios vary.',
-                'requiredCheck':'Loaded mass, acceleration and carrying capacity need native TF3 tuning.'})
+            'payloadPolicy':payload_policy, 'weightMaxPayload':payload})
     metadata = port_common_metadata(metadata, nodes[0], resolve, report=log,
                                     model_path=model_path, vehicle=profile.carrier is not None)
     resolve_nodes(nodes, resolve)
@@ -342,7 +341,7 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
                 borrowed_resources[old] = base.resolve(kind, reference, bundled=True)
                 omitted_borrowed.add(old)
     model_data, sound_families, mesh_referrers = {}, {}, {}
-    from .vehicle_profiles import classify_model
+    from .missing_data import classify_missing_model
     for old in sorted(mapping):
         if not old.endswith('.mdl') or old in omitted_borrowed:
             continue
@@ -355,7 +354,7 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
                         'modelPath':old, 'nodePath':f'lods[{lod_index}]/node[{node_index}]',
                         'materials':deepcopy(node.get('materials'))})
         metadata = data.get('metadata', {}) or {}
-        profile = classify_model(metadata, old)
+        profile = classify_missing_model(data, old)
         for block in ('railVehicle','roadVehicle','soundConfig'):
             sound = (metadata.get(block) or {}).get('soundSet') or {}
             if sound.get('name'):
@@ -456,7 +455,7 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
         if suffix not in ('.mdl','.mtl','.msh','.ani'): continue
         d = literal(load_resource_table(p.read_text(encoding='utf-8-sig')), old)
         if suffix == '.mdl':
-            base.family = classify_model(d.get('metadata', {}) or {}, old).family
+            base.family = classify_missing_model(d, old).family
             def write_animation(event, value):
                 digest = hashlib.sha256(emit(value).encode('utf-8')).hexdigest()[:20]
                 path = f'models/animation/_tf3_port/{checked_name(event)}_{digest}.ani'
@@ -468,7 +467,7 @@ def port_tf2_mod(source: str | Path, destination: str | Path, *, tf3_game: str |
                     raise ValueError('Generated animation hash collision')
                 return mod_id+'::/'+path
             d = port_model(model_data[old], resolve, native, model_path=old, report=migration_audit,
-                           animation_writer=write_animation); counts['models'] += 1
+                           animation_writer=write_animation, progress=progress); counts['models'] += 1
             model_path = old[len('models/model/'):-4]
             # TF3 defaults use icons beside each model. Retain the original
             # supplied TF2 thumbnails through explicit metadata references.

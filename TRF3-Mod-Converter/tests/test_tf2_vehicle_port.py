@@ -150,7 +150,7 @@ def test_empty_old_compartment_schema_retains_load_config_structure():
     assert [len(c['loadConfigs']) for c in compartments]==[2,1]
     assert all(load['cargoEntry']['capacity']==0 for c in compartments for load in c['loadConfigs'])
     t['compartments']=[[{'capacity':10}]]
-    with pytest.raises(ValueError,match='must be a literal list'):
+    with pytest.raises(ValueError,match='(?:must be|expected) a literal list'):
         port_model(d,lambda ref,kind:ref,Native())
 
 

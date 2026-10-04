@@ -1,6 +1,20 @@
 # Validation scope
 
-## Version 0.9 — 2026-10-04
+## Version 0.10.0 — 2026-10-04
+
+This version adds missing-only vehicle data completion from compatible installed TF3 definitions. Authored regressions cover strict class/propulsion/size evidence, required scalar fields, declared engine positions and unit conversion, unambiguous typed cargo capacities, native payload policy, source-LOD gear evidence, guarded native gear/hull estimates, ambiguous donor rejection, source preservation and queue preflight integration. Existing invalid values, unknown identities and unsupported scripts remain explicit errors. Reports record completed fields, donor provenance, matching evidence and estimates; native gameplay remains `not_run`.
+
+Read-only catalog checks inspected 355 installed native vehicle definitions: all accepted lexical metadata/bounds projection, and 341 provide supported donor profiles. Fourteen helicopter/zeppelin models are excluded. Metadata projection avoids unused LOD AST construction; selected donor geometry is parsed fully on demand. All 27 inspected ships declare payload values, with observed raw-capacity ratios of 150 or 300 kg. All 30 inspected native aircraft omit the optional payload field. Matching now uses the declared native ratio for land/ship profiles or the verified native aircraft omission, replacing the former blanket 300 kg estimate.
+
+Aircraft geometry estimates require matching explicit gear roles/names/counts, normalized world positions and uniform body/node scaling. Exact source LOD radii take precedence. Missing ship waterlines require uniform hull dimension scaling and record the aligned native outline. Source nodes, controls and authored radii are retained. Cargo capacities require unambiguous compatible independent compartments and preserve existing capacities and visuals. These estimates need inspection and physical checks in TF3.
+
+The final full suite completed with **638 passed and three skips**: one Windows symlink privilege check and two intermittent local Tcl startup errors. Separate desktop reruns passed all six GUI tests. Authored full-package tests exercise successful queued completion of absent weight/engine power, per-export donor provenance, same-class cargo completion, durable completion messages, verified resume and unchanged source/existing output on rejection.
+
+Read-only integration checks called the actual completion function on copied installed TF2 definitions. Aboag recovered its missing 5 t weight from the corresponding native 5000 kg model; Alco HH600 recovered 93 t and 450 kW; Junkers F13 recovered wing area 34 and three missing lower-LOD gear radii from exact source LOD evidence. All three selected their corresponding TF3 models and preserved original source hashes. The initial catalog scan took about 79 seconds; subsequent checks reused it. These are model-data completion checks, not full installed Workshop exports or gameplay tests.
+
+The 0.10.0 Windows executable, portable ZIP, wheel and source archive were built locally. Embedded application modules match current source, packaged Tcl/Tk files match the local runtime, and package code/tests/documents were checked against the project. No native-game compatibility test is claimed for the new completion feature; historical counts below describe earlier versions only.
+
+## Historical version 0.9 — 2026-10-04
 
 New authored package tests cover steam/diesel/electric rail, wagons, trams, buses, trucks, cars, ships, aircraft, people and static assets; generated control-surface animations; cargo capacity and same-class additions; per-mod catalog/reference isolation; configurations without model files; and queue dispatch beyond electric locomotives. Shared regressions cover source preservation, translations/identifiers, unsafe behavior and transaction safety. All generated reports still mark native gameplay as not_run.
 

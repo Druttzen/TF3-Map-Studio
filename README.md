@@ -17,7 +17,7 @@ Download and extract the package for the tool you need, then open its `.exe`. Th
 - [TF3-Heightmap-Studio — Preview 0.6](https://github.com/Druttzen/TF3-Map-Studio/releases/download/preview-2026-10-02/TF3-Heightmap-Studio-Preview-0.6-Windows.zip)
 - [TRF3-Mod-Converter — 0.2.0](https://github.com/Druttzen/TF3-Map-Studio/releases/download/preview-2026-10-02/TRF3-Mod-Converter-Windows.zip)
 
-TRF3-Mod-Converter source is now **0.9.0**, with road/rail/tram/water/air export profiles, automatic same-class TF3 freight additions and protected queued exports. Dynamic/API mods still require manual migration. The download above is the earlier published package. See [the current converter instructions and limitations](TRF3-Mod-Converter/EXPORT_PROFILES.md).
+TRF3-Mod-Converter source is now **0.10.0**, with road/rail/tram/water/air export profiles, automatic completion of missing data from sufficiently similar installed TF3 vehicles, same-class TF3 freight additions and protected queued exports. Existing data stays authoritative, every completion records its source, and uncertain matches receive **Needs review**. Dynamic/API mods still require manual migration; completed drafts require tests in TF3. The download above is the earlier published package. See [the current converter instructions and limitations](TRF3-Mod-Converter/EXPORT_PROFILES.md).
 
 The [preview release](https://github.com/Druttzen/TF3-Map-Studio/releases/tag/preview-2026-10-02) also includes checksums. Source archives are available on that page.
 
