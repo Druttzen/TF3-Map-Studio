@@ -1,7 +1,7 @@
 OSM IMPORTER - TRANSPORT FEVER 3 VANILLA
-Preview 0.12 | GPL-3.0 | 3 October 2026
+Preview 0.15 | GPL-3.0 | 9 October 2026
 
-DOWNLOAD OPENSTREETMAP (0.12)
+DOWNLOAD OPENSTREETMAP (0.15)
 Project > Download OSM opens an interactive OpenStreetMap view. No OSM account
 or sign-in is needed. The app connects to public HTTPS services when this
 view opens or you request a download. It does not require firewall changes.
@@ -50,9 +50,13 @@ Tile usage policy: https://operations.osmfoundation.org/policies/tiles/
 
 OSM XML is downloaded through https://overpass-api.de/api/interpreter, the
 data-download service recommended by OSM. You can enter another public HTTPS
-Overpass endpoint, including your own server. Downloads are single requests,
-not parallel sweeps of a region. Public services may reject busy, very large,
-or dense requests; wait and retry, use a smaller area or your own endpoint.
+Overpass endpoint, including your own server. Large selections are downloaded
+in smaller areas sequentially. HTTP 504 or XML resource-limit errors split the
+affected part further. HTTP 429/502/503 receive one delayed retry. Complete
+ways and nested relations are preserved; shared objects are deduplicated on
+disk. Conflicting objects abort safely. Limits of 64 completed parts and 128
+requests prevent endless retries. Persistent server overload still requires
+a later retry or a regional .osm extract. Cancel remains available while waiting.
 Incomplete responses, server error remarks, malformed XML and truncation
 are rejected. Download size has no fixed client file-size cap.
 OSM data: ODbL 1.0, Â© OpenStreetMap contributors.

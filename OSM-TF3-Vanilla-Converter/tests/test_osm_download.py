@@ -101,7 +101,7 @@ class DownloadTests(unittest.TestCase):
     def test_failure_keeps_both_previous_outputs(self):
         self.run_download();old={p.name:p.read_bytes() for p in self.folder.iterdir()}
         for payload in (b'<html>failure</html>',b'<osm version="0.6"><remark>runtime error: timeout</remark></osm>',b'<osm version="0.6"><node',b'',b'<osm version="0.6"><node id="1" lat="NaN" lon="2"/></osm>'):
-            with self.assertRaises((ValueError,ET.ParseError)):self.run_download(payload)
+            with patch.object(d,'wait_for_service'),self.assertRaises((ValueError,ET.ParseError)):self.run_download(payload)
             self.assertEqual({p.name:p.read_bytes() for p in self.folder.iterdir()},old)
 
     def test_download_to_export_keeps_lake_and_waterway_source_metadata(self):
@@ -203,8 +203,8 @@ class DownloadTests(unittest.TestCase):
         seen=[]
         def opener(request,**kwargs):
             seen.append(request);raise urllib.error.HTTPError(request.full_url,429,'Busy',{},None)
-        with self.assertRaisesRegex(ValueError,'busy'):d.download(self.bounds,self.size,self.folder/'area.osm',opener=opener)
-        self.assertEqual(len(seen),1);self.assertEqual(seen[0].get_method(),'POST');self.assertEqual(seen[0].get_header('User-agent'),d.USER_AGENT)
+        with patch.object(d,'wait_for_service'),self.assertRaisesRegex(ValueError,'busy'):d.download(self.bounds,self.size,self.folder/'area.osm',opener=opener)
+        self.assertEqual(len(seen),2);self.assertEqual(seen[0].get_method(),'POST');self.assertEqual(seen[0].get_header('User-agent'),d.USER_AGENT)
         self.assertNotIn('no-cache',str(seen[0].headers));self.assertEqual(list(self.folder.iterdir()),[])
         for url in ('http://overpass-api.de/api/interpreter','https://user:password@example.org/api','https://example.org/#x'):
             with self.assertRaises(ValueError):d.download(self.bounds,self.size,self.folder/'area.osm',endpoint=url)
@@ -269,6 +269,117 @@ class DownloadTests(unittest.TestCase):
             if p==94:cancel.set()
         with self.assertRaises(Cancelled):self.run_download(overview=self.snapshot(),cancel=cancel,progress=progress)
         self.assertEqual({p.name:p.read_bytes() for p in self.folder.iterdir()},old)
+
+class LargeDownloadTests(unittest.TestCase):
+    setUp=DownloadTests.setUp
+    tearDown=DownloadTests.tearDown
+    run_download=DownloadTests.run_download
+    snapshot=DownloadTests.snapshot
+    def test_largest_presets_are_partitioned_without_changing_selection(self):
+        for name in SIZES:
+            for fmt in FORMATS:
+                bounds=d.area_bounds((59,18),dimensions(name,fmt))
+                parts=d.download_parts(bounds)
+                self.assertLessEqual(len(parts),d.MAX_PARTS)
+                self.assertEqual(min(p[0] for p in parts),bounds[0])
+                self.assertEqual(min(p[1] for p in parts),bounds[1])
+                self.assertEqual(max(p[2] for p in parts),bounds[2])
+                self.assertEqual(max(p[3] for p in parts),bounds[3])
+                self.assertAlmostEqual(sum((p[2]-p[0])*(p[3]-p[1]) for p in parts),(bounds[2]-bounds[0])*(bounds[3]-bounds[1]),places=12)
+
+    def test_parts_preserve_shared_ids_complete_ways_nested_relations_and_bounds(self):
+        bounds=[0,0,.01,.1]
+        common=b'''<node id="1" lat="0.005" lon="0.005"/>
+        <node id="2" lat="0.005" lon="0.2"/>
+        <way id="1"><nd ref="1"/><nd ref="2"/><tag k="highway" v="residential"/></way>
+        <relation id="1"><member type="way" ref="1" role="outer"/><tag k="type" v="multipolygon"/></relation>
+        <relation id="2"><member type="relation" ref="1" role="inner"/><tag k="name" v="Nested"/></relation>'''
+        calls=[]
+        def opener(request,**kwargs):
+            calls.append(urllib.parse.parse_qs(request.data.decode())['data'][0])
+            extra=b'<node id="3" lat="0.006" lon="0.09"><tag k="name" v="Other part"/></node>' if len(calls)==2 else b''
+            return Response(b'<osm version="0.6">'+common+extra+b'</osm>')
+        result=d.download(bounds,[11000,1000],self.folder/'area.osm',opener=opener)
+        root=ET.parse(result['output']).getroot()
+        self.assertEqual(len(calls),2)
+        self.assertEqual(result['counts'],{'nodes':3,'ways':1,'relations':2})
+        self.assertEqual([float(root.find('bounds').get(k)) for k in ('minlat','minlon','maxlat','maxlon')],bounds)
+        self.assertEqual([n.get('ref') for n in root.find('way')],['1','2',None])
+        self.assertEqual(root.find("node[@id='2']").get('lon'),'0.2')
+        self.assertEqual(root.find("relation[@id='2']/member").attrib,{'type':'relation','ref':'1','role':'inner'})
+        self.assertEqual(result['requestCount'],2)
+        self.assertTrue(all('>>' in q for q in calls))
+        converted=export_file(result['output'],self.folder/'map.lua',result['bounds'],result['mapSize'])
+        self.assertGreater(converted['edges'],0)
+        self.assertEqual(converted['bounds'],bounds)
+
+    def test_504_subdivides_failed_area_and_keeps_successful_parts(self):
+        bounds=[0,0,.02,.02];seen=[]
+        def opener(request,**kwargs):
+            seen.append(urllib.parse.parse_qs(request.data.decode())['data'][0])
+            if len(seen)==1:raise urllib.error.HTTPError(request.full_url,504,'Busy',{},None)
+            return Response(self.source)
+        with patch.object(d,'wait_for_service') as wait:
+            result=d.download(bounds,[2000,2000],self.folder/'area.osm',opener=opener)
+        self.assertEqual(len(seen),3)
+        self.assertNotEqual(seen[0],seen[1]);self.assertNotEqual(seen[1],seen[2])
+        self.assertEqual(len(result['downloadParts']),2)
+        self.assertEqual(result['requestCount'],3)
+        self.assertEqual(len(ET.parse(result['output']).findall('node')),len(ET.fromstring(self.source).findall('node')))
+        wait.assert_called_once_with(5,None)
+
+    def test_429_retry_after_is_respected_without_subdivision(self):
+        calls=[]
+        def opener(request,**kwargs):
+            calls.append(request)
+            if len(calls)==1:raise urllib.error.HTTPError(request.full_url,429,'Busy',{'Retry-After':'30'},None)
+            return Response(self.source)
+        with patch.object(d,'wait_for_service') as wait:
+            result=d.download(self.bounds,self.size,self.folder/'area.osm',opener=opener)
+        wait.assert_called_once_with(30,None)
+        self.assertEqual(result['requestCount'],2)
+        self.assertEqual(calls[0].data,calls[1].data)
+
+    def test_failed_later_part_preserves_previous_xml_log_and_overview(self):
+        self.run_download(overview=self.snapshot());old={p.name:p.read_bytes() for p in self.folder.iterdir()};calls=[]
+        def opener(request,**kwargs):
+            calls.append(request)
+            return Response(self.source if len(calls)==1 else b'<osm version="0.6"><node')
+        with self.assertRaises(ET.ParseError):
+            d.download([0,0,.01,.1],[11000,1000],self.folder/'area.osm',opener=opener)
+        self.assertEqual({p.name:p.read_bytes() for p in self.folder.iterdir()},old)
+
+    def test_changed_duplicate_is_rejected_without_partial_commit(self):
+        calls=[]
+        def opener(request,**kwargs):
+            calls.append(request)
+            return Response(b'<osm version="0.6"><node id="1" lat="0" lon="'+(b'0' if len(calls)==1 else b'0.1')+b'"/></osm>')
+        with self.assertRaisesRegex(ValueError,'changed between'):
+            d.download([0,0,.01,.1],[11000,1000],self.folder/'area.osm',opener=opener)
+        self.assertEqual(list(self.folder.iterdir()),[])
+
+    def test_cancel_during_busy_wait_preserves_existing_files(self):
+        self.run_download();old={p.name:p.read_bytes() for p in self.folder.iterdir()};cancel=threading.Event()
+        def opener(request,**kwargs):raise urllib.error.HTTPError(request.full_url,429,'Busy',{},None)
+        def progress(p,stage,detail):
+            if 'retrying in' in detail:cancel.set()
+        start=time.monotonic()
+        with self.assertRaises(Cancelled):
+            d.download(self.bounds,self.size,self.folder/'area.osm',opener=opener,cancel=cancel,progress=progress)
+        self.assertLess(time.monotonic()-start,1)
+        self.assertEqual({p.name:p.read_bytes() for p in self.folder.iterdir()},old)
+
+    def test_repeated_504_and_huge_selection_have_finite_request_limits(self):
+        calls=[]
+        def opener(request,**kwargs):
+            calls.append(request);raise urllib.error.HTTPError(request.full_url,504,'Busy',{},None)
+        with patch.object(d,'wait_for_service'),patch.object(d,'MAX_REQUESTS',3),self.assertRaisesRegex(ValueError,'request limit'):
+            d.download([0,0,.02,.02],[2000,2000],self.folder/'area.osm',opener=opener)
+        self.assertEqual(len(calls),3)
+        self.assertEqual(list(self.folder.iterdir()),[])
+        with self.assertRaisesRegex(ValueError,'too large'):
+            d.download_parts([0,0,10,10])
+
 
 class TileTests(unittest.TestCase):
     def setUp(self):self.temp=tempfile.TemporaryDirectory();self.folder=Path(self.temp.name)

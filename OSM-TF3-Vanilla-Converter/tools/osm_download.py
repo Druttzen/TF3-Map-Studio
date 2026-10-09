@@ -1,6 +1,8 @@
 """Selected-area OSM XML downloads and cached visible map tiles. GPL-3.0."""
 from __future__ import annotations
+from contextlib import closing
 from datetime import datetime,timezone
+from email.utils import parsedate_to_datetime
 import hashlib
 import io
 import json
@@ -9,6 +11,7 @@ import os
 from pathlib import Path
 import queue
 import shutil
+import sqlite3
 import tempfile
 import threading
 import time
@@ -21,11 +24,56 @@ from PIL import Image
 from converter import validate_bounds
 from job import Cancelled
 
-USER_AGENT='Druttzen-OSM-TF3-Converter/0.12 (+https://github.com/Druttzen/TRF3-mod-converter)'
+USER_AGENT='Druttzen-OSM-TF3-Converter/0.15 (+https://github.com/Druttzen/TF3-Map-Studio)'
 OVERPASS='https://overpass-api.de/api/interpreter'
 TILES='https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 R=6378137.0
 WORLD=2*math.pi*R
+PART_METRES=8000
+MAX_PARTS=64
+MAX_REQUESTS=128
+
+
+class AreaTooLarge(ValueError):
+    """A server resource refusal eligible for a smaller-area request."""
+
+
+def ground_extent(bounds):
+    south,west,north,east=bounds
+    x,y=mercator(south,west);xx,yy=mercator(north,east)
+    scale=math.cos(math.radians((south+north)/2))
+    return (xx-x)*scale,(yy-y)*scale
+
+
+def download_parts(bounds):
+    """Cover the exact selection; adjacent parts share their boundary."""
+    width,height=ground_extent(bounds)
+    nx=max(1,math.ceil(width/PART_METRES));ny=max(1,math.ceil(height/PART_METRES))
+    if nx*ny>MAX_PARTS:
+        raise ValueError('This selection is too large for the public OSM download. Use a regional .osm extract or reduce the area scale.')
+    south,west,north,east=bounds
+    xs=[west+(east-west)*i/nx for i in range(nx+1)]
+    ys=[south+(north-south)*i/ny for i in range(ny+1)]
+    xs[0],xs[-1]=west,east;ys[0],ys[-1]=south,north
+    return [[ys[j],xs[i],ys[j+1],xs[i+1]] for j in range(ny) for i in range(nx)]
+
+
+def smaller_parts(bounds):
+    south,west,north,east=bounds
+    width,height=ground_extent(bounds)
+    if width>=height:
+        middle=(west+east)/2
+        return [[south,west,north,middle],[south,middle,north,east]]
+    middle=(south+north)/2
+    return [[south,west,middle,east],[middle,west,north,east]]
+
+
+def wait_for_service(seconds,cancel):
+    until=time.monotonic()+seconds
+    while time.monotonic()<until:
+        check(cancel)
+        time.sleep(min(.1,max(0,until-time.monotonic())))
+    check(cancel)
 
 def check(cancel):
     if cancel is not None and cancel.is_set():
@@ -161,7 +209,10 @@ def rewrite_xml(source,target,bounds,cancel=None,progress=None):
                 continue
             if depth==2:
                 check(cancel)
-                if elem.tag in {'remark','error'}:raise ValueError('The OSM service could not complete the selected area: '+''.join(elem.itertext()).strip()[:500])
+                if elem.tag in {'remark','error'}:
+                    message=''.join(elem.itertext()).strip()[:500]
+                    error=AreaTooLarge if any(word in message.lower() for word in ('timed out','timeout','out of memory','exceeded')) else ValueError
+                    raise error('The OSM service could not complete the selected area: '+message)
                 if elem.tag in keys:
                     if not elem.get('id'):raise ValueError('The OSM service returned an object without an ID.')
                     if elem.tag=='node':
@@ -176,6 +227,78 @@ def rewrite_xml(source,target,bounds,cancel=None,progress=None):
         outgoing.write(b'</osm>\n');outgoing.flush();os.fsync(outgoing.fileno())
     return counts
 
+
+def fetch_part(bounds,raw,prepared,endpoint,cancel,opener,update):
+    request=urllib.request.Request(endpoint,data=urllib.parse.urlencode({'data':query_for(bounds)}).encode(),headers={'User-Agent':USER_AGENT,'Accept':'application/xml','Content-Type':'application/x-www-form-urlencoded'})
+    for attempt in range(2):
+        received=0;total=0;headers={}
+        try:
+            with raw.open('wb') as out:
+                for chunk in _chunks(request,cancel,opener,headers):
+                    out.write(chunk);received+=len(chunk)
+                    total=int(headers.get('Content-Length',headers.get('content-length','0')) or 0)
+                    update(None,'Downloading OSM XML',f'{received/1048576:.2f} MB received for this part')
+            if total and received!=total:raise ValueError('The OSM response was truncated. Existing files were kept.')
+            return rewrite_xml(raw,prepared,bounds,cancel,update)
+        except urllib.error.HTTPError as exc:
+            code=exc.code
+            retry_after=exc.headers.get('Retry-After') if exc.headers else None
+            exc.close()
+            if code==504:raise AreaTooLarge('OSM service could not process this area (HTTP 504).') from exc
+            if code in (429,502,503) and attempt==0:
+                try: delay=max(15,float(retry_after or 15))
+                except ValueError:
+                    try: delay=max(15,(parsedate_to_datetime(retry_after)-datetime.now(timezone.utc)).total_seconds())
+                    except (TypeError,ValueError): delay=15
+                if not math.isfinite(delay) or delay>120:
+                    raise ValueError(f'OSM service is busy (HTTP {code}). Retry later; existing files were kept.') from exc
+                update(None,'Waiting for OSM service',f'Server busy; retrying in {delay:g} seconds. You can cancel.')
+                wait_for_service(delay,cancel)
+                continue
+            raise ValueError(f'OSM service is busy (HTTP {code}). Retry later; existing files were kept.' if code in (429,502,503) else f'OSM download failed (HTTP {code}). Existing files were kept.') from exc
+        except (urllib.error.URLError,TimeoutError) as exc:
+            raise ValueError('Could not reach the OSM data service. Check the connection or retry later. Existing files were kept.') from exc
+
+
+def merge_parts(parts,target,bounds,database,cancel,update):
+    """Disk-backed deduplication retains ordered references and outside members."""
+    keys={'node':'nodes','way':'ways','relation':'relations'}
+    counts={key:0 for key in keys.values()}
+    with closing(sqlite3.connect(database)) as db:
+        db.execute('CREATE TABLE objects (kind TEXT, id TEXT, xml BLOB, signature TEXT, PRIMARY KEY(kind,id))')
+        for part in parts:
+            root=None;depth=0
+            with part.open('rb') as incoming:
+                for event,elem in ET.iterparse(SafeXmlReader(incoming,cancel),events=('start','end')):
+                    if event=='start':
+                        depth+=1
+                        if root is None:root=elem
+                        continue
+                    if depth==2:
+                        check(cancel)
+                        if elem.tag in keys:
+                            # Whitespace and attribute ordering are not OSM content.
+                            signature=json.dumps([sorted(elem.attrib.items()),[(child.tag,sorted(child.attrib.items())) for child in elem]],ensure_ascii=False)
+                            previous=db.execute('SELECT signature FROM objects WHERE kind=? AND id=?',(elem.tag,elem.get('id'))).fetchone()
+                            if previous and previous[0]!=signature:
+                                raise ValueError('OSM data changed between downloaded parts. Retry the download; existing files were kept.')
+                            if not previous:
+                                elem.tail=None
+                                db.execute('INSERT INTO objects VALUES (?,?,?,?)',(elem.tag,elem.get('id'),ET.tostring(elem,encoding='utf-8'),signature))
+                                counts[keys[elem.tag]]+=1
+                                if sum(counts.values())%5000==0:update(90,'Combining OSM parts',f"{sum(counts.values()):,} unique objects")
+                        root.remove(elem);elem.clear()
+                    depth-=1
+            db.commit()
+        with target.open('wb') as outgoing:
+            outgoing.write(b'<?xml version="1.0" encoding="UTF-8"?>\n<osm version="0.6" generator="Druttzen-OSM-TF3-Converter">\n')
+            outgoing.write(ET.tostring(ET.Element('bounds',dict(zip(('minlat','minlon','maxlat','maxlon'),map(lambda v:format(v,'.17g'),bounds)))),encoding='utf-8')+b'\n')
+            for kind in keys:
+                for (xml,) in db.execute('SELECT xml FROM objects WHERE kind=? ORDER BY rowid',(kind,)):
+                    check(cancel);outgoing.write(xml+b'\n')
+            outgoing.write(b'</osm>\n');outgoing.flush();os.fsync(outgoing.fileno())
+    return counts
+
 def download(bounds,size,target,endpoint=OVERPASS,coverage=1,progress=None,cancel=None,opener=None,overview=None):
     bounds=list(bounds);size=list(size);validate_bounds(bounds,size);https_url(endpoint)
     if not math.isfinite(coverage) or not 0.01<=coverage<=100:raise ValueError('Invalid area scale.')
@@ -183,7 +306,7 @@ def download(bounds,size,target,endpoint=OVERPASS,coverage=1,progress=None,cance
     if target.suffix.lower()!='.osm':raise ValueError('Save downloaded OSM XML as a .osm file.')
     target.parent.mkdir(parents=True,exist_ok=True)
     report_path=target.with_suffix('.download.json')
-    request=urllib.request.Request(endpoint,data=urllib.parse.urlencode({'data':query_for(bounds)}).encode(),headers={'User-Agent':USER_AGENT,'Accept':'application/xml','Content-Type':'application/x-www-form-urlencoded'})
+    pending=download_parts(bounds)
     staging=Path(tempfile.mkdtemp(prefix='.osm-download-',dir=target.parent))
     raw=staging/'response.xml';prepared=staging/target.name;preserve_staging=False
     def update(percent,stage,detail=''):
@@ -191,25 +314,37 @@ def download(bounds,size,target,endpoint=OVERPASS,coverage=1,progress=None,cance
         if progress:progress(percent,stage,detail)
     try:
         update(None,'Waiting for OSM service','You can cancel while the server prepares the area')
-        received=0;total=0;headers={}
-        with raw.open('wb') as out:
+        completed=[];part_bounds=[];requests=0
+        def counted_opener(*args,**kwargs):
+            nonlocal requests
+            if requests>=MAX_REQUESTS:
+                raise ValueError('OSM download request limit reached. Retry later or use a regional .osm extract. Existing files were kept.')
+            requests+=1
+            return (opener or urllib.request.urlopen)(*args,**kwargs)
+        while pending:
+            part=pending.pop(0)
+            update(None,'Downloading OSM area',f'Part {len(completed)+1} of {len(completed)+len(pending)+1}; parts are downloaded one at a time')
+            part_file=staging/f'part-{len(completed)}.osm'
             try:
-                for chunk in _chunks(request,cancel,opener or urllib.request.urlopen,headers):
-                    out.write(chunk);received+=len(chunk)
-                    total=int(headers.get('Content-Length',headers.get('content-length','0')) or 0)
-                    update(min(80,received/total*80) if total else None,'Downloading OSM XML',f'{received/1048576:.2f} MB received')
-            except urllib.error.HTTPError as exc:
-                exc.close()
-                if exc.code in (429,504):raise ValueError(f'OSM service is busy (HTTP {exc.code}). Wait and retry, select a smaller area, or use your own Overpass endpoint.') from exc
-                raise ValueError(f'OSM download failed (HTTP {exc.code}). Existing files were kept.') from exc
-            except (urllib.error.URLError,TimeoutError) as exc:raise ValueError('Could not reach the OSM data service. Check the connection or retry later.') from exc
-        if total and received!=total:raise ValueError('The OSM response was truncated. Existing files were kept.')
+                counts=fetch_part(part,raw,part_file,endpoint,cancel,counted_opener,update)
+            except AreaTooLarge as exc:
+                if max(ground_extent(part))<=1000 or len(completed)+len(pending)+2>MAX_PARTS:
+                    raise ValueError('OSM service is busy or this area is too dense. Retry later or use a regional .osm extract. Existing files were kept.') from exc
+                update(None,'Splitting a busy OSM area','Retrying as two smaller parts; you can cancel')
+                wait_for_service(5,cancel)
+                pending[0:0]=smaller_parts(part)
+                continue
+            completed.append(part_file);part_bounds.append(part)
         update(85,'Checking OSM XML')
-        counts=rewrite_xml(raw,prepared,bounds,cancel,update)
+        if len(completed)==1:
+            os.replace(completed[0],prepared)
+        else:
+            counts=merge_parts(completed,prepared,bounds,staging/'objects.sqlite',cancel,update)
         digest=hashlib.sha256()
         with prepared.open('rb') as file:
             while chunk:=file.read(1048576):check(cancel);digest.update(chunk)
         report={'format':'Druttzen-OSM-download','version':1,'createdUtc':datetime.now(timezone.utc).isoformat(),'bounds':bounds,'mapSize':size,'groundAreaScaleAtCentre':coverage,'source':'OpenStreetMap via Overpass','endpoint':endpoint,'counts':counts,'osmSha256':digest.hexdigest(),'output':str(target),'licence':'ODbL 1.0','attribution':'© OpenStreetMap contributors','copyrightUrl':'https://www.openstreetmap.org/copyright','geometryNote':'Complete referenced geometry may extend outside the selection. The converter clips it to the locked bounds.'}
+        report['downloadParts']=part_bounds;report['requestCount']=requests
         files=[(prepared,target,staging/'previous.osm')]
         if overview is not None:
             from map_overview import save_overview

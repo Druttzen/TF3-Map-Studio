@@ -1,8 +1,8 @@
 {
-  "version": "0.14-preview",
+  "version": "0.15-preview",
   "gameBuildInspected": "25533170",
   "automatedTests": {
-    "passed": 265,
+    "passed": 273,
     "failed": 0,
     "scope": [
       "OSM XML conversion",
@@ -75,7 +75,10 @@
       "No-scaling footprint fit including concave cuts; native model origin offsets and XYZ journals",
       "Native Map.Town preparation and world-position preflight using installed map-editor contract",
       "Accepted-town journal, rejected growth command retry/reload without duplication, unknown outcomes blocked",
-      "Native town limits, duplicate names, unchanged existing town policies and simulated-building audit"
+      "Native town limits, duplicate names, unchanged existing town policies and simulated-building audit",
+      "Sequential large-area partitioning with exact original bounds, full descendant geometry and disk-backed object deduplication",
+      "Bounded HTTP 504 and XML resource-error subdivision; delayed rate-limit retry, request budgets and cancellation",
+      "Later-part failure and conflicting shared objects preserve previous OSM, overview and download log"
     ],
     "subtestsPassed": 208,
     "modules": {
@@ -84,7 +87,7 @@
       "test_game_scripts": 55,
       "test_hydrology": 22,
       "test_map_sizes": 5,
-      "test_osm_download": 30,
+      "test_osm_download": 38,
       "test_panel": 21,
       "test_shallow_water": 6,
       "test_water": 17,
@@ -174,99 +177,110 @@
     "profiles": "preset names preserved, mismatches rejected, old profiles supported"
   },
   "windowsExecutable": {
-    "version": "0.12-preview",
-    "historicalPreviews": {
-      "0.10-preview": {
-        "version": "0.10-preview",
-        "build": "passed",
-        "nativeUIThisVersionVerified": true,
-        "historicalPreviews": {
-          "evidenceVersion": "0.9-preview and earlier",
-          "checks": {
-            "build": "passed",
-            "nativeUIConversion": "0.7: all size/format choices displayed; Gigantomaniac 1:5 exported at 12800 x 64000 metres; manual edit selects Custom; legacy profile loaded successfully",
-            "standaloneLuaExport": "passed with native Windows UI",
-            "newStandaloneModCreation": "passed with bundled scripts and custom settings",
-            "settingsSaveLoad": "passed; exact JSON profile round trip",
-            "cancellation": "passed during million-tree conversion; existing Lua and report unchanged",
-            "scrollableSettings": "passed at 150% Windows display scaling",
-            "exampleEdges": 10,
-            "exampleSceneryItems": 117,
-            "exampleNamedMarkers": 1,
-            "sha256": "af07a55801cd743c6a6bea7bd2734a1a2bd4c1bc1e76d0ca495fdd9ea12daf40",
-            "nativeMapDownload": {
-              "liveNativeWindowsMapDownload": "passed",
-              "displayScaling": "150%",
-              "yellowFrameClickLock": "passed",
-              "lockedPanZoomAndFit": "same displayed coordinates retained",
-              "openstreetmapTiles": "live visible map tiles loaded with attribution",
-              "dataEndpoint": "https://overpass-api.de/api/interpreter",
-              "savedOsmXml": "valid OSM 0.6 with exact locked bounds",
-              "fullWayAndRelationReferences": "all present",
-              "downloadedCounts": {
-                "nodes": 316924,
-                "ways": 16416,
-                "relations": 533
-              },
-              "fileBytes": 42302111,
-              "osmSha256": "fec3b9463bc2b28de2565122d6a42f0d79f4d132733d0f013b3a5ce9cb93b01d",
-              "nativeConversionAndHandoff": "passed; exact bounds, size and checksums match",
-              "mapSize": [
-                1000.0,
-                1000.0
-              ],
-              "convertedEdges": 4085,
-              "convertedScenery": 4419,
-              "nativeTF3EngineImportVerified": false,
-              "heightmapStudioLuaAndLogAlignment": "passed: identical locked bounds and TF3 size; source/Lua checksums verified",
-              "nativeMapSizes": "all eight sizes and five formats displayed; Tiny 1:1 and 1:5 update dimensions and frame; selecting a new size unlocks the area",
-              "finalWindowsBuildAndLayout": "passed; cached tiles display and yellow frame label stays readable at 150% scaling"
-            },
-            "nativeOverviewDownload": {
-              "nativeExeVersion": "0.9-preview",
-              "downloadedViaNativeUI": true,
-              "publicOverpassRequest": true,
-              "osmBytes": 43080889,
-              "pngBytes": 398308,
-              "pixels": [
-                750,
-                521
-              ],
-              "counts": {
-                "nodes": 320224,
-                "ways": 16762,
-                "relations": 548
-              },
-              "bounds": [
-                59.32474245289905,
-                18.059966446510916,
-                59.33372560575721,
-                18.077576876242965
-              ],
-              "mapSize": [
-                1000.0,
-                1000.0
-              ],
-              "xmlLogAndPngBoundsMatch": true,
-              "checksumsMatch": true,
-              "yellowFramePixelAndProjectionChecks": "passed",
-              "offscreenLockedSelectionAutomaticallyFitted": true,
-              "overviewVisuallyInspected": true,
-              "tf3EngineImportVerified": false
-            }
-          }
-        },
-        "sha256": "c09fd7564f9737177acee664251945904eaf6212db50c8108e40e63e421d34f9",
-        "embeddedModTemplateBytesVerified": true,
-        "nativeUIScope": "Native Windows startup, Preview 0.10 header and updated In game instructions passed. This version did not repeat desktop conversion/download trials; earlier desktop preview evidence is retained under historicalPreviews."
-      }
-    },
+    "version": "0.15-preview",
     "build": "passed",
     "nativeUIThisVersionVerified": false,
-    "nativeUIScope": "Current executable UI has not been tested. Historical UI evidence remains separate.",
-    "sha256": "ea6d19bd02bd98de60100c3cc9a74a321289523fddc5a75ea9f4f67ce2f775c3",
-    "embeddedConverterMatchesSource": true,
-    "embeddedHydrologyMatchesSource": true
+    "historicalPreviews": {
+      "0.14-and-earlier": {
+        "version": "0.12-preview",
+        "historicalPreviews": {
+          "0.10-preview": {
+            "version": "0.10-preview",
+            "build": "passed",
+            "nativeUIThisVersionVerified": true,
+            "historicalPreviews": {
+              "evidenceVersion": "0.9-preview and earlier",
+              "checks": {
+                "build": "passed",
+                "nativeUIConversion": "0.7: all size/format choices displayed; Gigantomaniac 1:5 exported at 12800 x 64000 metres; manual edit selects Custom; legacy profile loaded successfully",
+                "standaloneLuaExport": "passed with native Windows UI",
+                "newStandaloneModCreation": "passed with bundled scripts and custom settings",
+                "settingsSaveLoad": "passed; exact JSON profile round trip",
+                "cancellation": "passed during million-tree conversion; existing Lua and report unchanged",
+                "scrollableSettings": "passed at 150% Windows display scaling",
+                "exampleEdges": 10,
+                "exampleSceneryItems": 117,
+                "exampleNamedMarkers": 1,
+                "sha256": "af07a55801cd743c6a6bea7bd2734a1a2bd4c1bc1e76d0ca495fdd9ea12daf40",
+                "nativeMapDownload": {
+                  "liveNativeWindowsMapDownload": "passed",
+                  "displayScaling": "150%",
+                  "yellowFrameClickLock": "passed",
+                  "lockedPanZoomAndFit": "same displayed coordinates retained",
+                  "openstreetmapTiles": "live visible map tiles loaded with attribution",
+                  "dataEndpoint": "https://overpass-api.de/api/interpreter",
+                  "savedOsmXml": "valid OSM 0.6 with exact locked bounds",
+                  "fullWayAndRelationReferences": "all present",
+                  "downloadedCounts": {
+                    "nodes": 316924,
+                    "ways": 16416,
+                    "relations": 533
+                  },
+                  "fileBytes": 42302111,
+                  "osmSha256": "fec3b9463bc2b28de2565122d6a42f0d79f4d132733d0f013b3a5ce9cb93b01d",
+                  "nativeConversionAndHandoff": "passed; exact bounds, size and checksums match",
+                  "mapSize": [
+                    1000.0,
+                    1000.0
+                  ],
+                  "convertedEdges": 4085,
+                  "convertedScenery": 4419,
+                  "nativeTF3EngineImportVerified": false,
+                  "heightmapStudioLuaAndLogAlignment": "passed: identical locked bounds and TF3 size; source/Lua checksums verified",
+                  "nativeMapSizes": "all eight sizes and five formats displayed; Tiny 1:1 and 1:5 update dimensions and frame; selecting a new size unlocks the area",
+                  "finalWindowsBuildAndLayout": "passed; cached tiles display and yellow frame label stays readable at 150% scaling"
+                },
+                "nativeOverviewDownload": {
+                  "nativeExeVersion": "0.9-preview",
+                  "downloadedViaNativeUI": true,
+                  "publicOverpassRequest": true,
+                  "osmBytes": 43080889,
+                  "pngBytes": 398308,
+                  "pixels": [
+                    750,
+                    521
+                  ],
+                  "counts": {
+                    "nodes": 320224,
+                    "ways": 16762,
+                    "relations": 548
+                  },
+                  "bounds": [
+                    59.32474245289905,
+                    18.059966446510916,
+                    59.33372560575721,
+                    18.077576876242965
+                  ],
+                  "mapSize": [
+                    1000.0,
+                    1000.0
+                  ],
+                  "xmlLogAndPngBoundsMatch": true,
+                  "checksumsMatch": true,
+                  "yellowFramePixelAndProjectionChecks": "passed",
+                  "offscreenLockedSelectionAutomaticallyFitted": true,
+                  "overviewVisuallyInspected": true,
+                  "tf3EngineImportVerified": false
+                }
+              }
+            },
+            "sha256": "c09fd7564f9737177acee664251945904eaf6212db50c8108e40e63e421d34f9",
+            "embeddedModTemplateBytesVerified": true,
+            "nativeUIScope": "Native Windows startup, Preview 0.10 header and updated In game instructions passed. This version did not repeat desktop conversion/download trials; earlier desktop preview evidence is retained under historicalPreviews."
+          }
+        },
+        "build": "passed",
+        "nativeUIThisVersionVerified": false,
+        "nativeUIScope": "Current executable UI has not been tested. Historical UI evidence remains separate.",
+        "sha256": "ea6d19bd02bd98de60100c3cc9a74a321289523fddc5a75ea9f4f67ce2f775c3",
+        "embeddedConverterMatchesSource": true,
+        "embeddedHydrologyMatchesSource": true
+      }
+    },
+    "sha256": "4084fde802ecc724e8a14400f3cac59b65966556815ea94403ebc4db15a07a60",
+    "embeddedSourceMatches": true,
+    "embeddedModTemplateBytesVerified": true,
+    "sqliteIncluded": true
   },
   "nativeTF3EngineImport": {
     "verified": true,
@@ -365,16 +379,21 @@
     "lockedBounds": "embedded in XML, download log, converter custom bounds, converted Lua and report",
     "mapTiles": "OpenStreetMap raster tiles, visible viewport only",
     "tileCache": "minimum 7 days; conditional HTTP revalidation",
-    "applicationUserAgent": "Druttzen-OSM-TF3-Converter/0.12 (+https://github.com/Druttzen/TRF3-mod-converter)",
-    "dataService": "single Overpass request for selected nodes, ways, relations and descendants",
+    "applicationUserAgent": "Druttzen-OSM-TF3-Converter/0.15 (+https://github.com/Druttzen/TF3-Map-Studio)",
+    "dataService": "Sequential smaller Overpass areas; complete nodes, ways, relations and descendants; exact selected bounds retained",
     "customHttpsOverpassEndpoint": true,
     "fixedClientFileSizeCap": null,
     "cancelAndRollback": "passed",
     "openstreetmapAccountRequired": false,
     "providerRateAndResourceLimits": "public service limits apply; busy/failed/incomplete responses reported and previous files preserved",
-    "attribution": "Â© OpenStreetMap contributors / ODbL 1.0"
+    "attribution": "Â© OpenStreetMap contributors / ODbL 1.0",
+    "maxCompletedParts": 64,
+    "maxRequests": 128,
+    "busyRetry": "One delayed retry for HTTP 429/502/503; bounded Retry-After support; HTTP 504 and XML resource failures subdivide areas down to 1 km maximum extent",
+    "duplicatePolicy": "Same type/ID deduplicated on disk; changed objects reject the whole download before commit",
+    "liveLargeDownloadThisVersionVerified": false
   },
-  "validationDate": "2026-10-04",
+  "validationDate": "2026-10-09",
   "nativeLargeMapPilot": {
     "testedModRevision": 5,
     "status": "paused for native water research; boundary correction not yet retested in the large map",

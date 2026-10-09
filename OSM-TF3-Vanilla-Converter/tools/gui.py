@@ -15,7 +15,7 @@ from job import Cancelled
 from map_sizes import CUSTOM, SIZES, FORMATS, dimensions, experimental, matching_preset, validate_preset
 
 MODES=['Save Lua map file','Update installed mod','Create standalone mod folder']
-APP_VERSION='0.14-preview'
+APP_VERSION='0.15-preview'
 LABELS={
     'forest_spacing':'Forest spacing (m)', 'shrub_spacing':'Shrub spacing (m)',
     'max_generated_trees':'Maximum generated trees / shrubs', 'tree_jitter':'Position variation (0â€“0.49)',
@@ -66,7 +66,7 @@ class App(tk.Tk):
         style.configure('Horizontal.TProgressbar',background='#087c83',troughcolor='#d6e3e7')
         header=tk.Frame(self,bg='#163b46',padx=22,pady=13); header.pack(fill='x')
         tk.Label(header,text='OSM â†’ LUA MAP',bg='#163b46',fg='white',font=('Segoe UI',21,'bold')).pack(side='left')
-        tk.Label(header,text='TRANSPORT FEVER 3 Â· PREVIEW 0.14\nMapped objects Â· standalone converter',bg='#163b46',fg='#b9dce1',font=('Segoe UI',10),justify='right').pack(side='right')
+        tk.Label(header,text='TRANSPORT FEVER 3 Â· PREVIEW 0.15\nMapped objects Â· standalone converter',bg='#163b46',fg='#b9dce1',font=('Segoe UI',10),justify='right').pack(side='right')
         body=ttk.Frame(self,padding=(16,12)); body.pack(fill='both',expand=True)
         body.columnconfigure(0,weight=3); body.columnconfigure(1,weight=2); body.rowconfigure(0,weight=1)
         self.book=ttk.Notebook(body); self.book.grid(row=0,column=0,sticky='nsew',padx=(0,12))
