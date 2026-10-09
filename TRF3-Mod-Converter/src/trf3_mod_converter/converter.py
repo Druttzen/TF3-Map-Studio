@@ -12,12 +12,44 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .lua_metadata import UnsupportedValue, load_lua_table
-from .filesystem import linked as _linked
+from .filesystem import linked as _linked, rename_with_retry
 from .resource_audit import audit_resources
 from .conversion_plan import analyze_mod
 
 _load_lua_table = load_lua_table
 Progress = Callable[[str], None]
+
+
+def migrate_legacy_display_name(name: str, description: str, audit: dict) -> tuple[str, str]:
+    """Fit a legacy title into TF3 metadata without losing the full title.
+
+    Native metadata still uses the strict 32-character validation below. Only
+    the legacy resource exporter opts into this recorded presentation change.
+    """
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("Name must contain non-blank text")
+    display = " ".join(name.split())
+    native = display
+    if len(native) > 32:
+        prefix = native[:31].rstrip()
+        # Prefer a complete word, while retaining useful specificity for names
+        # with a long final token or no spaces (including non-Latin titles).
+        boundary = prefix.rfind(" ")
+        if boundary >= 20:
+            prefix = prefix[:boundary]
+        native = prefix + "…"
+    if native != name:
+        description = f"Original mod name: {name}\n\n{description}".rstrip()
+        audit.setdefault("metadataMigrations", []).append({
+            "field": "info.name", "targetField": "_metadata/modinfo.json.name",
+            "sourceValue": name, "targetValue": native,
+            "policy": "fit_native_name_preserve_full_title_in_description",
+            "fullTitleLocation": "_metadata/modinfo.json.description",
+            "nativeTest": "not_run",
+        })
+    return native, description
+
+
 ALIASES = {
     "name": ("name", "displayName", "modName"),
     "modId": ("modId", "mod_id", "id"),
@@ -300,6 +332,31 @@ def _source_root(source: Path) -> Path:
     return source.parent
 
 
+def _is_legacy_tf2_package(root: Path) -> bool:
+    """Recognize legacy metadata without overriding an existing native package."""
+    return ((root / 'mod.lua').is_file()
+            and not (root / 'mod.json').is_file()
+            and not (root / '_metadata' / 'modinfo.json').is_file())
+
+
+def _legacy_tf2_savegame_blocker(root: Path) -> str | None:
+    """Metadata migration cannot translate a TF2 binary savegame/map."""
+    if not _is_legacy_tf2_package(root):
+        return None
+    saves = sorted(path for path in root.rglob('*') if path.is_file() and path.suffix.lower() == '.sav')
+    if not saves:
+        return None
+    names = []
+    for path in saves[:3]:
+        relative = path.relative_to(root).as_posix()
+        if path.with_name(path.name + '.lua').is_file():
+            relative += ' (with .sav.lua sidecar)'
+        names.append(relative)
+    remaining = f'; and {len(saves) - 3} more' if len(saves) > 3 else ''
+    return ('Unsupported TF2 saved map/savegame: ' + '; '.join(names) + remaining
+            + '. Metadata export cannot convert TF2 .sav data to TF3; the map requires a savegame format adapter or recreation in TF3.')
+
+
 def inspect_mod(source: str | Path) -> ModDescriptor:
     source_path = Path(source).expanduser()
     if not source_path.exists():
@@ -359,6 +416,8 @@ def inspect_mod(source: str | Path) -> ModDescriptor:
                     raise ValueError("This folder contains multiple mods. Batch conversion is not available; select one mod folder.")
         raise FileNotFoundError(f"No supported metadata found in {source_path}")
     descriptor = _normalize_mod_descriptor(raw)
+    if blocker := _legacy_tf2_savegame_blocker(root):
+        descriptor.blockers.append(blocker)
     # Known aliases are normalized; native extension fields are preserved in place.
     aliases = {alias for entries in ALIASES.values() for alias in entries}
     technical_keys = {"modId", "revision", "severityAdd", "severityRemove", "visible", "cosmetic",
@@ -446,6 +505,19 @@ def _validate(descriptor: ModDescriptor, root: Path) -> list[str]:
             except (ValueError, OverflowError):
                 errors.append("Parameter numbers must be finite numbers, one per value; export writes TF3 doubles.")
     return list(dict.fromkeys(errors))
+
+
+def allow_missing_vehicle_dependencies(descriptor):
+    """Downgrade only unresolved, syntactically valid references in vehicle mode."""
+    allowed = {message for message in descriptor.blockers if ': missing local resource for ' in message}
+    if not allowed:
+        return
+    descriptor.blockers = [message for message in descriptor.blockers if message not in allowed]
+    descriptor.warnings.extend('Unresolved vehicle dependency: '+message for message in sorted(allowed))
+    audit = descriptor.resource_audit
+    audit['blockers'] = [message for message in audit['blockers'] if message not in allowed]
+    audit.setdefault('unresolvedVehicleDependencies', []).extend(sorted(allowed))
+    audit['status'] = 'blocked' if audit['blockers'] else 'static_checks_with_dependency_warnings'
 
 
 def _audit(descriptor: ModDescriptor, root: Path) -> None:
@@ -547,7 +619,7 @@ def _copy_files(root: Path, stage: Path, excluded: set[Path], progress: Progress
     if (stage / "res").is_dir():
         if (stage / "content").exists():
             raise ValueError("Both res and content folders exist. Resolve their resource layout before conversion")
-        (stage / "res").rename(stage / "content")
+        rename_with_retry(stage / "res", stage / "content")
     (stage / "content").mkdir(exist_ok=True)
     return count
 
@@ -560,7 +632,9 @@ def convert_mod(source: str | Path, destination: str | Path, *, name: str | None
                 author: str | None = None, mod_id: str | None = None, revision: int | None = None,
                 summary: str | None = None, overwrite: bool = False,
                 progress: Progress | None = None,
-                _report_fields: dict[str, Any] | None = None) -> dict[str, Any]:
+                _report_fields: dict[str, Any] | None = None,
+                _before_publish: Callable[[], None] | None = None,
+                _allow_missing_resources: bool = False) -> dict[str, Any]:
     source_path = Path(source).expanduser()
     if not source_path.exists():
         raise FileNotFoundError(f"Source does not exist: {source_path}")
@@ -570,6 +644,8 @@ def convert_mod(source: str | Path, destination: str | Path, *, name: str | None
     destination_path = destination_input.resolve()
     root = _check_paths(source_path, destination_path, overwrite)
     descriptor = prepare_mod(source_path, name=name, author=author, mod_id=mod_id, revision=revision, summary=summary)
+    if _allow_missing_resources:
+        allow_missing_vehicle_dependencies(descriptor)
     if descriptor.blockers:
         raise ValueError("Conversion needs manual changes:\n" + "\n".join(descriptor.blockers))
     notify = progress or (lambda message: None)
@@ -608,6 +684,8 @@ def convert_mod(source: str | Path, destination: str | Path, *, name: str | None
             path.write_text(json.dumps(payload, ensure_ascii=False, indent=4, allow_nan=False) + "\n", encoding="utf-8")
         # Validate the actual staged resources before touching an existing output.
         _audit(descriptor, stage)
+        if _allow_missing_resources:
+            allow_missing_vehicle_dependencies(descriptor)
         if descriptor.blockers:
             raise ValueError("Staged conversion needs manual changes:\n" + "\n".join(descriptor.blockers))
         report["resourceAudit"] = descriptor.resource_audit
@@ -629,13 +707,15 @@ def convert_mod(source: str | Path, destination: str | Path, *, name: str | None
             report["backup"] = str(backup)
         (stage / "conversion-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=4) + "\n", encoding="utf-8")
         notify("Metadata validated. Finalizing output…")
+        if _before_publish is not None:
+            _before_publish()
         if backup:
-            destination_path.rename(backup)
+            rename_with_retry(destination_path, backup)
         try:
-            stage.rename(destination_path)
+            rename_with_retry(stage, destination_path)
         except OSError:
             if backup:
-                backup.rename(destination_path)
+                rename_with_retry(backup, destination_path)
             raise
     notify("Conversion complete")
     return report

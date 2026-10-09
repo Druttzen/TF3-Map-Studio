@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from .base_resources import validate_reference
+from .base_resources import normalize_reference
 from .lua_metadata import TranslatedString
 
 
@@ -22,8 +22,7 @@ SCHEMA_SOURCES = (
 def _reference(value, where):
     if isinstance(value, TranslatedString):
         raise ValueError(f'{where}: localized material reference requires manual migration')
-    validate_reference(value)
-    return value
+    return normalize_reference(value)
 
 
 def _resolved(value, resolve, where):
@@ -63,7 +62,7 @@ def _slot_evidence(referrers, slot, submesh_count, resolve, mesh_path):
 
 
 def port_mesh_descriptor(data: dict, resolve, referrers: list[dict], report: dict | None = None,
-                         mesh_path: str = '') -> dict:
+                         mesh_path: str = '', allow_missing_defaults: bool = False) -> dict:
     """Resolve submesh material defaults without changing geometry or animation.
 
     ``resolve(source_reference, 'material')`` must verify its returned reference.
@@ -98,9 +97,11 @@ def port_mesh_descriptor(data: dict, resolve, referrers: list[dict], report: dic
             raise ValueError(f'{mesh_path}: submesh materials must be a literal list')
         for variant, source in enumerate(materials):
             where = f'{mesh_path}/subMeshes/{slot}/materials/{variant}'
-            # Unsafe/localized input is always a blocker, never a reason to use
-            # otherwise-valid model evidence as a replacement.
-            _reference(source, where)
+            # Vehicle mode accepts a blank exporter default only through complete
+            # explicit model-slot evidence. Unsafe/localized paths remain blocked.
+            missing_default = allow_missing_defaults and type(source) is str and not source.strip()
+            if not missing_default:
+                _reference(source, where)
             evidence, method = [], 'direct_verified_reference'
             try:
                 target = _resolved(source, resolve, where)

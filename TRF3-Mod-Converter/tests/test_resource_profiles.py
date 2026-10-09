@@ -71,12 +71,14 @@ def test_cyclic_tables_and_alias_expansion_are_rejected_before_normalization():
     assert result['a'] is not result['b']
 
 
-def test_reader_preserves_translation_provenance_but_blocks_translated_concatenation():
+def test_reader_preserves_translation_provenance_and_defers_translated_concatenation():
     result=load_resource_table('function data() return {name=_("Box"),id="Box"} end')
     assert isinstance(result['name'],TranslatedString)
     assert not isinstance(result['id'],TranslatedString)
-    with pytest.raises(ValueError, match='Translated fragments'):
-        load_resource_table('function data() return {name=_("Box") .. " suffix"} end')
+    from trf3_mod_converter.resource_profiles import TranslatedConcat
+    value = load_resource_table('function data() return {name=_("Box") .. " suffix"} end')['name']
+    assert isinstance(value, TranslatedConcat)
+    assert value.parts == ((True, 'Box'), (False, ' suffix'))
 
 
 @pytest.mark.parametrize('source',[

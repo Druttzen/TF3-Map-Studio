@@ -7,7 +7,7 @@ Unknown simulation/config fields block export rather than silently disappearing.
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 
 
@@ -20,6 +20,7 @@ SCHEMA_SOURCES = (
     'https://wiki.transportfever3.com/doku.php?id=modding:misc:people',
 )
 ENGINES = {'HORSE', 'STEAM', 'DIESEL', 'ELECTRIC'}
+EMISSIONS_POLICIES = frozenset({'strict', 'legacy_noise', 'tf3_automatic', 'class_average'})
 COMMON_METADATA = {
     'availability', 'cost', 'description', 'emission', 'maintenance', 'seatProvider',
     'colorConfig', 'labelList', 'particleSystem', 'cameraConfig', 'cargoSlotProvider',
@@ -84,9 +85,12 @@ class VehicleProfile:
     transport_modes: tuple[str, ...]
     engine_transport_modes: tuple[str, ...]
     transformer: str | None
+    decorative_physics: str | None = None
 
     @property
     def key(self) -> str:
+        if self.decorative_physics:
+            return 'tf2_asset_' + self.decorative_physics.removesuffix('Vehicle').lower()
         if self.family in ('train', 'waggon', 'tram'):
             engine = '_'.join(t.lower() for t in self.engine_types) or 'unpowered'
             return f'tf2_{self.family}_{engine}'
@@ -141,6 +145,16 @@ def classify_model(metadata: dict, model_path: str = '') -> VehicleProfile:
                 'airVehicle': {'AIR'}, 'waterVehicle': {'WATER'}}[block]
     car = 'car' in m
     carrier = transport.get('carrier')
+    decorative = None
+    # A construction asset may retain its original vehicle physics/configs for
+    # rendering. Preserve those fields without creating a transport/AI marker.
+    # An explicit transport table (including an empty one) is never repaired by
+    # this path; its missing/conflicting carrier remains an authored error.
+    if not car and 'transportVehicle' not in m and 'asset' in model_path.replace('\\', '/').lower().split('/'):
+        if block == 'railVehicle':
+            raise ValueError('Decorative railVehicle needs an explicit rail/tram animation contract; a carrier cannot be inferred')
+        decorative = block
+        carrier = {'roadVehicle': 'ROAD', 'waterVehicle': 'WATER', 'airVehicle': 'AIR'}[block]
     if car:
         if block != 'roadVehicle' or transport:
             raise ValueError('AI car must have roadVehicle and no transportVehicle metadata')
@@ -177,7 +191,7 @@ def classify_model(metadata: dict, model_path: str = '') -> VehicleProfile:
         cargos = _cargo_categories(transport)
         hint = '/' + model_path.replace('\\', '/').lower().lstrip('/')
         license_ = _dict(m.get('seatProvider', {}), 'seatProvider').get('drivingLicense')
-        if car:
+        if car or decorative:
             family, modes = 'car', ()
         elif 'PASSENGERS' in cargos and cargos - {'PASSENGERS'}:
             family, modes = 'bus', ('BUS', 'TRUCK')
@@ -205,8 +219,10 @@ def classify_model(metadata: dict, model_path: str = '') -> VehicleProfile:
         family = 'plane'
         modes = ('SMALL_AIRCRAFT',) if physical['type'] == 'SMALL' else ('AIRCRAFT',)
         engine_modes, transformer = modes, 'vehicle/shared/default_air.trf'
-    return VehicleProfile(family, carrier, bool(engines) or carrier in ('WATER', 'AIR'),
-                          tuple(engine_types), modes, engine_modes, transformer)
+    return VehicleProfile('asset' if decorative else family, None if decorative else carrier,
+                          bool(engines) or carrier in ('WATER', 'AIR'), tuple(engine_types),
+                          () if decorative else modes, () if decorative else engine_modes,
+                          transformer, decorative)
 
 
 def _matrix(value, where):
@@ -225,7 +241,8 @@ def _multiply(a, b):
             for col in range(4) for row in range(4)]
 
 
-def derive_lod_nodes(lods: list, *, metadata: dict | None = None) -> tuple[list[list[dict]], list[list[list[float]]]]:
+def derive_lod_nodes(lods: list, *, metadata: dict | None = None, report=None,
+                     model_path='') -> tuple[list[list[dict]], list[list[list[float]]]]:
     """Name caller-owned nodes and derive their complete model-space transforms.
 
     The caller must first deep-copy the source model. Names preserve unique TF2
@@ -263,6 +280,20 @@ def derive_lod_nodes(lods: list, *, metadata: dict | None = None) -> tuple[list[
             check_refs(metadata)
         def visit(node, parent):
             node = _dict(node, 'node')
+            editor_ids = {}
+            for field in ('_meshId', '_origMeshId'):
+                if field in node:
+                    value = node[field]
+                    if type(value) is not int or value < 0:
+                        raise ValueError(f'node/{field}: expected a nonnegative integer editor ID')
+                    editor_ids[field] = node.pop(field)
+            if editor_ids and report is not None:
+                report.setdefault('modelNodeMigrations', []).append({
+                    'model': model_path, 'lod': li, 'nodeIndex': len(nodes),
+                    'nodeName': node.get('name', ''), 'sourceFields': editor_ids,
+                    'policy': 'omit_editor_mesh_ids_preserve_node_order',
+                    'reason': 'TF2 editor IDs are outside the runtime node schema; TF3 node references use unique names.',
+                    'nativeTest': 'not_run'})
             _known(node, {'name', 'mesh', 'materials', 'transf', 'children', 'animations',
                           'skin', 'skinMaterials'}, 'node')
             name = node.get('name') or f'node_{len(nodes)}'
@@ -364,10 +395,12 @@ def _angle_animation(nodes, config, event, axis, native, writer, *, one_way=Fals
 
 def _config_port(physical, profile, lod_nodes, native, transforms, animation_writer, log, model_path):
     configs = _list(physical.get('configs'), profile.family + '/configs')
-    if profile.family == 'ship' and len(configs) < len(lod_nodes):
+    if (profile.family == 'ship' or profile.decorative_physics) and len(configs) < len(lod_nodes):
         log.setdefault('vehicleAdaptations', []).append({'model': model_path,
-            'field': 'waterVehicle/configs', 'sourceCount': len(configs), 'targetCount': len(lod_nodes),
-            'reason': 'Trailing ship LODs have no source config; preserve absence of config-driven animations.'})
+            'field': (profile.decorative_physics or 'waterVehicle') + '/configs',
+            'sourceCount': len(configs), 'targetCount': len(lod_nodes),
+            'reason': 'Trailing decorative asset LODs have no source config; preserve absence of config-driven animations.' if profile.decorative_physics else
+                      'Trailing ship LODs have no source config; preserve absence of config-driven animations.'})
         configs = configs + [{} for _ in range(len(lod_nodes) - len(configs))]
     if len(configs) != len(lod_nodes):
         raise ValueError('Vehicle configs must match the LOD count')
@@ -516,9 +549,20 @@ def _config_port(physical, profile, lod_nodes, native, transforms, animation_wri
     return combined, contacts, has_flaps
 
 
-def _sound_port(sound, resolve):
+def normalize_sound_set(sound):
+    """TF2 accepts a sound-set filename as well as a table of sound fields."""
+    if isinstance(sound, str):
+        sound = {'name': sound} if sound else {}
     sound = _dict(sound, 'soundSet')
     _known(sound, {'name', 'horn', 'openDoors', 'closeDoors', 'clacks', 'chuffs'}, 'soundSet')
+    for field, value in sound.items():
+        if not isinstance(value, str):
+            raise ValueError(f'soundSet/{field}: expected a literal resource reference')
+    return sound
+
+
+def _sound_port(sound, resolve):
+    sound = normalize_sound_set(sound)
     result = {}
     if sound.get('name'):
         result['soundSet'] = {'name': resolve(sound['name'], 'sound_set')}
@@ -531,10 +575,56 @@ def _sound_port(sound, resolve):
     return result
 
 
+def _emissions_port(value, policy, model_path):
+    """Apply an explicit balancing choice without inventing a pollution split.
+
+    TF3's noise idle/power/speed coefficients use the documented TF2 units.
+    Treating the former combined emission as noise is a user choice, not proof
+    that either game's pollution behavior is equivalent. Keeping ``strict``
+    as the default requires that choice whenever an authored coefficient exists.
+    """
+    emission = _dict(value, 'emission')
+    names = {'idleEmission': ('idle', 100), 'powerEmission': ('power', .0002),
+             'speedEmission': ('speed', 2)}
+    _known(emission, set(names), 'emission')
+    for field, item in emission.items():
+        _number(item, 'emission/' + field)
+        if item < 0 and item != -1:
+            raise ValueError(f'emission/{field}: expected -1 or a non-negative coefficient')
+    automatic = {'noise': {'score': -1}, 'pollution': {'score': -1}}
+    if all(value == -1 for value in emission.values()):
+        return automatic, None
+    if policy == 'strict':
+        raise ValueError('Explicit TF2 emissions require a noise/pollution balancing decision')
+    if policy == 'legacy_noise':
+        if set(emission) != set(names) or any(item == -1 for item in emission.values()):
+            raise ValueError('Legacy noise choice needs all three explicit TF2 emission coefficients; '
+                             'use TF3 automatic emissions or supply an explicit native emission port')
+        for field, (_, maximum) in names.items():
+            if emission[field] > maximum:
+                raise ValueError(f'emission/{field}: exceeds the documented TF3 coefficient range; '
+                                 'use TF3 automatic emissions or supply an explicit native emission port')
+        target = {'noise': {names[field][0]: item for field, item in emission.items()},
+                  'pollution': {'score': -1}}
+    else:
+        target = automatic
+    return target, {'model': model_path, 'field': 'emission',
+                    'sourceValue': deepcopy(emission), 'targetValue': deepcopy(target),
+                    'emissionsPolicy': policy, 'explicitChoice': True,
+                    'policy': 'explicit_legacy_noise_automatic_pollution' if policy == 'legacy_noise'
+                              else 'explicit_tf3_automatic_emissions',
+                    'noiseCoefficientsPreserved': policy == 'legacy_noise',
+                    'pollutionBehaviorPreserved': False,
+                    'requiredCheck': 'Verify noise and pollution balancing in TF3.',
+                    'schemaSources': [SCHEMA_SOURCES[1], SCHEMA_SOURCES[3]],
+                    'nativeTest': 'not_run'}
+
+
 def adapt_vehicle_metadata(metadata: dict, lod_nodes: list[list[dict]], resolve, native,
                            *, model_path: str = '', weight_max_payload: float | None = 0,
                            node_world_transforms=None, animation_writer=None,
-                           report: dict | None = None) -> tuple[dict, VehicleProfile]:
+                           report: dict | None = None,
+                           emissions_policy: str = 'strict') -> tuple[dict, VehicleProfile]:
     """Migrate verified metadata and mutate caller-owned node animations only.
 
     Cargo structures and common model extras remain literal and unchanged for
@@ -542,15 +632,31 @@ def adapt_vehicle_metadata(metadata: dict, lod_nodes: list[list[dict]], resolve,
     the caller's cargo analysis. Generated angular animations use an optional
     ``animation_writer(event, {times, transfs})`` returning a resource reference.
     """
+    if type(emissions_policy) is not str or emissions_policy not in EMISSIONS_POLICIES:
+        raise ValueError('Emissions policy must be strict, legacy_noise, tf3_automatic or class_average')
+    emissions_result, emissions_audit = None, None
+    source_metadata = _dict(metadata, 'metadata')
+    if emissions_policy == 'class_average':
+        from .vehicle_mode import class_average_emissions
+        emissions_result, emissions_audit = class_average_emissions(
+            {'metadata': source_metadata}, native, model_path=model_path)
+    elif 'emission' in source_metadata:
+        emissions_result, emissions_audit = _emissions_port(source_metadata['emission'], emissions_policy, model_path)
     profile = classify_model(metadata, model_path)
     result = deepcopy(_dict(metadata, 'metadata'))
     _known(result, COMMON_METADATA | VEHICLE_BLOCKS | {'transportVehicle', 'soundConfig', 'car'}, 'model metadata')
     log = report if report is not None else {}
-    if profile.carrier is not None:
-        physical_key = {'train': 'railVehicle', 'waggon': 'railVehicle', 'tram': 'railVehicle',
+    if profile.carrier is not None or profile.decorative_physics:
+        physical_key = profile.decorative_physics or {'train': 'railVehicle', 'waggon': 'railVehicle', 'tram': 'railVehicle',
                         'bus': 'roadVehicle', 'truck': 'roadVehicle', 'car': 'roadVehicle',
                         'plane': 'airVehicle', 'ship': 'waterVehicle'}[profile.family]
         physical = _dict(result[physical_key], physical_key)
+        if profile.decorative_physics == 'waterVehicle' and 'engines' in physical:
+            if physical['engines'] != []:
+                raise ValueError('Decorative waterVehicle engines must be empty; active engine data requires an adapter')
+            log.setdefault('vehicleAdaptations', []).append({'model': model_path,
+                'field': 'waterVehicle/engines', 'sourceValue': physical.pop('engines'),
+                'policy': 'omit_inert_empty_decorative_ship_engine_list', 'nativeTest': 'not_run'})
         allowed = {
             'railVehicle': {'engines', 'configs', 'soundSet', 'topSpeed', 'weight', 'blinkInterval'},
             'roadVehicle': {'engine', 'configs', 'soundSet', 'topSpeed', 'weight', 'blinkInterval'},
@@ -565,8 +671,15 @@ def adapt_vehicle_metadata(metadata: dict, lod_nodes: list[list[dict]], resolve,
             _number(weight_max_payload, 'weightMaxPayload', minimum=0)
         if physical.get('blinkInterval', 500) != 500:
             raise ValueError('Non-default blinkInterval requires a custom TF3 transformator')
-        combined, contacts, has_flaps = _config_port(physical, profile, lod_nodes, native,
+        config_profile = replace(profile, family={'roadVehicle':'car', 'waterVehicle':'ship', 'airVehicle':'plane'}[physical_key]) if profile.decorative_physics else profile
+        combined, contacts, has_flaps = _config_port(physical, config_profile, lod_nodes, native,
                                                     node_world_transforms, animation_writer, log, model_path)
+        if profile.decorative_physics:
+            log.setdefault('vehicleAdaptations', []).append({'model': model_path,
+                'field': physical_key, 'policy': 'preserve_construction_asset_physics_and_animation_config',
+                'evidence': 'Explicit asset path with no transportVehicle or car metadata',
+                'createdTransportMetadata': False, 'createdCarMetadata': False,
+                'nativeTest': 'not_run'})
         if physical_key in ('railVehicle', 'roadVehicle'):
             engines = physical.get('engines', []) if physical_key == 'railVehicle' else [physical['engine']] if physical.get('engine') else []
             result['landVehicle'] = {'engines': deepcopy(engines), 'topSpeed': physical['topSpeed'],
@@ -635,6 +748,22 @@ def adapt_vehicle_metadata(metadata: dict, lod_nodes: list[list[dict]], resolve,
         result['transformatorConfig'] = {'transformator': {'name': native.reference(profile.transformer)}}
         if 'transportVehicle' in result and profile.family != 'car':
             t = _dict(result['transportVehicle'], 'transportVehicle')
+            if set(t) & {'maxWeight', 'maxVolume'}:
+                from .missing_data import legacy_payload_hints
+                hints = legacy_payload_hints({'metadata': {'transportVehicle': t}})
+                if (hints['weightMaxPayload'] is None or type(weight_max_payload) not in (int, float)
+                        or not math.isfinite(weight_max_payload) or weight_max_payload != hints['weightMaxPayload']):
+                    raise ValueError('EMP cargo limits require the native payload to match the authored maxWeight in tonnes; '
+                                     'volume alone cannot determine payload or cargo capacity')
+                for field, source_value in hints['sourceFields'].items():
+                    t.pop(field)
+                    log.setdefault('vehicleAdaptations', []).append({
+                        'model': model_path, 'field': 'transportVehicle/'+field, 'sourceValue': source_value,
+                        'sourceUnit': 't' if field == 'maxWeight' else 'm3',
+                        'weightMaxPayload': weight_max_payload if field == 'maxWeight' else None,
+                        'method': 'consume_documented_emp_payload_hint' if field == 'maxWeight' else
+                                  'archive_emp_volume_hint_preserve_authored_capacity',
+                        'schemaSource': hints['schemaSource'], 'nativeTest': 'not_run'})
             _known(t, {'carrier', 'compartmentsList', 'compartments', 'capacities', 'groupFileName', 'loadSpeed',
                        'multipleUnitOnly', 'reversible', 'departureDelay'}, 'transportVehicle')
             if 'departureDelay' in t:
@@ -648,12 +777,11 @@ def adapt_vehicle_metadata(metadata: dict, lod_nodes: list[list[dict]], resolve,
             if t.get('groupFileName'):
                 t['groupFileName'] = resolve(t['groupFileName'], 'model')
             result['transportVehicle'] = t
-    if 'emission' in result:
-        emission = _dict(result.pop('emission'), 'emission')
-        _known(emission, {'idleEmission', 'powerEmission', 'speedEmission'}, 'emission')
-        if any(value != -1 for value in emission.values()):
-            raise ValueError('Explicit TF2 emissions require a noise/pollution balancing decision')
-        result['emissions'] = {'noise': {'score': -1}, 'pollution': {'score': -1}}
+    if 'emission' in result or emissions_policy == 'class_average' and emissions_result is not None:
+        result.pop('emission', None)
+        result['emissions'] = emissions_result
+        if emissions_audit is not None:
+            log.setdefault('vehicleAdaptations', []).append(emissions_audit)
     if 'maintenance' in result:
         maintenance = _dict(result['maintenance'], 'maintenance')
         _known(maintenance, {'lifespan', 'runningCosts', 'runningCostScale'}, 'maintenance')
@@ -672,9 +800,29 @@ def adapt_vehicle_metadata(metadata: dict, lod_nodes: list[list[dict]], resolve,
                         'waggon': 'RAIL', 'ship': 'WATER', 'plane': 'AIR'}.get(profile.family)
             if license_:
                 seats['drivingLicense'] = license_
-        for seat in _list(seats.get('seats', []), 'seats'):
+        standing_schema_checked = False
+        for seat_index, seat in enumerate(_list(seats.get('seats', []), 'seats')):
             seat = _dict(seat, 'seat')
-            _known(seat, {'group', 'crew', 'forward', 'animation', 'transf'}, 'seat')
+            _known(seat, {'group', 'crew', 'forward', 'animation', 'transf', 'standing'}, 'seat')
+            if 'standing' in seat:
+                standing, animation = seat['standing'], seat.get('animation')
+                if (type(animation) is not str or not
+                        ((standing is False and animation == 'sitting')
+                         or (standing is True and animation == 'idle'))):
+                    raise ValueError('seat/standing requires a matching explicit sitting or idle animation')
+                proof = 'vehicle/train/hst_125/hst_125_middle2.mdl'
+                if not standing_schema_checked and hasattr(native, 'read'):
+                    native.read(proof)
+                    standing_schema_checked = True
+                # Posture is explicitly selected by animation in both games.
+                # Retire only the legacy flag that agrees with that animation.
+                del seat['standing']
+                log.setdefault('seatMigrations', []).append({
+                    'model': model_path, 'seatIndex': seat_index, 'sourceValue': standing,
+                    'animation': animation, 'policy': 'preserve_explicit_pose_retire_matching_legacy_standing',
+                    'nativeSchemaResource': proof,
+                    'schemaSource': 'https://wiki.transportfever3.com/doku.php?id=modding:vehicles:basics#seats',
+                    'nativeTest': 'not_run'})
             for field in ('crew', 'forward'):
                 if field in seat and type(seat[field]) is not bool:
                     raise ValueError(f'seat/{field} must be a boolean')

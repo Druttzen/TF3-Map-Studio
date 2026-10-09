@@ -6,6 +6,8 @@ import sys
 
 from . import __version__
 from .converter import convert_mod, prepare_mod
+from .vehicle_profiles import EMISSIONS_POLICIES
+from .conversion_choices import VEHICLE_POLICIES
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -16,10 +18,15 @@ def build_parser() -> argparse.ArgumentParser:
     analyze.add_argument("source", help="Mod directory; metadata is not required")
     scan = commands.add_parser('scan', help='List separate mod packages recursively without exporting')
     scan.add_argument('source')
+    scan.add_argument('--vehicles-only', action='store_true')
     batch = commands.add_parser('batch', help='Convert discovered mods sequentially; unsupported packages get separate errors')
     batch.add_argument('source')
     batch.add_argument('destination')
     batch.add_argument('--tf3-game', help='Installed TF3 folder; detected from Steam when omitted')
+    batch.add_argument('--vehicle-policy', choices=sorted(VEHICLE_POLICIES), default='strict')
+    batch.add_argument('--vehicles-only', action='store_true')
+    batch.add_argument('--emissions-policy', choices=sorted(EMISSIONS_POLICIES), default='strict',
+                       help='Explicit noise and pollution choice; strict preserves unresolved decisions')
     for command in ("convert", "inspect"):
         sub = commands.add_parser(command, help=f"{command.capitalize()} a mod folder or metadata file")
         sub.add_argument("source", help="Mod directory or JSON/Lua metadata file")
@@ -42,8 +49,11 @@ def build_parser() -> argparse.ArgumentParser:
     port.add_argument("--revision", type=int)
     port.add_argument("--summary")
     port.add_argument("--repairs", help="JSON object mapping unresolved TF2 texture references to explicit source replacements")
+    port.add_argument('--emissions-policy', choices=sorted(EMISSIONS_POLICIES), default='strict')
+    port.add_argument('--vehicle-policy', choices=sorted(VEHICLE_POLICIES), default='strict')
     port.add_argument("--overwrite", action="store_true")
-    commands.add_parser("gui", help="Open the desktop app")
+    gui = commands.add_parser("gui", help="Open the desktop app")
+    gui.add_argument('--report', help='Reopen a saved batch report')
     return parser
 
 
@@ -52,16 +62,20 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "gui":
         from .gui import main as open_gui
-        open_gui()
+        open_gui(args.report)
         return 0
     try:
         if args.command in ('scan', 'batch'):
             from dataclasses import asdict
             from .batch import scan_mods, convert_queue, find_tf3_game
-            found = scan_mods(args.source, exclude=getattr(args, 'destination', None))
+            found = scan_mods(args.source, exclude=getattr(args, 'destination', None),
+                             vehicles_only=args.vehicles_only or getattr(args, 'vehicle_policy', '') == 'tf2_complete')
             if args.command == 'scan':
                 print(json.dumps({**found, 'items': [asdict(i) for i in found['items']]}, ensure_ascii=False, indent=2))
                 return 0
+            for item in found['items']:
+                item.emissions_policy = args.emissions_policy
+                item.vehicle_policy = args.vehicle_policy
             result = convert_queue(found['items'], args.destination, tf3_game=args.tf3_game or find_tf3_game(args.source) or None)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 2 if result['counts']['failed'] else 0
@@ -78,7 +92,8 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("Repairs must be a JSON object of source texture references and replacement paths")
             result = port_tf2_mod(args.source,args.destination,tf3_game=args.tf3_game,name=args.name,mod_id=args.mod_id,
                                   repairs=repairs,overwrite=args.overwrite,author=args.author,
-                                  revision=args.revision,summary=args.summary,tf2_game=args.tf2_game)
+                                  revision=args.revision,summary=args.summary,tf2_game=args.tf2_game,
+                                  emissions_policy=args.emissions_policy, vehicle_policy=args.vehicle_policy)
             print(json.dumps(result,ensure_ascii=False,indent=2))
             return 0
         overrides = {key: getattr(args, key) for key in ("name", "author", "mod_id", "revision", "summary")}

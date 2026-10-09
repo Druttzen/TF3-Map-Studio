@@ -20,7 +20,36 @@ class TranslatedString(str):
     """Literal key originally passed to _(); keep localization provenance."""
 
 
-def _value(node: lua.Node, constant_numbers: bool = False) -> Any:
+def same_pure_literal(left: Any, right: Any) -> bool:
+    """Compare finite inert values without Python's bool/number coercions."""
+    if type(left) is not type(right):
+        return False
+    if type(left) in (str, TranslatedString, bool, type(None)):
+        return left == right
+    if type(left) in (int, float):
+        return math.isfinite(left) and math.isfinite(right) and left == right
+    if isinstance(left, list):
+        return len(left) == len(right) and all(same_pure_literal(a, b) for a, b in zip(left, right))
+    if isinstance(left, dict):
+        return (len(left) == len(right) and all(type(key) in (str, int) for key in left)
+                and all(key in right and same_pure_literal(value, right[key]) for key, value in left.items()))
+    return False
+
+
+def record_duplicate_literal(audit, resource, key, first, duplicate):
+    """Keep both authored expressions; the exporter also archives the raw file."""
+    if audit is None:
+        return
+    audit.setdefault('literalFieldMigrations', []).append({
+        'resource': resource, 'key': key,
+        'firstExpression': ast.to_lua_source(first.value),
+        'duplicateExpression': ast.to_lua_source(duplicate.value),
+        'firstLine': first.first_token.line if first.first_token else None,
+        'duplicateLine': duplicate.first_token.line if duplicate.first_token else None,
+        'policy': 'collapse_proven_equivalent_duplicate_field', 'nativeTest': 'not_run'})
+
+
+def _value(node: lua.Node, constant_numbers: bool = False, *, audit=None, resource='', strict_duplicates=False) -> Any:
     if isinstance(node, lua.String):
         value = node.s.decode("utf-8")
         if node.delimiter == lua.StringDelimiter.DOUBLE_SQUARE:
@@ -37,11 +66,12 @@ def _value(node: lua.Node, constant_numbers: bool = False) -> Any:
     if isinstance(node, lua.Nil):
         return None
     if isinstance(node, lua.UMinusOp):
-        operand = _value(node.operand, constant_numbers)
+        operand = _value(node.operand, constant_numbers, audit=audit, resource=resource, strict_duplicates=strict_duplicates)
         if isinstance(operand, (int, float)) and not isinstance(operand, bool):
             return -operand
     if isinstance(node, lua.Concat):
-        left, right = _value(node.left, constant_numbers), _value(node.right, constant_numbers)
+        left, right = (_value(node.left, constant_numbers, audit=audit, resource=resource, strict_duplicates=strict_duplicates),
+                       _value(node.right, constant_numbers, audit=audit, resource=resource, strict_duplicates=strict_duplicates))
         if isinstance(left, str) and isinstance(right, str):
             return left + right
     if constant_numbers:
@@ -55,7 +85,7 @@ def _value(node: lua.Node, constant_numbers: bool = False) -> Any:
                 and node.func.idx.id == 'pow' and len(node.args) == 2):
             operation, arguments = math.pow, node.args
         if operation:
-            values = [_value(a, True) for a in arguments]
+            values = [_value(a, True, audit=audit, resource=resource, strict_duplicates=strict_duplicates) for a in arguments]
             if all(type(v) in (int,float) and math.isfinite(v) for v in values):
                 try:
                     result = operation(*values)
@@ -65,10 +95,11 @@ def _value(node: lua.Node, constant_numbers: bool = False) -> Any:
                 raise ValueError('Constant numeric expression is undefined or non-finite')
     if isinstance(node, lua.Call) and isinstance(node.func, lua.Name):
         if node.func.id == "_" and len(node.args) == 1:
-            value = _value(node.args[0], constant_numbers)
+            value = _value(node.args[0], constant_numbers, audit=audit, resource=resource, strict_duplicates=strict_duplicates)
             return TranslatedString(value) if isinstance(value, str) else value
     if isinstance(node, lua.Table):
         mapped: dict[Any, Any] = {}
+        authored = {}
         next_index = 1
         for entry in node.fields:
             if entry.key is None:
@@ -77,10 +108,18 @@ def _value(node: lua.Node, constant_numbers: bool = False) -> Any:
             elif isinstance(entry.key, lua.Name) and not entry.between_brackets:
                 key = entry.key.id
             else:
-                key = _value(entry.key, constant_numbers)
+                key = _value(entry.key, constant_numbers, audit=audit, resource=resource, strict_duplicates=strict_duplicates)
             if not isinstance(key, (str, int)) or isinstance(key, bool):
                 return UnsupportedValue("a computed or unsupported Lua table key")
-            mapped[key] = _value(entry.value, constant_numbers)
+            value = _value(entry.value, constant_numbers, audit=audit, resource=resource, strict_duplicates=strict_duplicates)
+            if key in mapped:
+                equivalent = same_pure_literal(mapped[key], value)
+                if not equivalent and strict_duplicates:
+                    raise ValueError(f'Duplicate Lua table key: {key}')
+                if equivalent:
+                    record_duplicate_literal(audit, resource, key, authored[key], entry)
+            mapped[key] = value
+            authored.setdefault(key, entry)
         if not mapped:
             return []
         if all(type(key) is int for key in mapped) and set(mapped) == set(range(1, len(mapped) + 1)):
@@ -92,7 +131,7 @@ def _value(node: lua.Node, constant_numbers: bool = False) -> Any:
     return UnsupportedValue(f"a dynamic Lua expression ({type(node).__name__}); use literal metadata")
 
 
-def load_lua_table(text: str, *, constant_numbers: bool = False) -> dict[str, Any]:
+def load_lua_table(text: str, *, constant_numbers: bool = False, audit=None, resource='', strict_duplicates=False) -> dict[str, Any]:
     """Accept a bare table, returned chunk, or direct return in data()."""
     text = text.lstrip("\ufeff")
     try:
@@ -128,7 +167,7 @@ def load_lua_table(text: str, *, constant_numbers: bool = False) -> dict[str, An
             raise ValueError("data() computes metadata. Replace it with a direct literal return table before conversion")
     if len(returns) != 1 or len(returns[0].values) != 1:
         raise ValueError("Lua metadata must contain one direct returned table or data() return table")
-    payload = _value(returns[0].values[0], constant_numbers)
+    payload = _value(returns[0].values[0], constant_numbers, audit=audit, resource=resource, strict_duplicates=strict_duplicates)
     if payload == []:
         return {}
     if not isinstance(payload, dict):

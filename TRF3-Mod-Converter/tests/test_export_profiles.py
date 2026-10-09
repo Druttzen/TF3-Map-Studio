@@ -1,5 +1,6 @@
 """End-to-end authored packages, including cargo, pure configs and batch dispatch."""
 from copy import deepcopy
+from pathlib import Path
 import json
 import zipfile
 
@@ -182,6 +183,22 @@ def test_editor_backup_is_inert_and_does_not_collide_with_live_model(fixture_mod
     path=report['pathMapping']['models/model/vehicle/train/test.mdl~']
     assert path.endswith('.editor_backup')
     assert (output/'content'/path).read_bytes()==b'original editor backup'
+
+
+def test_mesh_underscore_backups_retain_distinct_bytes_without_live_collision(fixture_mod):
+    source,game,output=fixture_mod
+    expected_meshes=len(list((source/'res/models/mesh').rglob('*.msh')))
+    live=next((source/'res/models/mesh').rglob('*.msh'))
+    backups={str(live)+'_':b'old descriptor copy',str(live)+'.blob_':b'old blob copy'}
+    for name,data in backups.items():Path(name).write_bytes(data)
+    report=port_tf2_mod(source,output,tf3_game=game,mod_id='fixture_test',name='Fixture')
+    assert report['portCounts']['meshes']==expected_meshes
+    for name,data in backups.items():
+        original=Path(name).relative_to(source/'res').as_posix()
+        target=report['pathMapping'][original]
+        assert target.endswith('.editor_backup')
+        assert (output/'content'/target).read_bytes()==data
+    assert len(set(report['pathMapping'].values()))==len(report['pathMapping'])
 
 
 def test_native_binary_at_sign_is_not_confused_with_callback_suffix(fixture_mod):

@@ -13,6 +13,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 import math
+import re
 from pathlib import PurePosixPath
 from typing import Any, Callable, Mapping
 
@@ -256,7 +257,8 @@ def _source_compartments(transport: dict) -> tuple[list[dict], str]:
 def port_compartments(transport_vehicle: dict, *, catalog: CargoCatalog | None = None,
                       native=None, nodes=None, resolve: Callable | None = None,
                       expand_classes: bool = True, cargo_slot_provider=None,
-                      seat_count: int | None = None) -> tuple[dict, dict, dict]:
+                      seat_count: int | None = None, allow_unverified_types: bool = False,
+                      allow_legacy_layouts: bool = False) -> tuple[dict, dict, dict]:
     """Return ``(transportVehicle, metadata additions, cargo audit)``.
 
     Pass flattened original nodes with their final ``name`` and original ``mesh``
@@ -264,8 +266,9 @@ def port_compartments(transport_vehicle: dict, *, catalog: CargoCatalog | None =
     based. ``resolve(path, 'model')`` migrates authored slot models. A native
     catalog is required only when a nonempty cargo entry is actually present.
     No source dictionary is mutated, and unsupported layouts raise before any
-    export can be published. Expansion appends alternatives; original capacities
-    and load configurations remain intact.
+    export can be published. Expansion appends alternatives with verified generic
+    visuals; unrepresentable inferred alternatives are audited and withheld.
+    Original capacities, cargo mappings and load configurations remain intact.
     """
     _literal(transport_vehicle, 'transportVehicle')
     result = deepcopy(transport_vehicle)
@@ -315,7 +318,12 @@ def port_compartments(transport_vehicle: dict, *, catalog: CargoCatalog | None =
         return catalog
 
     def migrate_entry(entry, ci, li, ei):
-        entry = _dict(entry, 'cargoEntry')
+        entry = deepcopy(_dict(entry, 'cargoEntry'))
+        if 'toHide' in entry and entry['toHide'] in ([], {}):
+            audit.setdefault('normalizations', []).append({
+                'compartment': ci, 'loadConfig': li, 'entry': ei, 'field': 'cargoEntry.toHide',
+                'sourceValue': deepcopy(entry.pop('toHide')),
+                'policy': 'omit_empty_entry_visibility_list', 'nativeTest': 'not_run'})
         _unknown(entry, {'type', 'capacity', 'seats', 'cargoBay', 'customCargoModels', 'cargoTypeSet', 'loadIndicator'}, 'cargoEntry')
         capacity = _number(entry.get('capacity', 0), 'cargoEntry/capacity')
         seats = _list(deepcopy(entry.get('seats', [])), 'cargoEntry/seats')
@@ -326,23 +334,33 @@ def port_compartments(transport_vehicle: dict, *, catalog: CargoCatalog | None =
         if 'type' in entry and 'cargoTypeSet' in entry:
             raise ValueError('Cargo entry mixes TF2 type and TF3 cargoTypeSet')
         restrictions, excluded_classes, excluded_keys = None, set(), set()
+        external = None
         if 'cargoTypeSet' in entry:
             c = get_catalog()
             keys, restrictions, excluded_classes, excluded_keys = c.resolve_set(entry['cargoTypeSet'])
             reason = 'existing cargo type set'
         elif entry.get('type') is not None:
-            keys, reason = get_catalog().keys(entry['type'])
+            try:
+                keys, reason = get_catalog().keys(entry['type'])
+            except ValueError:
+                token = entry['type']
+                if not allow_unverified_types or type(token) is not str or not re.fullmatch(r'[A-Za-z0-9_]+', token):
+                    raise
+                keys, reason = set(), 'unverified external TF2 cargo retained without substitution'
+                external = '::/cargos/'+token.lower()+'/'+token.lower()+'.cargo'
+                audit.setdefault('unverifiedCargoTypes', []).append({'sourceType':token, 'reference':external,
+                    'capacity':capacity, 'nativeTest':'not_run'})
         elif capacity == 0 and not seats:
             keys, reason = set(), 'empty locomotive compartment'
         else:
             raise ValueError('A nonempty cargo compartment has no type; refusing to infer it from vehicle names')
-        if capacity and not keys:
+        if capacity and not keys and external is None:
             raise ValueError('Nonempty cargo compartment has an empty verified cargo type set')
         if keys and seats and any('PASSENGERS' not in get_catalog().types[key].classes for key in keys):
             raise ValueError('Passenger seats assigned to a freight-only cargo entry need review')
         target = {'capacity': capacity, 'cargoTypeSet': restrictions or {
             'cargoClassesIncluded': [], 'cargoClassesExcluded': [],
-            'cargoTypesIncluded': [get_catalog().reference(key) for key in sorted(keys)] if keys else [],
+            'cargoTypesIncluded': [external] if external else [get_catalog().reference(key) for key in sorted(keys)],
             'cargoTypesExcluded': [],
         }, 'loadIndicator': entry.get('loadIndicator', ''), 'seats': seats}
         indicator = {}
@@ -362,14 +380,18 @@ def port_compartments(transport_vehicle: dict, *, catalog: CargoCatalog | None =
             if 'cargoFormats' in bay and 'cargoFormat' in bay:
                 raise ValueError('Cargo bay mixes old and new cargo format fields')
             cargo_format = bay.pop('cargoFormat', None)
-            bay['cargoFormats'] = _list(bay.get('cargoFormats', [cargo_format] if cargo_format else []), 'cargoBay/cargoFormats')
+            default_formats = ['MEDIUM4x1', 'MEDIUM2x1'] if bay.get('type') == 'LEVEL' else ['BIG', 'SMALL']
+            bay['cargoFormats'] = _list(bay.get('cargoFormats', [cargo_format] if cargo_format else default_formats), 'cargoBay/cargoFormats')
             for tag in bay['cargoFormats']:
                 if tag not in get_catalog().formats:
                     raise ValueError(f'Cargo bay format {tag!r} is absent from selected TF3 installation')
             if bay.get('type', 'DISCRETE') not in ('DISCRETE', 'LEVEL'):
                 raise ValueError(f'Unsupported cargo bay type {bay["type"]!r}')
-            if bay.get('sizePolicy') not in (None, '', 'STRETCH', 'STRETCH_HEIGHT_SCALEY', 'BEST_FIT'):
-                raise ValueError('Unsupported cargo bay scaling policy')
+            if bay.get('sizePolicy') not in (None, '', 'STRETCH', 'STRETCH_HEIGHT_SCALEY', 'STRETCH_HEIGHT_NONE', 'BEST_FIT'):
+                if not allow_legacy_layouts or type(bay['sizePolicy']) is not str:
+                    raise ValueError('Unsupported cargo bay scaling policy')
+                audit.setdefault('legacyScalingPolicies', []).append({'value':bay['sizePolicy'],
+                    'policy':'preserve_literal_native_default_scaling', 'nativeTest':'not_run'})
             grid = _list(bay.get('gridSize', []), 'cargoBay/gridSize')
             if len(grid) > 3 or any(type(v) not in (int, float) or not math.isfinite(v) for v in grid):
                 raise ValueError('Cargo bay gridSize needs up to three finite numbers')
@@ -495,9 +517,20 @@ def port_compartments(transport_vehicle: dict, *, catalog: CargoCatalog | None =
                             'evidence': c.types[key].path + '.lua',
                             'inferredFrom': record['cargoTypes'], 'nativeTest': 'not_run',
                         })
-            if unavailable - already:
-                raise ValueError('New same-class cargo types need a generic cargoBay or dynamic #cargo-format slot layout; fixed source cargo models cannot represent: '
-                                 + ', '.join(sorted(unavailable - already)))
+            omitted = sorted(unavailable - already)
+            if omitted:
+                audit['policy'] = 'same_verified_class_where_representable'
+                for key in omitted:
+                    audit.setdefault('omittedInferredExpansions', []).append({
+                        'compartment': ci, 'cargoType': key,
+                        'cargoClasses': sorted(c.types[key].classes & SPECIFIC_FREIGHT_CLASSES),
+                        'evidence': c.types[key].path + '.lua',
+                        'reason': 'no_verified_generic_visual_template',
+                        'policy': 'preserve_authored_cargo_coverage', 'nativeTest': 'not_run',
+                    })
+                audit['warnings'].append(
+                    f'Compartment {ci}: inferred cargo alternatives withheld because no verified generic visual exists; '
+                    'all authored cargo types, capacities and visuals retained: ' + ', '.join(omitted))
         compartments.append({'loadConfigs': converted})
         audit['maxCapacity'] += max((load['cargoEntry']['capacity'] for load in converted), default=0)
     for field in ('compartmentsList', 'compartments', 'capacities'):

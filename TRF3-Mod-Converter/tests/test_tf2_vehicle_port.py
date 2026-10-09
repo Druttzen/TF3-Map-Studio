@@ -58,6 +58,49 @@ def fixture_mod(tmp_path):
     return source,game,tmp_path/'output'
 
 
+@pytest.fixture
+def fractional_revision_mod(fixture_mod):
+    source, _, _ = fixture_mod
+    metadata = load_lua_table((source/'mod.lua').read_text())
+    metadata['info']['minorVersion'] = 1.2
+    (source/'mod.lua').write_text(emit(metadata), encoding='utf-8')
+    return fixture_mod
+
+
+@pytest.mark.parametrize('revision', [0, 6])
+def test_fractional_source_revision_accepts_explicit_integer_override(fractional_revision_mod, revision):
+    source, game, output = fractional_revision_mod
+    before = snapshot(source)
+    original_metadata = (source/'mod.lua').read_bytes()
+    report = port_tf2_mod(source, output, tf3_game=game, mod_id='fixture_test', name='Draft',
+                          revision=revision)
+    assert report['revision'] == revision
+    assert json.loads((output/'mod.json').read_text())['revision'] == revision
+    assert snapshot(source) == before
+    assert (output/'_port_originals/mod.lua').read_bytes() == original_metadata
+    assert load_lua_table((source/'mod.lua').read_text())['info']['minorVersion'] == 1.2
+
+
+def test_fractional_source_revision_still_needs_an_explicit_override(fractional_revision_mod):
+    source, game, output = fractional_revision_mod
+    before = snapshot(source)
+    with pytest.raises(ValueError, match='revision must be a non-negative integer'):
+        port_tf2_mod(source, output, tf3_game=game, mod_id='fixture_test', name='Draft')
+    assert snapshot(source) == before
+    assert not output.exists()
+
+
+@pytest.mark.parametrize('revision', [-1, 1.2, True])
+def test_fractional_source_revision_rejects_invalid_override(fractional_revision_mod, revision):
+    source, game, output = fractional_revision_mod
+    before = snapshot(source)
+    with pytest.raises(ValueError, match='Revision override must be a non-negative integer'):
+        port_tf2_mod(source, output, tf3_game=game, mod_id='fixture_test', name='Draft',
+                     revision=revision)
+    assert snapshot(source) == before
+    assert not output.exists()
+
+
 def test_full_port_preserves_binaries_source_and_credits(fixture_mod):
     source,game,output=fixture_mod; before=snapshot(source)
     report=port_tf2_mod(source,output,tf3_game=game,mod_id='fixture_test',name='New Name')
@@ -73,6 +116,76 @@ def test_full_port_preserves_binaries_source_and_credits(fixture_mod):
     assert not (output/'content/vehicle/train/shared/default_train.trf.lua').exists()
     material=load_lua_table((output/'content/models/material/body.mtl').read_text())
     assert material['params']['map_albedo']['fragmentSamplers']['albedoTex']['fileName']=='fixture_test::/textures/body.dds'
+
+
+def stock_dependencies(fixture_mod):
+    from test_source_game_resources import geometry, dds, installed
+    source, game, output = fixture_mod
+    mesh, blob, _ = geometry()
+    files = {'models/mesh/light.msh': mesh, 'models/mesh/light.msh.blob': blob,
+             'models/material/light.mtl': emit({'type':'PHYSICAL', 'params':{
+                 'map_albedo':{'fileName':'stock.dds'}}}).encode(), 'textures/stock.dds':dds()}
+    tf2, _ = installed(source.parent, files)
+    for path in files:
+        local = source/'res'/path
+        if local.exists(): local.unlink()
+    return tf2, files
+
+
+def test_exact_installed_dependencies_run_adapters_and_archive_all_input_bytes(fixture_mod):
+    from trf3_mod_converter.source_game_resources import verify_source_game_dependencies
+    source, game, output = fixture_mod
+    tf2, files = stock_dependencies(fixture_mod)
+    before = snapshot(source)
+    report = port_tf2_mod(source, output, tf3_game=game, tf2_game=tf2, mod_id='fixture_test', name='Draft')
+    assert snapshot(source) == before
+    rows = report['sourceGameDependencies']
+    assert len(rows) == 4
+    assert report['sourceGameInstallation'] == str(tf2.resolve())
+    assert verify_source_game_dependencies(tf2, rows, report['sourceGameResourceFingerprints'],
+                                          report['sourceGameInventoryFingerprint'])
+    for row in rows:
+        assert (output/row['originalFile']).read_bytes() == files[row['sourceResource'][4:]]
+    for path in ('models/mesh/light.msh', 'models/mesh/light.msh.blob', 'textures/stock.dds'):
+        assert (output/'content'/path).read_bytes() == files[path]
+    material = load_lua_table((output/'content/models/material/light.mtl').read_text())
+    assert material['params']['map_albedo']['fragmentSamplers']['albedoTex']['fileName'] == 'fixture_test::/textures/stock.dds'
+
+
+def test_installed_mesh_rejects_mismatched_authored_material_slots(fixture_mod):
+    source, game, output = fixture_mod
+    tf2, _ = stock_dependencies(fixture_mod)
+    path = source/'res/models/model/vehicle/train/test.mdl'
+    data = load_lua_table(path.read_text())
+    data['lods'][0]['node']['children'][2]['materials'] = ['body.mtl', 'body.mtl']
+    path.write_text(emit(data))
+    with pytest.raises(ValueError, match='material slots'):
+        port_tf2_mod(source, output, tf3_game=game, tf2_game=tf2, mod_id='fixture_test', name='Draft')
+    assert not output.exists()
+
+
+def test_installed_material_cannot_bind_to_unrelated_authored_texture(fixture_mod):
+    source, game, output = fixture_mod
+    tf2, _ = stock_dependencies(fixture_mod)
+    (source/'res/textures/stock.dds').write_bytes(b'unrelated authored texture')
+    with pytest.raises(ValueError, match='conflicts with an authored resource'):
+        port_tf2_mod(source, output, tf3_game=game, tf2_game=tf2, mod_id='fixture_test', name='Draft')
+    assert not output.exists()
+
+
+def test_installed_dependency_change_blocks_publication(fixture_mod, monkeypatch):
+    source, game, output = fixture_mod
+    tf2, _ = stock_dependencies(fixture_mod)
+    original = NativeInventory.material
+    def change_after_adaptation(self, data, resolve, **kwargs):
+        result = original(self, data, resolve, **kwargs)
+        if kwargs.get('resource') == 'models/material/light.mtl':
+            (tf2/'res/textures/stock.dds').write_bytes(b'changed after reading')
+        return result
+    monkeypatch.setattr(NativeInventory, 'material', change_after_adaptation)
+    with pytest.raises(ValueError, match='installed TF2 resources changed'):
+        port_tf2_mod(source, output, tf3_game=game, tf2_game=tf2, mod_id='fixture_test', name='Draft')
+    assert not output.exists()
 
 
 @pytest.mark.parametrize('case',['callback','script','module','repair','blob','nested','alias_source'])

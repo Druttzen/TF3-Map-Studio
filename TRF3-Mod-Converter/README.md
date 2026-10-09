@@ -1,6 +1,139 @@
 # TRF3 Mod Converter
 
-A local desktop app and command-line tool, version **0.11.0**, with a removable mod queue, metadata/layout conversion and **TF2 vehicle, cargo and resource export profiles**. Missing required vehicle data can be completed from a sufficiently similar object in the selected TF3 installation. It never executes source Lua. Exported mods remain drafts until tested in TF3.
+A local desktop app and command-line tool, version **0.15.0**. The desktop now focuses on **vehicles and vehicle appearance mods**, with a removable queue. It preserves original TF2 vehicle data, exports despite unavailable mod requirements and records unresolved resources as warnings. It never executes source Lua. Exported mods remain drafts until tested in TF3.
+
+Vehicle appearance patches can export without a confirmed base model. Existing
+verified dependencies are included when available; missing or ambiguous providers
+remain explicit references. Export does not establish that a repaint works by
+itself. Original textures and source files are preserved.
+
+The vehicle profile keeps authored speed, power, effort, mass and cargo capacity.
+Missing native equivalents can use the selected TF3 installation's legacy vehicle
+adapter with the literal TF2 data. Aircraft gear radii can come from their own
+circular source mesh geometry. Native compatibility defaults and unported
+features are identified in the report. Unsupported coupled cargo layouts still
+require adaptation so authored capacities are not discarded.
+
+Unconfirmed custom cargo keeps its identifier and capacity as an external
+reference with a warning. Native cargo bay scaling includes
+`STRETCH_HEIGHT_NONE`; missing/blank formats use the installed BIG/SMALL defaults
+or MEDIUM4x1/MEDIUM2x1 for LEVEL displays. Combined bay/custom-slot displays
+follow the native adapter's custom-slot precedence, with the redundant bay archived.
+Mesh descriptors lacking geometry stay archived and used references remain
+explicitly external. Unused invalid descriptors and invalid optional cargo display
+attachments stay archived, so they do not prevent exporting the actual vehicles.
+When authored and installed TF2 inputs share a filename but differ, vehicle
+exports retain both under separate references and archive each original input.
+Unported helper animations are identified separately from retained vehicle data.
+Unsupported optional material fields retain an archived original; declared shader
+inputs and textures remain active. Invalid RGB variation palettes are archived
+with an appearance warning. Constant homogeneous transforms are normalized to
+their equivalent affine matrices; position-dependent perspective remains unsupported.
+
+The two non-blending transparent material types retain their type and active
+textures while undeclared recoloring/aging blocks and unused samplers stay
+archived with warnings. Native properties declaring these inputs remain active.
+Mesh editor backups ending in an extra underscore retain their bytes under
+inactive filenames. Stray tables outside mesh children or explicit cargo slot
+configurations stay archived without adding nodes or slots. Cargo visibility
+names absent from every source LOD and the external Rail & Track Industry
+`rt_off` flag produce warnings while authored capacities are retained.
+
+Noise and pollution default to separate arithmetic means of installed TF3
+vehicles of the same type and propulsion, falling back to the same vehicle class.
+Automatic sentinel values and invalid scores are excluded. Each average records
+its complete population and source hashes. No confirmation is required.
+
+Legacy customization menus/callbacks remain archived; supplied vehicle variants
+are exported. Unsupported dynamic sounds and native-inactive player logos produce
+warnings. Click an exported vehicle to inspect its warnings. Use a new export
+folder; older drafts and receipts remain available.
+
+The CLI retains its strict general profile. For the vehicle profile, use
+`batch SOURCE OUTPUT --tf3-game GAME --vehicle-policy tf2_complete` or
+`port-tf2 SOURCE OUTPUT --tf3-game GAME --name "Vehicle draft" --mod-id vehicle_draft --vehicle-policy tf2_complete`.
+`scan --vehicles-only` filters discovery without exporting.
+
+The following describes earlier release behavior and the strict CLI profile.
+
+Version 0.14 adds an explicit noise and pollution choice for vehicles with
+authored legacy emission coefficients. Click a failed mod's name, then choose
+whether to retain supported original coefficients as noise while TF3 calculates
+pollution, or let TF3 calculate both. The default requires a decision; a choice
+applies only to that mod and is recorded in the saved queue, conversion report
+and receipt. Changing it invalidates reuse of an existing draft. Use a fresh
+export folder to create a different draft.
+
+Two additional exact legacy sound-helper editions preserve their own brake,
+slow-speed and supported squeal controls. Unsupported operations remain review
+results. Workshop dependency identities can be inspected through independent
+literal locals and local helper definitions without executing their scripts.
+Conflicting dependency identities remain blocked. Declared providers are
+checked before unrelated Workshop packages. Equivalent literal duplicate
+fields retain both authored expressions and source lines in the audit.
+
+Aircraft may omit the optional payload-weight field when every supported
+installed TF3 plane omits it and no excluded plane could contradict that
+evidence. Installed profile hashes are rechecked; gear and geometry
+requirements still apply. Choose a separate export folder for version 0.14.
+
+Native model fingerprints now attest the exact bytes parsed, including typed
+`.mdl.tl` inputs. Used files cannot change their recorded digest during a port.
+Fresh mounted inventories are checked immediately before final publication,
+after the final staging copy, and again before a queue gives a green result.
+New files or loose overrides invalidate cached evidence and guarded resume.
+
+Version 0.13 follows exact Workshop material, model, mesh, geometry, sound and
+audio dependencies as well as textures. Declared Workshop dependencies select
+the intended provider; imported files and provider metadata are rechecked on
+resume. Imported descriptors retain their author's own dependency scope,
+custom resources, helper identity and language tables. Supported ParamBuilder
+asset templates preserve model selections,
+offsets, heights, track snapping and rotation in generated native scripts.
+Rail signals become native edge constructions with their authored appearance,
+animations, signal type and price. Common speed/power sound expressions, steam
+controls and a bounded brake-gated builder preserve their runtime behavior.
+Finite decorative selectors preserve each model/color choice, height and
+authored random branch, including independent trailer choices. Exact approved
+legacy sound helpers preserve their own brake thresholds and speed fades.
+Localized concatenations retain each language. Metadata localization can use a
+verified, once-assigned string global from the same package's `strings.lua`;
+its literal key and all locale tables remain intact. Identical duplicate literals,
+inactive exporter fields and empty cargo hide lists receive narrow audited
+migrations. Documented scalar EMP cargo payload hints retain authored tonnes
+as native kilograms. Geometry eligibility is checked before donor ranking.
+Literal RGB palettes retain their colors and palette/channel order. Legacy
+standing flags are retired only when they agree with explicit sitting/idle
+animations. Authored cargo types, capacities and visuals remain intact when
+an inferred same-class addition has no verified generic visual. Exact installed
+TF2 resources can pass bounded category adapters when no verified native
+replacement exists; their raw inputs and dependency evidence are retained.
+Use a fresh export folder for version 0.13; prior results remain available.
+
+Temporary Windows file locks during staged folder renames receive a bounded
+retry. Persistent access errors remain visible, and existing output folders
+are preserved.
+
+Version 0.12 fixes filename-only legacy sound sets, long display names, root
+visibility settings, harmless repeated resource separators and numeric model
+editor IDs. It adds verified sound-set builders, literal door-animation
+factories and multiple-unit grouping references. Inactive legacy material
+settings are migrated only with recorded shader/schema evidence. Full titles,
+original resource text and all migration decisions remain available in reports.
+Saved queues can be reopened with `TRF3-Mod-Converter.exe --report PATH`.
+Failed exports now include diagnostic details in the batch report. Existing
+0.11 exports are retained; choose a separate folder for the updated converter.
+Missing textures can use an exact relative-path match in another installed
+TF2 Workshop package when every provider has identical bytes. The draft stores
+its own copy and records all provider paths/checksums; changed or ambiguous
+providers invalidate resume. This Workshop fallback copies only verified
+Workshop inputs. Decorative vehicle assets retain supported physics/animation fields
+without gaining transport or AI-car behavior.
+Legacy TF2 savegame maps (`.sav` with optional `.sav.lua` sidecars) require a
+separate savegame format adapter or recreation in TF3. Copying their metadata
+cannot convert the binary save; these packages now remain explicit review
+results, including when an older completed receipt exists. Invalid legacy IDs
+in numeric Workshop folders use the package's stable Workshop identity.
 
 Version 0.11 fixes ordered cargo exclusions/reinclusions, rejects shadowed
 localization helpers and invalid/version-1 native donors, and checks the TF3
@@ -72,7 +205,7 @@ The queue automatically selects each supported TF2 vehicle/resource profile, inc
 trf3-mod-converter port-tf2 "F:\TF2\mods\electric_locomotive" "F:\exports\electric_locomotive_tf3" --tf3-game "B:\SteamLibrary\steamapps\common\Transport Fever 3" --name "Electric Locomotive Test" --mod-id "creator_electric_test"
 ~~~
 
-`--repairs repairs.json` accepts explicit texture substitutions within the original mod, for example `{"missing.dds":"existing.dds"}`. Missing resources are never guessed. Unused repair entries are rejected. The report records every substitution. The port checks native material properties and base resources against the chosen installation; game assets are referenced rather than copied.
+`--repairs repairs.json` accepts explicit texture substitutions within the original mod, for example `{"missing.dds":"existing.dds"}`. Missing resources are never guessed. Unused repair entries are rejected. The report records every substitution. The port checks native material properties and base resources against the chosen installation. Verified TF3 replacements are referenced; supported exact installed TF2 inputs can instead be adapted into the local draft when no verified native replacement exists.
 
 Profiles cover horse/steam/diesel/electric rail and road vehicles, unpowered wagons, buses, trucks, AI cars, trams, ships, aircraft, people and static/tree/rock models. Cargo and passenger compartments, seats, hidden nodes and generic cargo visuals are migrated. Multiple units, crossings, auto ground textures, ground textures, terrain materials, grass, tracks/streets, verified default bridges and constant decorative asset constructions have separate adapters. Per-LOD identity and unit changes are handled by each profile. Unmatched or conflicting aircraft radii, active ship flags, nonstandard blink timing, explicit TF2 emissions, custom callbacks or unverified metadata can still block an individual mod. Only provably empty mod lifecycle functions can be removed. Dynamic stations/industries/depots/modules, custom cargo economies and arbitrary game/API scripts require manual migration; there is no claim of universal automatic conversion.
 
@@ -92,17 +225,23 @@ Missing aircraft gear radii first use an existing corresponding source LOD with 
 
 ### Automatic same-class TF3 freight additions
 
-The default policy is the user-selected **same verified cargo class** policy. The selected TF3 installation supplies the catalog; this installation currently contains 37 cargo types, six classes and 28 formats. Original cargo alternatives retain their raw capacity and visuals. Additional eligible types become separate alternatives in the same compartment; independent compartments retain simultaneous capacity. BULK, LIQUID, GOODS and FLATBED expansions honor source exclusions and never add passengers as freight. The broad UNIVERSAL class alone does not authorize crossing specific freight classes.
+The default policy adds **same verified cargo class** alternatives where they can be represented faithfully. The selected TF3 installation supplies the catalog. Original cargo alternatives retain their mapped types, raw capacity and visuals. Additional eligible types become separate alternatives in the same compartment; independent compartments retain simultaneous capacity. BULK, LIQUID, GOODS and FLATBED expansions honor source exclusions and never add passengers as freight. The broad UNIVERSAL class alone does not authorize crossing specific freight classes.
 
-Legacy aggregate cargo IDs have explicit catalog mappings, including FOOD and CONSTRUCTION_MATERIALS; OIL denotes the liquid category and is not confused with CRUDE. Unknown/custom IDs require a verified explicit mapping. Fixed authored cargo models must have a generic bay/dynamic format alternative before they can represent newly added cargo. An unsupported mixed visual/layout blocks export rather than disappearing. `migrationAudit.cargoMigrations` records original definitions, every addition, template, class, capacity and installed evidence. Land/ship maximum payload uses the matched native vehicle's declared payload per raw capacity unit and the converted model's maximum simultaneous capacity. Installed native aircraft omit the optional payload field; a matched aircraft follows that omission. The former blanket 300 kg estimate is no longer used. Completed capacities and payload decisions are recorded and still require loaded-mass/acceleration checks in TF3.
+Legacy aggregate cargo IDs have explicit catalog mappings, including FOOD and CONSTRUCTION_MATERIALS; OIL denotes the liquid category and is not confused with CRUDE. Unknown/custom IDs require a verified explicit mapping. Fixed authored cargo models require a verified generic bay/dynamic format alternative before they can represent newly inferred cargo. If that visual is unavailable, only the inferred addition is withheld: all authored cargo types, capacities, indicators and slots remain. Generic visual templates continue to support eligible additions. Unsupported authored mixed visual/layout behavior still blocks export. `migrationAudit.cargoMigrations` records original definitions, additions, templates, classes, capacities and installed evidence; `omittedInferredExpansions` records each withheld type and its reason. Land/ship maximum payload uses the matched native vehicle's declared payload per raw capacity unit and the converted model's maximum simultaneous capacity. Installed native aircraft omit the optional payload field; a matched aircraft follows that omission. The former blanket 300 kg estimate is no longer used. Completed capacities and payload decisions are recorded and still require loaded-mass/acceleration checks in TF3.
 
 `migrationAudit.vehicleProfiles` and `capabilities` describe the actual selected adapters and remaining manual categories. References and cached catalogs remain isolated between queued mods. Native gameplay status stays `not_run` until independently tested. [EXPORT_PROFILES.md](EXPORT_PROFILES.md) lists the verified implementation and research sources.
 
 ### Borrowed TF2 resources (0.7)
 
-The TF2 port automatically replaces borrowed base-game textures, particle textures, sound sets and audio with verified installed TF3 counterparts. A shared resolver serves every category adapter: sound sets retain their vehicle family (bus, car, truck, tram, train, wagon, plane or ship), instead of always looking under train resources. Recognized resource roles can use updated TF3 assets whose bytes differ from TF2. Other relocated textures, clips and animations require an identical SHA-256 hash and filename; a similar name alone is insufficient. Unknown or ambiguous equivalents stop export with an explicit migration requirement.
+The TF2 port prefers verified installed TF3 counterparts for borrowed base-game resources. A shared resolver serves every category adapter: sound sets retain their vehicle family (bus, car, truck, tram, train, wagon, plane or ship), instead of always looking under train resources. Recognized resource roles can use updated TF3 assets whose bytes differ from TF2. Other relocated textures, clips and animations require an identical SHA-256 hash and filename; a similar name alone is insufficient.
 
 The TF2 base inventory is detected from the source's Steam library or the TF3 installation's sibling directory. CLI users can provide `--tf2-game "F:\SteamLibrary\steamapps\common\Transport Fever 2"`. Both loose and archived TF2 resources are read without executing Lua. When a mod bundles a texture, clip, animation or sound set identical to TF2's base resource at the same path, the verified TF3 replacement is referenced and the borrowed file is omitted from the exported content. Authored modifications, including files using a standard base-game name, stay local. Without a TF2 installation, known mappings still work, but bundled files cannot be identified safely and remain local.
+
+When no verified native replacement exists, a bounded category adapter can import the exact requested installed TF2 model, mesh/blob pair, material, animation, texture, sound set or audio input into the local draft. Shared mesh/animation schemas and supported binary formats are checked; model, material and sound descriptors still pass their normal TF3 category adapters. Imported descriptors resolve their dependencies within the installed source game. Unsupported formats or behavior remain explicit errors. This path does not execute Lua or infer a native equivalent from a similar filename.
+
+Raw installed TF2 inputs are archived under `_port_originals`. `sourceGameDependencies` records the exact resource, loose/archive mount, hash, validation policy and exported target; the source installation and inventory fingerprint are retained separately. Referenced bytes and mount selection are checked before completion and again when a receipt is resumed. These are local draft exports with `nativeTest: not_run`; rendering, audio and gameplay still need TF3 verification.
+
+Fallback decisions also record the absence of the exact resource from its Workshop author and declared dependencies. Those scoped lookups and declaration metadata are rechecked; an added author/dependency resource invalidates the old fallback receipt.
 
 Every substitution records its source, TF3 target, origin and proof method in `baseResourceReplacements`. `omittedBorrowedResources` lists omitted copies and `tf2BaseInventory` records the inspected installation. TF3 assets are referenced through `::/` and never copied into the output. A missing TF3 target is not replaced with a random default. Literal particle emitters now preserve named parents, frequency, lifetime, color, velocity and size/alpha endpoints as explicit TF3 curves. The report records the linear size/fade policy. TF2 emitters lack semantic IDs; engine-dependent steam/smoke timing needs native verification. Unknown emitter fields block export. Verified default driver roles and track resources also reference installed TF3 counterparts.
 
@@ -144,7 +283,7 @@ Nested outputs are supported. Current output, temporary stages, recognized previ
 
 ## Migration limits
 
-Inline callbacks, computed metadata, legacy options, and unsupported parameter/dependency definitions require manual migration and block conversion. Legacy script paths require native TF3 module references; referenced local modules must exist.
+Unsupported inline callbacks, computed metadata, legacy options, and parameter/dependency definitions require manual migration and block conversion. The verified constant/finite asset and sound profiles described above have bounded adapters. Legacy script paths require native TF3 module references; referenced local modules must exist.
 
 The ordinary metadata conversion does not port gameplay APIs, models/materials or translations. Its Lua translation calls yield literal keys. The separate TF2 profile converts supported literal `strings.lua` tables to `strings.json`, without executing them.
 

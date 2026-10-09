@@ -104,6 +104,51 @@ def test_preserve_policy_disables_expansion(catalog):
     assert audit['policy'] == 'preserve_types' and audit['additions'] == []
 
 
+def test_vehicle_custom_cargo_keeps_capacity_without_an_invented_mapping(catalog):
+    source = transport(entry('ROLLS', 68))
+    with pytest.raises(ValueError, match='Unknown/custom'):
+        port_compartments(source, catalog=catalog)
+    target, _, audit = port_compartments(source, catalog=catalog, allow_unverified_types=True)
+    cargo = target['compartments'][0]['loadConfigs'][0]['cargoEntry']
+    assert cargo['capacity'] == 68 and audit['maxCapacity'] == 68
+    assert cargo['cargoTypeSet']['cargoTypesIncluded'] == ['::/cargos/rolls/rolls.cargo']
+    assert audit['unverifiedCargoTypes'][0]['sourceType'] == 'ROLLS'
+    assert audit['additions'] == []
+
+
+@pytest.mark.parametrize('token', ['../escape', '::/custom.cargo', 'ROLLS/OTHER'])
+def test_unverified_cargo_does_not_allow_unsafe_or_ambiguous_resource_names(catalog, token):
+    with pytest.raises(ValueError):
+        port_compartments(transport(entry(token)), catalog=catalog, allow_unverified_types=True)
+
+
+def test_native_height_none_bay_policy_and_discrete_default_formats(catalog, nodes):
+    bay = {'bbMin':[0,0,0], 'bbMax':[1,1,1], 'childId':1, 'cargoFormat':'',
+           'gridSize':[], 'sizePolicy':'STRETCH_HEIGHT_NONE', 'type':'DISCRETE'}
+    _, extras, _ = port_compartments(transport(entry('COAL', cargoBay=bay)), catalog=catalog, nodes=nodes)
+    target = extras['loadIndicator']['configs']['tf2_cargo_0_0_0']['cargoBay']
+    assert target['sizePolicy'] == 'STRETCH_HEIGHT_NONE'
+    assert target['cargoFormats'] == ['BIG','SMALL'] and target['childId'] == 'body'
+
+
+def test_level_bays_use_native_covering_defaults(catalog, nodes):
+    bay = {'bbMin':[0,0,0], 'bbMax':[1,1,1], 'childId':1, 'cargoFormat':'',
+           'sizePolicy':'STRETCH', 'type':'LEVEL'}
+    _, extras, _ = port_compartments(transport(entry('COAL', cargoBay=bay)), catalog=catalog, nodes=nodes)
+    assert extras['loadIndicator']['configs']['tf2_cargo_0_0_0']['cargoBay']['cargoFormats'] == ['MEDIUM4x1','MEDIUM2x1']
+
+
+def test_vehicle_legacy_scaling_token_is_retained_with_capacity(catalog, nodes):
+    bay = {'bbMin':[0,0,0],'bbMax':[1,1,1],'childId':0,'cargoFormat':'BIG','sizePolicy':'LEGACY_NONE'}
+    source = transport(entry('COAL',68,cargoBay=bay))
+    with pytest.raises(ValueError,match='scaling policy'):
+        port_compartments(source,catalog=catalog,nodes=nodes)
+    target, extras, audit = port_compartments(source,catalog=catalog,nodes=nodes,allow_legacy_layouts=True)
+    assert extras['loadIndicator']['configs']['tf2_cargo_0_0_0']['cargoBay']['sizePolicy'] == 'LEGACY_NONE'
+    assert target['compartments'][0]['loadConfigs'][0]['cargoEntry']['capacity'] == 68
+    assert audit['legacyScalingPolicies'][0]['value'] == 'LEGACY_NONE'
+
+
 @pytest.mark.parametrize('schema', ['compartmentsList', 'compartments', 'capacities'])
 def test_all_tf2_capacity_schemas(catalog, schema):
     original = transport(entry('LOGS', 88), entry('PLANKS', 64))
@@ -228,12 +273,60 @@ def test_slot_indices_randomization_and_fixed_models_preserved(catalog, nodes):
     assert indicator['configs'][name]['cargoSlots']['configurations'] == [[[], [0], [0, 1]]]
 
 
-def test_fixed_authored_slot_models_block_unverified_new_cargo_visuals(catalog, nodes):
+def test_fixed_authored_slot_models_preserve_source_and_withhold_only_inferred_new_cargo(catalog, nodes):
     source = transport(entry('LOGS', customCargoModels={'configurations': [{'slotLevels': [[], [0]]}]}))
     provider = {'slots': [{'group': 1, 'models': ['authored/logs.mdl'], 'transf': [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]}]}
-    with pytest.raises(ValueError, match='fixed source cargo models'):
-        port_compartments(source, catalog=catalog, nodes=nodes, cargo_slot_provider=provider,
-                          resolve=lambda path, kind: 'test::/' + path)
+    before, before_provider = deepcopy(source), deepcopy(provider)
+    target, extras, audit = port_compartments(source, catalog=catalog, nodes=nodes, cargo_slot_provider=provider,
+                                             resolve=lambda path, kind: 'test::/' + path)
+    loads = target['compartments'][0]['loadConfigs']
+    assert len(loads) == 1 and cargo_keys(loads) == {'logs'}
+    assert loads[0]['cargoEntry']['capacity'] == 80 and audit['maxCapacity'] == 80
+    indicator = extras['loadIndicator']
+    assert indicator['slots'][0]['models'] == ['test::/authored/logs.mdl']
+    assert indicator['configs'][loads[0]['cargoEntry']['loadIndicator']]['cargoSlots']['configurations'] == [[[], [0]]]
+    assert audit['policy'] == 'same_verified_class_where_representable' and audit['additions'] == []
+    omitted = audit['omittedInferredExpansions']
+    assert {row['cargoType'] for row in omitted} == catalog.class_types('FLATBED') - {'logs'}
+    assert all(row['reason'] == 'no_verified_generic_visual_template' for row in omitted)
+    assert all(row['policy'] == 'preserve_authored_cargo_coverage' and row['nativeTest'] == 'not_run' for row in omitted)
+    assert source == before and provider == before_provider
+
+
+def test_fixed_visual_fallback_retains_legacy_mappings_and_explicit_cargo_exclusions(catalog, nodes):
+    visual = {'configurations': [{'slotLevels': [[], [0]]}]}
+    provider = {'slots': [{'group': 1, 'models': ['authored/crates.mdl'],
+                          'transf': [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]}]}
+    target, _, audit = port_compartments(transport(entry('FOOD', 37, customCargoModels=visual)),
+                                         catalog=catalog, nodes=nodes, cargo_slot_provider=provider,
+                                         resolve=lambda path, kind: 'test::/' + path)
+    assert cargo_keys(target['compartments'][0]['loadConfigs']) == {'fish', 'meat', 'tinned_food', 'vegetables'}
+    assert audit['entries'][0]['mapping'] == 'legacy category mapping FOOD'
+    assert audit['maxCapacity'] == 37
+    restricted = {'capacity': 45, 'customCargoModels': visual, 'cargoTypeSet': {
+        'cargoClassesIncluded': [], 'cargoClassesExcluded': [],
+        'cargoTypesIncluded': ['logs.cargo'], 'cargoTypesExcluded': ['planks.cargo']}}
+    target, _, audit = port_compartments(transport(restricted), catalog=catalog, nodes=nodes,
+                                         cargo_slot_provider=provider, resolve=lambda path, kind: 'test::/' + path)
+    assert cargo_keys(target['compartments'][0]['loadConfigs']) == {'logs'}
+    assert target['compartments'][0]['loadConfigs'][0]['cargoEntry']['cargoTypeSet']['cargoTypesExcluded'] == ['::/cargos/planks/planks.cargo']
+    assert {row['cargoType'] for row in audit['omittedInferredExpansions']} == {'steel', 'machines'}
+
+
+def test_generic_alternative_expands_while_fixed_authored_visuals_remain_exclusive(catalog, nodes):
+    provider = {'slots': [{'group': 1, 'models': ['authored/logs.mdl'],
+                          'transf': [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]}]}
+    source = transport(entry('LOGS', 80, customCargoModels={'configurations': [{'slotLevels': [[], [0]]}]}),
+                       entry('PLANKS', 30))
+    target, extras, audit = port_compartments(source, catalog=catalog, nodes=nodes,
+                                             cargo_slot_provider=provider, resolve=lambda path, kind: 'test::/' + path)
+    loads = target['compartments'][0]['loadConfigs']
+    assert cargo_keys(loads) == catalog.class_types('FLATBED')
+    assert [row['cargoEntry']['capacity'] for row in loads] == [80, 30, 30, 30]
+    assert loads[0]['cargoEntry']['loadIndicator'] in extras['loadIndicator']['configs']
+    assert all(not load['cargoEntry']['loadIndicator'] for load in loads[1:])
+    assert audit['maxCapacity'] == 80 and 'omittedInferredExpansions' not in audit
+    assert all(row['inferredFrom'] == ['planks'] for row in audit['additions'])
 
 
 def test_dynamic_cargo_slots_support_class_expansion(catalog, nodes):

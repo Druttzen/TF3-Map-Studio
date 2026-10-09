@@ -38,6 +38,8 @@ def tf2_inventory(tmp_path, files):
     ('models/vehicle/dirt_albedo.dds', 'vehicle/shared/mat/tex/dirt_albedo.dds'),
     ('default_normal_map.tga', 'placeholders/mat/tex/default_normal_map.dds'),
     ('particle_smoke.dds', 'base/tex/particle_smoke.dds'),
+    ('unknown_texture.tga', 'placeholders/mat/tex/unknown_texture.dds'),
+    ('unknown_albedo_1k.tga', 'placeholders/mat/tex/unknown_albedo_1k.dds'),
 ])
 def test_known_roles_use_installed_tf3_asset_even_when_its_bytes_changed(tmp_path, reference, target):
     legacy = tf2_inventory(tmp_path, {'textures/' + reference: b'TF2 authored placeholder'})
@@ -108,7 +110,7 @@ def test_relocated_binary_requires_hash_proof_and_allows_identical_copies(tmp_pa
 
 
 @pytest.mark.parametrize('reference', ['../outside.wav', '/absolute.wav', 'vehicle\\clip.wav',
-                                        'other_mod::/clip.wav', 'vehicle//clip.wav'])
+                                        'other_mod::/clip.wav', 'vehicle//../clip.wav'])
 def test_unsafe_resource_references_are_rejected(reference):
     with pytest.raises(ValueError, match='Unsafe TF2 resource reference'):
         BaseResourceResolver(Installed({})).resolve('audio', reference)

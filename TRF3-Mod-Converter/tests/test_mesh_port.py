@@ -92,11 +92,30 @@ def test_incomplete_or_conflicting_evidence_stops_without_partial_audit(mutation
 
 @pytest.mark.parametrize('unsafe', ['../escape.mtl', '::/already_native.mtl', 'C:/escape.mtl',
                                     'a\\b.mtl', TranslatedString('TRANSLATED')])
-def test_unsafe_material_default_cannot_be_replaced_using_model_evidence(unsafe):
+@pytest.mark.parametrize('allow_missing_defaults', [False, True])
+def test_unsafe_material_default_cannot_be_replaced_using_model_evidence(unsafe, allow_missing_defaults):
     source = descriptor(); source['subMeshes'][0]['materials'] = [unsafe]
     refs = {'new/interior.mtl': 'package::/mat/interior.mtl', 'new/glass.mtl': 'package::/mat/glass.mtl'}
     with pytest.raises(ValueError):
-        port_mesh_descriptor(source, resolver(refs), referrers())
+        port_mesh_descriptor(source, resolver(refs), referrers(), allow_missing_defaults=allow_missing_defaults)
+
+
+@pytest.mark.parametrize('blank', ['', ' '])
+def test_vehicle_blank_mesh_default_uses_only_unanimous_explicit_model_slots(blank):
+    source = descriptor(); source['subMeshes'][0]['materials'] = [blank]
+    before = deepcopy(source)
+    refs = {'new/interior.mtl':'package::/mat/interior.mtl', 'new/glass.mtl':'package::/mat/glass.mtl'}
+    if blank == '':
+        with pytest.raises(ValueError):
+            port_mesh_descriptor(source, resolver(refs), referrers())
+    report = {}
+    result = port_mesh_descriptor(source, resolver(refs), referrers(), report,
+                                  allow_missing_defaults=True)
+    assert result['subMeshes'][0]['materials'] == ['package::/mat/interior.mtl']
+    assert source == before
+    assert report['meshMigrations'][0]['method'] == 'unanimous_explicit_model_material_slot'
+    with pytest.raises(ValueError, match='no explicit model referrers'):
+        port_mesh_descriptor(source, resolver(refs), [], allow_missing_defaults=True)
 
 
 def test_native_geometry_only_descriptor_is_preserved_without_material_invention():

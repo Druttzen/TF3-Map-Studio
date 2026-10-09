@@ -1,4 +1,4 @@
-"""Pure literal adapters for the installed TF2 vec3/transf helper contracts.
+"""Pure literal adapters for the installed TF2 vector/transf helper contracts.
 
 No Lua source is loaded or executed here. The matrix implementation uses
 standard column-major affine composition, authored independently from the
@@ -18,6 +18,8 @@ SCHEMA_SOURCES = (
     'https://wiki.transportfever2.com/doku.php?id=modding:resourcetypes:mdl',
 )
 VERIFIED_METHODS = {
+    'vec2': frozenset({'new'}),
+    'vec4': frozenset({'new'}),
     'vec3': frozenset({'new', 'add', 'sub', 'mul', 'dot', 'cross', 'length',
                        'distance', 'normalize', 'angleUnit', 'xyAngle'}),
     'transf': frozenset({'new', 'flipY', 'transl', 'scale', 'rotX', 'rotY', 'rotZ',
@@ -46,6 +48,15 @@ def _vector(value, where, *, dimension=3):
     if not isinstance(value, dict) or set(value) != set(fields):
         raise ValueError(f'{where}: expected named components {fields}')
     return {field: _number(value[field], f'{where}/{field}') for field in fields}
+
+
+def _scale_vector(value, where):
+    # TF2 transf.scale reads x/y/z only; authored mods also pass vec4 values.
+    # Validate the complete literal first, then retain the three scale axes.
+    if isinstance(value, dict) and set(value) == {*_AXES, 'w'}:
+        vector = _vector(value, where, dimension=4)
+        return {axis: vector[axis] for axis in _AXES}
+    return _vector(value, where)
 
 
 def _matrix(value, where):
@@ -150,7 +161,7 @@ def _transf(method, args):
         return [-value if index % 4 == 1 else value for index, value in enumerate(matrix)]
     if method in ('transl', 'scale'):
         _arity(args, 1, where)
-        vector = _vector(args[0], where)
+        vector = _scale_vector(args[0], where) if method == 'scale' else _vector(args[0], where)
         return _translation(vector) if method == 'transl' else _scale(vector)
     if method in ('rotX', 'rotY', 'rotZ'):
         _arity(args, 1, where)
@@ -166,13 +177,13 @@ def _transf(method, args):
         _arity(args, 2 if method == 'rotZYXTransl' else 3, where)
         rotation, translation = _vector(args[-2], where), _vector(args[-1], where)
         matrix = _zyx_rotation_translation(rotation, translation)
-        return matrix if method == 'rotZYXTransl' else _multiply(matrix, _scale(_vector(args[0], where)))
+        return matrix if method == 'rotZYXTransl' else _multiply(matrix, _scale(_scale_vector(args[0], where)))
     _arity(args, 2 if method == 'rotZTransl' else 3, where)
     angle, translation = _number(args[-2], where), _vector(args[-1], where)
     matrix = _multiply(_translation(translation), _rotation('z', angle))
     if method == 'rotZTransl':
         return matrix
-    scale = (_vector(args[0], where) if method == 'scaleXYZRotZTransl'
+    scale = (_scale_vector(args[0], where) if method == 'scaleXYZRotZTransl'
              else {axis: _number(args[0], where) for axis in _AXES})
     return _multiply(matrix, _scale(scale))
 
@@ -204,7 +215,12 @@ def evaluate_math(helper_name: str, method_name: str, literal_args: list):
     if not isinstance(literal_args, list):
         raise ValueError('Mathematical helper arguments must be a literal list')
     try:
-        result = _vec3(method_name, literal_args) if helper_name == 'vec3' else _transf(method_name, literal_args)
+        if helper_name in ('vec2', 'vec4'):
+            axes = ('x', 'y') if helper_name == 'vec2' else (*_AXES, 'w')
+            _arity(literal_args, len(axes), helper_name + '.new')
+            result = {axis: _number(value, helper_name + '.new') for axis, value in zip(axes, literal_args)}
+        else:
+            result = _vec3(method_name, literal_args) if helper_name == 'vec3' else _transf(method_name, literal_args)
         return _finite_result(result, helper_name + '.' + method_name + ' result')
     except (OverflowError, ZeroDivisionError) as error:
         raise ValueError(f'{helper_name}.{method_name}: result is not finite') from error

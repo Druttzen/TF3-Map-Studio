@@ -1,5 +1,111 @@
 # Validation scope
 
+## Version 0.14.0 — 2026-10-08
+
+The final source suite passed **1482 tests**, with **5 environment
+skips** and 11 duplicate-archive-fixture warnings. All **15 desktop
+cases passed in separate fresh processes**, with no GUI skips or failures.
+The combined process can intermittently fail Tcl initialization; Windows
+symlink privileges account for the other skips.
+
+All 204 preserved collection selections were rechecked with the reviewed
+runtime: **31 exported drafts,
+173 explicit review results, zero pending**.
+All 27 prior exports are retained. Four additional packages use the documented
+recommended choice: retain validated original noise coefficients and let TF3
+calculate pollution. Queue, report and receipt record that choice per mod.
+Changing it requires a new draft; existing exports are retained.
+The NSB Di4 draft retains the previously selected explicit integer revision 1.
+
+Every completed export passed an independent current source/output/native/
+Workshop/installed-TF2 audit, including helper/descriptor/locale archives and
+conversion-choice consistency. Native mounts are rebuilt before final
+publication and receipt verification. Exact parsed bytes supply donor hashes;
+typed .mdl.tl models and excluded aircraft cannot hide contradictory evidence.
+The final publication callback runs after the last staging copy and progress
+notification, before any existing-output backup or final rename.
+
+Independent reviews found and repaired the new squeal input namespace and
+typed-profile/provenance/publication gaps. Adversarial tests cover exact helper
+edition dispatch, native-shaped scripting inputs, modified parsed bytes, new
+mounts/loose overrides, final-copy mutations and preservation of existing
+destinations. Aircraft payload omission still requires unanimous installed
+plane evidence; gear/body/EMP guards remain intact.
+
+Nine full emissions probes were rerun on the frozen runtime. Four complete
+legacy-noise drafts passed fresh native, Workshop, source-game, archive,
+coefficient/audit and unchanged-original checks. Other packages expose distinct
+logo, donor, callback or LOD blockers. Default conversion remains strict.
+
+The portable executable's 31 embedded converter modules and launcher match
+the reviewed source bytecode; Tcl/Tk is included. Portable ZIP, wheel, source
+distribution and source ZIP are checked against the final files.
+**TF3 gameplay, physics, appearance and animations remain not_run.**
+
+## Version 0.13.0 — 2026-10-04
+
+The final source suite completed with **1298 passed and 5 skips**.
+All six GUI workflows passed in isolated fresh processes. Windows symlink privileges and intermittent Tcl initialization in the combined test process account for the skips.
+Deterministic linked-provider checks run independently.
+
+The final collection run retried all 204 preserved selections in a fresh output
+folder: **27 draft exports, 177 explicit review results, zero pending**.
+This adds 19 completed packages to the verified eight-export 0.12 baseline.
+Every completed receipt passed fresh source/output/native/Workshop/installed-TF2 fingerprint
+and provider-selection checks, including raw adapted descriptor/helper/locale
+archives. No unverified Workshop fallback copies known installed TF2 stock data.
+Exact installed TF2 inputs are separately adapted through bounded category and
+binary-format checks, with source archives and fresh mount/catalog/SHA receipts.
+
+Coverage includes contextual and transitive Workshop resource closure; imported
+author localization and custom-resource precedence; helper identity/provenance;
+literal and bounded selection callbacks; exact ParamBuilder profiles; generated
+sound formula/brake scripts; native rail signals; inactive camera/exporter flags;
+scalar EMP payload conversion; donor geometry eligibility; RGB palettes and
+matching seat postures; authored cargo visual coverage; original preservation
+and guarded resume. Arbitrary source Lua is never executed.
+
+Transient Windows access/sharing locks during staged renames receive bounded
+retries. Other errors and occupied destinations fail immediately; permanent
+locks exhaust the bound, preserving source and existing output paths.
+
+The executable is inspected against final source bytecode, with included Tcl/Tk
+and all required adapter modules. Portable/wheel/source packages match final files.
+Export details are in CONVERSION-REVIEW.md and .tf3-batch-report.json beside the
+drafts. **Native TF3 gameplay, physics, animations and appearance remain not_run.**
+
+## Version 0.12.0 — 2026-10-04
+
+The final source suite completed with **814 passed and two skips** for Windows
+symlink privileges. Deterministic linked-provider checks run independently of
+those permission-dependent fixtures. The Windows executable and portable zip
+were rebuilt successfully.
+
+Regression coverage includes filename-only sound sets; retained full titles and
+visibility; literal localization constants; verified sound builders and local
+door-animation factories; multiple-unit grouping; finite vector constructors;
+numeric model-editor IDs; guarded inactive material fields; decorative vehicle
+assets without invented transport/AI markers; repeated resource separators;
+exact Workshop texture dependency copies; source/provider preservation;
+ambiguous or newly added provider detection; changed dependency receipts; and
+saved-result reopening with malformed report rejection. Repackaged TF2 base
+textures still require verified native counterparts. No source Lua is executed.
+Legacy TF2 .sav map packages are rejected before copying or receipt resume;
+unchanged savegame copies cannot produce successful TF3 conversion results.
+Invalid legacy Workshop IDs use the numeric package identity while native and
+valid authored IDs retain their existing validation and namespace behavior.
+
+The recovery run uses a preserved report containing 204 selected packages
+(previously 6 completed, 198 failed) and a separate output folder. All results,
+remaining blockers and source/dependency checks are recorded in that folder's
+`.tf3-batch-report.json` and `CONVERSION-REVIEW.md`. Native gameplay for these
+new drafts remains `not_run`.
+The completed recovery review records **8 draft mod exports and 196 review
+results**. Six mod packages newly export. Four earlier green map results were
+unchanged TF2 savegame copies; they were revalidated as unsupported and the
+copies retained separately for review. All eight remaining completed receipts
+are checked against current source/output and native dependency fingerprints.
+
 ## Version 0.10.0 — 2026-10-04
 
 This version adds missing-only vehicle data completion from compatible installed TF3 definitions. Authored regressions cover strict class/propulsion/size evidence, required scalar fields, declared engine positions and unit conversion, unambiguous typed cargo capacities, native payload policy, source-LOD gear evidence, guarded native gear/hull estimates, ambiguous donor rejection, source preservation and queue preflight integration. Existing invalid values, unknown identities and unsupported scripts remain explicit errors. Reports record completed fields, donor provenance, matching evidence and estimates; native gameplay remains `not_run`.

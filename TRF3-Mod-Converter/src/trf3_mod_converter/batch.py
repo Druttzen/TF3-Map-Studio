@@ -11,18 +11,23 @@ from pathlib import Path
 import re
 import sys
 import threading
+import traceback
 import uuid
 from luaparser import ast, astnodes as lua
 
-from .converter import convert_mod, inspect_mod
-from .filesystem import linked
+from .converter import convert_mod, inspect_mod, _is_legacy_tf2_package, _legacy_tf2_savegame_blocker
+from .filesystem import linked, replace_with_retry
 from .lua_metadata import load_lua_table, _value, UnsupportedValue
 from .resource_audit import parse_lua
 from .base_resources import TF2Inventory, find_tf2_game
+from .workshop_resources import (verify_workshop_dependencies, verify_workshop_absences,
+                                 verify_native_stock_selections, verify_base_resource_identities)
+from .source_game_resources import verify_source_game_dependencies
 from .tf2_vehicle_port import NativeInventory, port_tf2_mod, snapshot, literal
 from .resource_profiles import classify_resource, load_resource_table
 from .vehicle_profiles import classify_model
 from . import __version__
+from .conversion_choices import conversion_choices
 
 METADATA = ('mod.lua', 'modinfo.lua', 'modinfo.json', 'info.json', 'mod.json', '_metadata/modinfo.json')
 SKIP_DIRS = {'.git', '__pycache__', '.pytest_cache', 'node_modules', '.venv', 'venv', '_port_originals'}
@@ -40,6 +45,8 @@ class QueueItem:
     status: str = 'pending'
     message: str = ''
     destination: str = ''
+    emissions_policy: str = 'strict'
+    vehicle_policy: str = 'strict'
 
     @property
     def key(self):
@@ -132,9 +139,15 @@ def _literal_translation_name(text: str, key: str) -> str | None:
 
 
 def stable_id(root: Path, descriptor) -> str:
-    if descriptor.mod_id:
+    workshop = root.name.isdecimal() and root.parent.name == '1066780'
+    # TF2-generated map IDs may contain '?', spaces and uppercase characters.
+    # A numeric Workshop identity is already proven by the package location;
+    # use it only for an invalid legacy ID, preserving native/valid authored IDs.
+    invalid_legacy_workshop_id = (workshop and _is_legacy_tf2_package(root)
+                                  and not re.fullmatch('[a-z0-9_]+', descriptor.mod_id or ''))
+    if descriptor.mod_id and not invalid_legacy_workshop_id:
         return descriptor.mod_id
-    if root.name.isdecimal() and root.parent.name == '1066780':
+    if workshop:
         return 'tf2_workshop_' + root.name
     slug = re.sub('[^a-z0-9]+', '_', root.name.lower()).strip('_')[:20] or 'mod'
     digest = hashlib.sha256(os.path.normcase(str(root)).encode()).hexdigest()[:12]
@@ -142,7 +155,7 @@ def stable_id(root: Path, descriptor) -> str:
 
 
 def scan_mods(source: str | Path, *, exclude: str | Path | None = None,
-              stop: threading.Event | None = None, progress=None) -> dict:
+              stop: threading.Event | None = None, progress=None, vehicles_only=False) -> dict:
     if not str(source).strip():
         raise ValueError('Choose a mod folder first.')
     root = Path(source).expanduser().absolute()
@@ -163,6 +176,11 @@ def scan_mods(source: str | Path, *, exclude: str | Path | None = None,
                 warnings.append(f'Skipped linked folder: {directory}')
                 continue
             if any((directory / name).is_file() for name in METADATA):
+                if vehicles_only:
+                    from .vehicle_mode import vehicle_package
+                    if not vehicle_package(directory):
+                        warnings.append(f'Skipped non-vehicle package: {directory}')
+                        continue
                 # A package boundary prevents helper-library metadata becoming another mod.
                 signature, error, name, mod_id = '', '', directory.name, ''
                 try:
@@ -255,7 +273,7 @@ def _save_state(output: Path, state: dict) -> None:
             json.dump(state, handle, ensure_ascii=False, indent=2)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, target)
+        replace_with_retry(temporary, target)
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -278,9 +296,11 @@ def _export(item, target, tf3_game, native_cache, tf2_cache, progress):
                 tf2_cache[tf2_key] = TF2Inventory(tf2_game)
             tf2 = tf2_cache[tf2_key]
         return port_tf2_mod(root, target, tf3_game=game, mod_id=item.mod_id, name=item.display_name,
-                            progress=progress, _native_inventory=native_cache[key], _tf2_inventory=tf2)
+                            progress=progress, _native_inventory=native_cache[key], _tf2_inventory=tf2,
+                            emissions_policy=item.emissions_policy, vehicle_policy=item.vehicle_policy)
     # Metadata-only/native packages retain the original static validation path.
-    return convert_mod(root, target, mod_id=item.mod_id, name=item.display_name, progress=progress)
+    return convert_mod(root, target, mod_id=item.mod_id, name=item.display_name, progress=progress,
+                       _report_fields={'conversionChoices': conversion_choices(item.emissions_policy, item.vehicle_policy)})
 
 
 def _tf3_data_added(report) -> bool:
@@ -294,11 +314,60 @@ def _tf3_data_added(report) -> bool:
                for key in ('dataCompletions', 'donorCompletions'))
 
 
+def _source_game_valid(root: Path, tf3_game, evidence: dict) -> bool:
+    """Derive the permitted TF2 installation independently of the saved report."""
+    rows = evidence.get('sourceGameDependencies', [])
+    resources = evidence.get('sourceGameResourceFingerprints', {})
+    inventory = evidence.get('sourceGameInventoryFingerprint')
+    installation = evidence.get('sourceGameInstallation')
+    if (rows and 'workshopAbsentDependencies' not in evidence
+            or not verify_workshop_absences(root, evidence.get('workshopAbsentDependencies', []))):
+        return False
+    if not isinstance(rows, list) or not isinstance(resources, dict):
+        return False
+    if not rows and not resources and inventory is None and installation is None:
+        return True  # Older exports without adapted stock inputs remain compatible.
+    if (not rows or not resources or not isinstance(inventory, str)
+            or not re.fullmatch('[a-f0-9]{64}', inventory) or tf3_game is None):
+        return False
+    selected = find_tf2_game(root, Path(tf3_game))
+    if selected is None or installation != str(selected.resolve()):
+        return False
+    return verify_source_game_dependencies(selected, rows, resources, inventory)
+
+
+def _receipt_base_replacements(receipt: dict, target: Path):
+    """Recover old receipt evidence only from its already fingerprinted output."""
+    if 'baseResourceReplacements' in receipt:
+        return receipt['baseResourceReplacements']
+    report = target/'conversion-report.json'
+    try:
+        if any(linked(path) for path in (report, *report.parents)) or not report.is_file():
+            return None
+        if report.resolve().parent != target.resolve():
+            return None
+        before = report.stat()
+        data = json.loads(report.read_text(encoding='utf-8'))
+        after = report.stat()
+        if (any(linked(path) for path in (report, *report.parents))
+                or (before.st_size, before.st_mtime_ns, before.st_ctime_ns)
+                != (after.st_size, after.st_mtime_ns, after.st_ctime_ns)
+                or not isinstance(data, dict)):
+            return None
+        return data.get('baseResourceReplacements', [])
+    except (OSError, ValueError, TypeError, UnicodeError):
+        return None
+
+
 def _preflight_profile(root: Path) -> None:
     """Reject known unsupported packages before hashing gigabytes of assets."""
+    if blocker := _legacy_tf2_savegame_blocker(root):
+        raise ValueError(blocker)
     content = root / 'res'
     if not content.is_dir():
         return
+    from .verified_helpers import verified_legacy_helpers
+    helper_paths = set(verified_legacy_helpers(root).values())
     models = []
     for path in content.rglob('*'):
         if linked(path):
@@ -308,6 +377,8 @@ def _preflight_profile(root: Path) -> None:
             if path.suffix.lower() in ('.zip','.7z','.rar','.pak','.dll','.exe','.bat','.cmd','.ps1','.sh'):
                 raise ValueError(f'Opaque resource archive/native executable requires unpacking or manual migration: {relative}')
             kind = classify_resource(relative)
+            if path in helper_paths:
+                continue  # An exact audited native adapter replaces this helper.
             if kind in ('script', 'module', 'tunnel') or path.suffix.lower() in ('.trf', '.snd'):
                 raise ValueError(f'Custom behavior resource needs a manual port: {relative}')
             if path.suffix.lower() == '.mdl':
@@ -341,10 +412,12 @@ def convert_queue(items: list[QueueItem], destination: str | Path, *, tf3_game: 
         if not isinstance(previous, dict) or previous.get('format') != FORMAT or not isinstance(previous.get('receipts'), dict):
             raise ValueError('Existing batch report is not recognized; choose another output folder.')
         state = {'format': FORMAT, 'destination': str(output), 'receipts': previous['receipts'], 'items': [],
-                 'nativeTest': 'not_run', 'cancelled': False}
+                 'nativeTest': 'not_run', 'cancelled': False, 'diagnostics': {}}
         collisions = {key for key, count in Counter(i.mod_id for i in items).items() if count > 1}
         native_cache, tf2_cache = {}, {}
         for item in items:
+            if item.vehicle_policy == 'tf2_complete' and item.emissions_policy == 'strict':
+                item.emissions_policy = 'class_average'
             item.status, item.message, item.destination = 'pending', '', str(output / item.mod_id)
         state['items'] = [asdict(i) for i in items]
         _save_state(output, state)
@@ -357,6 +430,7 @@ def convert_queue(items: list[QueueItem], destination: str | Path, *, tf3_game: 
             if event:
                 event('item', {'key': item.key, 'status': item.status, 'message': item.message, 'index': index, 'total': len(items), 'destination': str(target)})
             try:
+                choices = conversion_choices(item.emissions_policy, item.vehicle_policy)
                 if not re.fullmatch('[a-z0-9_]+', item.mod_id):
                     raise ValueError('Invalid mod ID; no export was created.')
                 if item.mod_id in collisions:
@@ -364,11 +438,16 @@ def convert_queue(items: list[QueueItem], destination: str | Path, *, tf3_game: 
                 root = Path(item.source)
                 if any(linked(p) for p in (root, *root.parents)):
                     raise ValueError('Source became a linked folder. Scan again.')
-                if item.scan_error:
+                if item.scan_error and not (item.vehicle_policy == 'tf2_complete' and _is_legacy_tf2_package(root)):
                     raise ValueError(item.scan_error)
                 if metadata_signature(root) != item.metadata_signature:
                     raise ValueError('Metadata changed after scanning. Scan the folder again.')
-                _preflight_profile(root)
+                if item.vehicle_policy == 'strict':
+                    _preflight_profile(root)
+                else:
+                    from .vehicle_mode import vehicle_package
+                    if not vehicle_package(root):
+                        raise ValueError('Vehicle mode skips packages without vehicle content')
                 before = file_fingerprint(root)
                 receipt = state['receipts'].get(item.key, {})
                 native=None
@@ -377,38 +456,77 @@ def convert_queue(items: list[QueueItem], destination: str | Path, *, tf3_game: 
                     if game_key not in native_cache:native_cache[game_key]=NativeInventory(Path(tf3_game))
                     native=native_cache[game_key]
                 native_valid=(native is None and receipt.get('nativeResources')=={} or native is not None
-                              and receipt.get('nativeInventory')==native.inventory_fingerprint()
                               and isinstance(receipt.get('nativeResources'),dict)
-                              and native.fingerprints(receipt['nativeResources'])==receipt['nativeResources']) if target.exists() else False
+                              and native.verify_current(receipt.get('nativeInventory'), receipt['nativeResources'])) if target.exists() else False
                 if target.exists():
+                    output_valid = not linked(target) and receipt.get('outputFingerprint') == file_fingerprint(target)
+                    base_identity_valid = output_valid and verify_base_resource_identities(root, tf3_game,
+                        _receipt_base_replacements(receipt, target))
+                    workshop_resources = receipt.get('workshopResources', {})
+                    workshop_valid = verify_workshop_dependencies(root, receipt.get('workshopDependencies', []), workshop_resources)
+                    native_selection_valid = verify_native_stock_selections(root, tf3_game,
+                        receipt.get('workshopDependencies', []))
+                    source_game_valid = _source_game_valid(root, tf3_game, receipt)
                     if (receipt.get('status') == 'completed' and receipt.get('modId') == item.mod_id
                             and receipt.get('sourceFingerprint') == before and not linked(target)
                             and receipt.get('converterVersion') == __version__
+                            and receipt.get('conversionChoices', conversion_choices()) == choices
                             and receipt.get('tf3Game') == (str(Path(tf3_game).resolve()) if tf3_game else None)
-                            and native_valid
-                            and receipt.get('outputFingerprint') == file_fingerprint(target)):
+                            and native_valid and workshop_valid and native_selection_valid and source_game_valid
+                            and base_identity_valid and output_valid):
                         item.message = ('Previous export verified · TF3 data added'
                                         if receipt.get('tf3DataAdded') is True else 'Previous export verified')
+                        if receipt.get('vehicleWarnings'):
+                            item.message += f" · {len(receipt['vehicleWarnings'])} warnings"
                     else:
                         raise ValueError('Output already exists or has changed. It was not overwritten; choose another output folder.')
                 else:
                     progress = (lambda message: event('progress', {'key': item.key, 'message': message})) if event else None
                     report = _export(item, target, tf3_game, native_cache, tf2_cache, progress)
-                    if native and native.fingerprints(report.get('nativeResourceFingerprints',{}))!=report.get('nativeResourceFingerprints',{}):
+                    report = report if isinstance(report, dict) else {}
+                    if report.get('conversionChoices', conversion_choices()) != choices:
+                        raise ValueError('The exporter did not preserve the selected conversion choices.')
+                    migration_audit = report.get('migrationAudit')
+                    migration_audit = migration_audit if isinstance(migration_audit, dict) else {}
+                    if not verify_workshop_dependencies(root, migration_audit.get('workshopDependencies', []), report.get('workshopResourceFingerprints', {})):
+                        raise ValueError('Workshop dependencies changed during conversion. Export needs review.')
+                    if not verify_native_stock_selections(root, tf3_game, migration_audit.get('workshopDependencies', [])):
+                        raise ValueError('TF2 stock resources used to select native mappings changed during conversion. Export needs review.')
+                    if not verify_base_resource_identities(root, tf3_game, report.get('baseResourceReplacements', [])):
+                        raise ValueError('TF2 base resources used to select native mappings changed during conversion. Export needs review.')
+                    if native and not native.verify_current(
+                            report.get('nativeInventoryFingerprint', native.inventory_fingerprint()),
+                            report.get('nativeResourceFingerprints',{})):
                         raise ValueError('TF3 resources changed during conversion. Export needs review.')
+                    if not _source_game_valid(root, tf3_game, report):
+                        raise ValueError('Referenced TF2 installation or resources changed during conversion. Export needs review.')
                     if file_fingerprint(root) != before:
                         raise ValueError('Source changed during conversion. Export needs review.')
                     data_added = _tf3_data_added(report)
                     state['receipts'][item.key] = {'status': 'completed', 'modId': item.mod_id,
                                                   'sourceFingerprint': before, 'outputFingerprint': file_fingerprint(target),
                                                   'converterVersion': __version__, 'tf3Game': str(Path(tf3_game).resolve()) if tf3_game else None,
+                                                  'conversionChoices': choices,
                                                   'nativeInventory': native.inventory_fingerprint() if native else None,
                                                   'nativeResources': report.get('nativeResourceFingerprints',{}) if native else {},
+                                                  'workshopResources': report.get('workshopResourceFingerprints', {}),
+                                                  'workshopDependencies': migration_audit.get('workshopDependencies', []),
+                                                  'baseResourceReplacements': report.get('baseResourceReplacements', []),
+                                                  'sourceGameDependencies': report.get('sourceGameDependencies', []),
+                                                  'sourceGameResourceFingerprints': report.get('sourceGameResourceFingerprints', {}),
+                                                  'sourceGameInventoryFingerprint': report.get('sourceGameInventoryFingerprint'),
+                                                  'sourceGameInstallation': report.get('sourceGameInstallation'),
+                                                  'workshopAbsentDependencies': report.get('workshopAbsentDependencies', []),
                                                   'tf3DataAdded': data_added}
-                    item.message = 'Export saved · TF3 data added' if data_added else 'Export saved'
+                    vehicle_warnings = migration_audit.get('vehicleWarnings', [])
+                    state['receipts'][item.key]['vehicleWarnings'] = vehicle_warnings
+                    item.message = (f'Export saved · {len(vehicle_warnings)} warnings' if vehicle_warnings else
+                                    'Export saved · TF3 data added' if data_added else 'Export saved')
                 item.status = 'completed'
             except Exception as exc:
                 item.status, item.message = 'failed', str(exc)
+                state['diagnostics'][item.key] = {'exceptionType':type(exc).__name__,
+                    'message':str(exc), 'traceback':traceback.format_exc()}
             state['items'] = [asdict(i) for i in items]
             _save_state(output, state)  # A durable receipt precedes the green checkmark.
             if event:

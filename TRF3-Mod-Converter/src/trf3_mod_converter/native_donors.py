@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
+import hashlib
 import json
 import math
 from pathlib import PurePosixPath
@@ -94,6 +95,21 @@ def _dimensions(model):
             raise ValueError(f'Invalid vehicle bounds on axis {axis}; body extent must remain finite')
         values.append(size)
     return tuple(values)
+
+
+def _verified_outside_aircraft_class(model):
+    """Classify excluded native inputs from metadata, never their path/name."""
+    try:
+        _literal(model)
+        metadata = _table(model.get('metadata', {}), 'native metadata')
+        transport = _table(metadata.get('transportVehicle', {}), 'native transportVehicle')
+        if 'airVehicle' not in metadata and transport.get('carrier') != 'AIR':
+            return True
+        physical = _table(metadata.get('airVehicle', {}), 'native airVehicle')
+        return (physical.get('isHelicopter') is True and transport.get('carrier') == 'AIR'
+                and transport.get('transportModes') == ['HELICOPTER'])
+    except (ValueError, AttributeError, TypeError):
+        return False
 
 
 def _sound_propulsion(metadata, family, *, native):
@@ -495,11 +511,11 @@ class NativeDonorCatalog:
         if cached is not None:
             return cached.for_native(native)
         cargo = CargoCatalog.from_native(native)
-        donors, diagnostics, dependencies = [], [], []
+        donors, diagnostics, dependencies = [], [], {}
         for path in sorted(native.files):
             if not path.startswith('vehicle/') or not path.endswith(('.mdl', '.mdl.lua', '.mdl.tl')):
                 continue
-            resource = path[:-4] if path.endswith(('.lua', '.tl')) else path
+            resource = path[:-4] if path.endswith('.lua') else path[:-3] if path.endswith('.tl') else path
             if not resource.endswith('.mdl'):
                 continue
             if path != resource and resource in native.files:
@@ -508,8 +524,10 @@ class NativeDonorCatalog:
                 # whose provenance would resolve to different native bytes.
                 continue
             try:
-                dependencies.append(path)
-                text = native.read(path).decode('utf-8-sig')
+                data = None
+                raw = native.read(path)
+                dependencies[path] = hashlib.sha256(raw).hexdigest()
+                text = raw.decode('utf-8-sig')
                 projected = True
                 try:
                     data = project_native_model(text)
@@ -521,13 +539,21 @@ class NativeDonorCatalog:
                 signature = _signature(data, cargo, native=True)
                 donors.append(NativeDonor(resource, deepcopy(data), signature, cargo, text if projected else None))
             except Exception as exc:
-                diagnostics.append({'resource': resource, 'reason': str(exc), 'action': 'excluded_from_donor_catalog'})
+                diagnostic = {'resource': resource, 'reason': str(exc), 'action': 'excluded_from_donor_catalog'}
+                if data is not None and _verified_outside_aircraft_class(data):
+                    diagnostic['verifiedOutsideAircraftClass'] = True
+                diagnostics.append(diagnostic)
         if not donors:
             raise ValueError('Selected TF3 installation contains no verified literal vehicle donors')
         # The cached object has no writable reference-tracking binding. Parsed
         # immutable records are shared; each match returns defensive data copies.
-        fingerprints = native.fingerprints(dependencies) if hasattr(native, 'fingerprints') else {}
-        fingerprints.update(cargo.resource_dependencies)
+        # Attest the bytes that produced these parsed records. Re-reading files
+        # here could attach new bytes to an old omission or donor decision.
+        fingerprints = dict(dependencies)
+        for path, digest in cargo.resource_dependencies.items():
+            if path in fingerprints and fingerprints[path] != digest:
+                raise ValueError('Native catalog input changed between its cargo and vehicle interpretations: ' + path)
+            fingerprints[path] = digest
         cached = cls(donors, cargo, native=None, diagnostics=diagnostics, resource_dependencies=fingerprints)
         owner._native_donor_catalog = cached
         return cached.for_native(native)
@@ -536,7 +562,41 @@ class NativeDonorCatalog:
         """Classify incomplete numeric metadata without inventing class markers."""
         return _signature(source_model, self.cargo_catalog)
 
-    def match(self, source_model, *, model_path='', requirements=()):
+    def aircraft_payload_omission(self, source_model, *, model_path=''):
+        """Prove a shared installed aircraft omission without selecting physics.
+
+        Omitting an optional field does not depend on similar body dimensions,
+        engines or load capacity. Require unanimous literal aircraft evidence;
+        a single explicit declaration or unclassified model fails this proof.
+        Excluded native definitions need separate literal non-aircraft proof.
+        All catalog input bytes are tracked and checked by the port/receipt.
+        """
+        source = self.source_signature(source_model, model_path=model_path)
+        if source.family != 'plane':
+            return None
+        if any(row.get('verifiedOutsideAircraftClass') is not True for row in self.diagnostics):
+            return None
+        aircraft = [donor for donor in self.donors if donor._signature.family == 'plane']
+        if not aircraft or any('weightMaxPayload' in donor.metadata['airVehicle'] for donor in aircraft):
+            return None
+        resources = sorted(donor.resource for donor in aircraft)
+        inputs = {path: digest for path, digest in self.resource_dependencies.items()
+                  if path in resources or path.removesuffix('.lua').removesuffix('.tl') in resources}
+        return {'field': 'airVehicle.weightMaxPayload',
+                'policy': 'omit_as_verified_installed_aircraft_class',
+                'nativeProfiles': resources, 'nativeProfileFingerprints': inputs,
+                'profileCount': len(resources), 'allProfilesOmitField': True,
+                'nativeTest': 'not_run'}
+
+    def match(self, source_model, *, model_path='', requirements=(), candidate_validator=None):
+        """Rank compatible donors, optionally checking requested geometry first.
+
+        The internal validator returns literal completion values for ambiguity
+        comparison or raises ValueError when this candidate cannot supply them.
+        It must not change the source, donor or published completion report.
+        """
+        if candidate_validator is not None and not callable(candidate_validator):
+            raise ValueError('Donor candidate validator must be callable')
         if isinstance(requirements, str):
             raise ValueError('Donor requirements must be a list/tuple of canonical native dotted paths')
         requirements = tuple(requirements)
@@ -548,7 +608,7 @@ class NativeDonorCatalog:
                              'waterVehicle.availPower', 'waterVehicle.maxRpm'}
         if source.carrier in ('AIR', 'WATER') and source.propulsion is None and any(path.removeprefix('metadata.') in propulsion_fields for path in requirements):
             raise ValueError('Source aircraft/ship propulsion is not verified; provide an explicit standard propulsion marker before completing physical data')
-        results = []
+        results, geometry_rejections = [], []
         for donor in self.donors:
             target = donor._signature
             if (source.family, source.carrier, source.size, source.powered, source.engines, source.role) != (target.family, target.carrier, target.size, target.powered, target.engines, target.role):
@@ -610,8 +670,24 @@ class NativeDonorCatalog:
             score = distance / weight
             if score > self.MAX_SCORE:
                 continue
+            if candidate_validator is not None:
+                candidate = NativeMatch(donor, score, tuple(evidence), 'candidate_geometry_check')
+                try:
+                    completed_geometry = candidate_validator(candidate)
+                    _literal(completed_geometry, 'donor candidate completion')
+                except ValueError as error:
+                    geometry_rejections.append({'resource': donor.resource, 'reason': str(error)})
+                    continue
+                # Identical raw native radii can produce different source
+                # radii after body/node scaling. Keep those differences inside
+                # the existing ambiguity guard as well as the physical values.
+                requested.append(deepcopy(completed_geometry))
+                evidence.append({'gate': 'required_geometry', 'completionValues': deepcopy(completed_geometry)})
             results.append((score, donor.resource, donor, tuple(evidence), requested))
         if not results:
+            if geometry_rejections:
+                raise ValueError('No compatible TF3 donor passed required geometry checks: '
+                                 + geometry_rejections[0]['reason'] + '; complete this mod manually')
             raise ValueError('No sufficiently similar installed TF3 donor with the same verified class, propulsion and requested data; complete this mod manually')
         results.sort(key=lambda row: (row[0], row[1]))
         best = results[0]
@@ -627,8 +703,11 @@ class NativeDonorCatalog:
             equivalents.append(row[1])
         runner = None if len(results) < 2 else {'resource': results[1][1], 'score': round(results[1][0], 8), 'scoreGap': round(results[1][0] - best[0], 8)}
         confidence = 'equivalent_required_values' if equivalents else 'close_physical_match' if best[0] <= .18 else 'compatible_physical_match'
+        evidence = best[3]
+        if geometry_rejections:
+            evidence = (*evidence, {'gate': 'exclude_incompatible_geometry', 'candidates': geometry_rejections})
         # Reads to construct the catalog must not leak provenance across mods.
         # Only the selected donor is registered on this catalog's native fork.
         if self.native is not None:
             self.native.reference(best[2].resource)
-        return NativeMatch(best[2], round(best[0], 8), best[3], confidence, runner, tuple(equivalents))
+        return NativeMatch(best[2], round(best[0], 8), evidence, confidence, runner, tuple(equivalents))

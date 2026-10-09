@@ -92,11 +92,46 @@ def resolve_nodes(lod_nodes, resolve):
                     raise ValueError(f'Unsupported animation {event}: {kind!r}')
 
 
-def port_common_metadata(metadata, nodes, resolve, *, report=None, model_path='', vehicle=False):
+def port_common_metadata(metadata, nodes, resolve, *, report=None, model_path='', vehicle=False, native=None):
     result = deepcopy(metadata)
     log = report if report is not None else {}
+    if 'colorConfig' in result:
+        palette = _table(result['colorConfig'], 'colorConfig')
+        _known(palette, {'configs'}, 'colorConfig')
+        if not palette:
+            del result['colorConfig']
+        else:
+            configs = palette.get('configs')
+            if not isinstance(configs, list):
+                raise ValueError('colorConfig/configs: expected literal RGB palettes')
+            channel_counts = set()
+            for config in configs:
+                if not isinstance(config, list) or not 1 <= len(config) <= 4:
+                    raise ValueError('colorConfig: each palette requires one to four RGB colors')
+                channel_counts.add(len(config))
+                for color in config:
+                    _vector(color, 3, 'colorConfig RGB color')
+                    if any(not 0 <= value <= 1 for value in color):
+                        raise ValueError('colorConfig: RGB values must be between zero and one')
+            if len(channel_counts) > 1:
+                raise ValueError('colorConfig: palettes must address the same color channels')
+            # Native car and character models use this same ordered RGB array.
+            # Preserve active variation, including channel and palette order.
+            proof = ('characters/era_a_man_01/era_a_man_01.mdl' if channel_counts - {1}
+                     else 'vehicle/car/2cv/2cv.mdl')
+            if native is not None and configs:
+                native.read(proof)
+            result['colorConfig'] = palette
+            log.setdefault('colorMigrations', []).append({
+                'model': model_path, 'sourceValue': deepcopy(palette),
+                'policy': 'preserve_literal_rgb_palette_and_channel_order',
+                'nativeSchemaResource': proof,
+                'schemaSource': ('https://wiki.transportfever3.com/doku.php?id=modding:misc:people'
+                                 if channel_counts - {1} else
+                                 'https://wiki.transportfever3.com/doku.php?id=modding:vehicles:basics#cars'),
+                'nativeTest': 'not_run'})
     # No public/native equivalence has been established for these legacy blocks.
-    for field in ('colorConfig', 'lightConfig', 'skinList', 'versioning'):
+    for field in ('lightConfig', 'skinList', 'versioning'):
         if field in result:
             if result[field] not in ({}, []):
                 raise ValueError(f'{field}: requires a verified TF3 adapter; source preserved')
@@ -104,6 +139,13 @@ def port_common_metadata(metadata, nodes, resolve, *, report=None, model_path=''
     camera = _table(result.get('cameraConfig', {}), 'cameraConfig')
     _known(camera, {'positions'}, 'cameraConfig')
     for position in camera.get('positions', []):
+        if 'noTransf' in position:
+            if position['noTransf'] is not False:
+                raise ValueError('camera noTransf must be the inactive false default; custom camera behavior requires migration')
+            position.pop('noTransf')
+            log.setdefault('cameraMigrations', []).append({
+                'model':model_path, 'sourceField':'noTransf', 'sourceValue':False,
+                'policy':'preserve_node_relative_camera_transform_omit_inactive_flag', 'nativeTest':'not_run'})
         _known(position, {'group', 'transf', 'fov'}, 'camera position')
         position['group'] = node_name(nodes, position.get('group'), 'camera')
         if 'transf' in position:

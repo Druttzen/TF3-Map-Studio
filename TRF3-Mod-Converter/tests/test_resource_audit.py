@@ -1,11 +1,14 @@
 import json
 from pathlib import Path
+import zipfile
 
 import pytest
 
 from trf3_mod_converter import convert_mod, prepare_mod
 from trf3_mod_converter import converter
 from trf3_mod_converter.resource_audit import callback_status, parse_lua
+from trf3_mod_converter.base_resources import BaseResourceResolver
+from trf3_mod_converter.tf2_vehicle_port import NativeInventory
 
 
 @pytest.mark.parametrize('script,key,expected', [
@@ -139,6 +142,56 @@ def test_reference_resolution_follows_relative_and_absolute_paths(tmp_path):
     assert any(r['status'] == 'external' for r in rows)
     (directory / 'tex/color.dds').unlink()
     assert any('missing local resource' in b for b in prepare_mod(source).blockers)
+
+
+def test_shipped_native_horn_case_survives_mapping_audit_and_export(tmp_path):
+    game = tmp_path / 'game'
+    archive = game / 'base/content/vehicle/train/shared.zip'
+    archive.parent.mkdir(parents=True)
+    # These are the exact member and reference names shipped in TF3 shared.zip.
+    with zipfile.ZipFile(archive, 'w') as package:
+        package.writestr('shared/sound/train_diesel/horn_23_Diesel.wav', b'native horn')
+    native = NativeInventory(game)
+    reference = BaseResourceResolver(native, family='train').resolve(
+        'audio', 'vehicle/train_diesel/horn_23_Diesel.wav')
+    assert reference == '::/vehicle/train/shared/sound/train_diesel/horn_23_Diesel.wav'
+    source = tmp_path / 'source'
+    fixture(source)
+    resource = source / 'content/object.mdl'
+    resource.write_text('function data() return {version=2, metadata={soundEffects={horn={'
+                        + json.dumps(reference) + '}}}} end', encoding='utf-8')
+    descriptor = prepare_mod(source)
+    assert not descriptor.blockers
+    row = next(r for r in descriptor.resource_audit['references'] if r['reference'] == reference)
+    assert row['status'] == 'external'
+    report = convert_mod(source, tmp_path / 'output')
+    assert not report['resourceAudit']['blockers']
+    assert (tmp_path / 'output/content/object.mdl').read_bytes() == resource.read_bytes()
+
+
+@pytest.mark.parametrize('reference', ['horn_23_Diesel.wav', 'original::/horn_23_Diesel.wav'])
+def test_native_case_exception_does_not_relax_local_export_names(tmp_path, reference):
+    source = tmp_path / 'source'
+    fixture(source)
+    (source / 'content/horn_23_Diesel.wav').write_bytes(b'local horn')
+    (source / 'content/object.mdl').write_text(
+        'function data() return {version=2, horn=' + json.dumps(reference) + '} end')
+    descriptor = prepare_mod(source)
+    assert any('invalid TF3 resource reference' in issue for issue in descriptor.blockers)
+
+
+@pytest.mark.parametrize('reference', [
+    '::/vehicle/train/shared/sound/../horn_23_Diesel.wav',
+    '::/vehicle\\train/shared/sound/train_diesel/horn_23_Diesel.wav',
+    '::/vehicle/train/shared/sound/train_diesel/horn_23_Diesel.wav:extra',
+])
+def test_native_case_exception_keeps_unsafe_reference_checks(tmp_path, reference):
+    source = tmp_path / 'source'
+    fixture(source)
+    (source / 'content/object.mdl').write_text(
+        'function data() return {version=2, horn=' + json.dumps(reference) + '} end')
+    descriptor = prepare_mod(source)
+    assert any('invalid TF3 resource reference' in issue for issue in descriptor.blockers)
 
 
 def test_literal_concatenation_and_comments_not_false_missing_refs(tmp_path):

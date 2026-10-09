@@ -16,7 +16,7 @@ def app():
     except tk.TclError as error:
         pytest.skip(f'Desktop display unavailable: {error}')
     root.withdraw()
-    instance = ConverterApp(root)
+    instance = ConverterApp(root, vehicle_mode=False)
     errors = []
     root.report_callback_exception = lambda *details: errors.append(details)
     yield instance

@@ -153,9 +153,14 @@ def audit_resources(root: Path, mod_id: str, *, source_id: str | None = None,
                 trees[relative] = tree
                 concat_children = {id(child) for n in ast.walk(tree) if isinstance(n, nodes.Concat)
                                    for child in ast.walk(n) if child is not n}
+                native_imports = {id(n.args[0]) for n in ast.walk(tree)
+                    if isinstance(n, nodes.Call) and isinstance(n.func, nodes.Name) and n.func.id == 'require'
+                    and len(n.args) == 1 and _value(n.args[0]) == '/base/model_metadata_util.lua'}
                 strings.extend((relative, s, False) for n in ast.walk(tree)
-                               if id(n) not in concat_children and isinstance(n, (nodes.String, nodes.Concat))
+                               if id(n) not in concat_children | native_imports and isinstance(n, (nodes.String, nodes.Concat))
                                and isinstance(s := _value(n), str))
+                if native_imports:
+                    strings.append((relative, '::/base/model_metadata_util.lua', False))
                 for n in ast.walk(tree):
                     if isinstance(n, nodes.Call) and isinstance(n.func, nodes.Name) and n.func.id == "ug_require":
                         if n.args and isinstance(value := _value(n.args[0]), str):
@@ -230,7 +235,10 @@ def audit_resources(root: Path, mod_id: str, *, source_id: str | None = None,
             else:
                 issue(f"{origin}: TF2 resource references need explicit TF3 migration; metadata-only conversion cannot rewrite their resource-type roots.")
             return
-        if "\\" in ref or ".." in PurePosixPath(ref).parts or not re.fullmatch(r"/?[a-z0-9_./@-]+", ref):
+        # Native assets retain their shipped names, including horn_23_Diesel.wav.
+        # Converted local assets still use the lower-case export naming policy.
+        path_pattern = r"/?[A-Za-z0-9_./@-]+" if namespace == "" else r"/?[a-z0-9_./@-]+"
+        if "\\" in ref or ".." in PurePosixPath(ref).parts or not re.fullmatch(path_pattern, ref):
             row["status"] = "invalid"
             issue(f"{row['source']}: invalid TF3 resource reference {reference!r}.")
             return

@@ -23,11 +23,41 @@ PHYSICAL = {
     'waterVehicle': 'waterVehicle', 'airVehicle': 'airVehicle',
 }
 
+EMP_PAYLOAD_SCHEMA = 'https://www.transportfever.net/lexicon/entry/339-calculated-vehicle-capacites-with-payload-and-loading-volume/'
+
 
 def _number(value, field):
     if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
         raise ValueError(f'{field}: invalid supplied value cannot be replaced with donor data')
     return value
+
+
+def legacy_payload_hints(model):
+    """Read documented CCW/EMP payload tonnes and volume m3 without mutation.
+
+    Compartment arrays need an explicit migration; only scalar whole-vehicle
+    limits are supported. Volume does not determine native cargo capacities.
+    """
+    metadata = model.get('metadata') or {}
+    if not isinstance(metadata, dict):
+        raise ValueError('Model metadata must be a named literal table')
+    transport = metadata.get('transportVehicle') or {}
+    if not isinstance(transport, dict):
+        raise ValueError('transportVehicle must be a named literal table')
+    fields = {key: transport[key] for key in ('maxWeight', 'maxVolume') if key in transport}
+    if not fields:
+        return None
+    for field, value in fields.items():
+        if isinstance(value, list):
+            raise ValueError(f'transportVehicle.{field}: EMP compartment arrays require an explicit payload/volume adapter')
+        _number(value, f'transportVehicle.{field}')
+        if value <= 0:
+            raise ValueError(f'transportVehicle.{field}: documented EMP limit must be positive')
+    payload = fields.get('maxWeight')
+    if payload is not None:
+        payload *= 1000
+        _number(payload, 'authored EMP payload in kilograms')
+    return {'sourceFields': deepcopy(fields), 'weightMaxPayload': payload, 'schemaSource': EMP_PAYLOAD_SCHEMA}
 
 
 def classification_view(model):
@@ -122,6 +152,13 @@ def _has_load(model):
     return has_payload_declaration(model)
 
 
+def _aircraft_payload_omission(model, native, model_path):
+    metadata = model.get('metadata') or {}
+    if 'airVehicle' not in metadata or classify_missing_model(model, model_path).carrier != 'AIR':
+        return None
+    return NativeDonorCatalog.from_native(native).aircraft_payload_omission(model, model_path=model_path)
+
+
 def _audit(match, model_path, source_field, native_field, value, donor_value, **extra):
     return {'model': model_path, 'field': source_field, 'value': deepcopy(value),
             'sourceValue': None, 'donorField': native_field, 'donorValue': deepcopy(donor_value),
@@ -155,7 +192,7 @@ def _waterline(model, match, report, model_path):
         'waterVehicle.waterLine',completed,points,bodyScale=scale,method='approximate_native_hull_waterline'))
 
 
-def complete_missing_model(model, native, *, model_path='', report=None, progress=None):
+def complete_missing_model(model, native, *, model_path='', report=None, progress=None, preserve_tf2=False):
     """Return (completed copy, selected match), preserving all supplied fields.
 
     One selected donor supplies the requested scalar, cargo and payload values.
@@ -165,6 +202,7 @@ def complete_missing_model(model, native, *, model_path='', report=None, progres
     profile = classify_missing_model(result, model_path)
     if profile.carrier is None:
         return result, None
+    payload_hints = legacy_payload_hints(result)
     pending_report = {}
     fields = _scalar_fields(result)
     missing = []
@@ -176,19 +214,40 @@ def complete_missing_model(model, native, *, model_path='', report=None, progres
     requirements = [row[3] for row in missing]
     requirements.extend(missing_cargo_requirements(result))
     result = complete_air_gear(result, report=pending_report, model_path=model_path)
-    if air_gear_needs(result):
+    needs_gear = air_gear_needs(result)
+    if needs_gear:
         requirements.append('nativeGearRadiusPolicy')
     water = (result.get('metadata') or {}).get('waterVehicle')
-    if isinstance(water,dict) and water.get('waterLine') is None:
+    needs_waterline = isinstance(water,dict) and water.get('waterLine') is None
+    if needs_waterline:
         requirements.append('waterVehicle.waterLine')
-    if _has_load(model):
-        requirements.append('nativePayloadPolicy')
+    if not preserve_tf2 and _has_load(model) and not (payload_hints and payload_hints['weightMaxPayload'] is not None):
+        omission = _aircraft_payload_omission(result, native, model_path)
+        if omission is None:
+            requirements.append('nativePayloadPolicy')
     match = None
     if requirements:
         if progress:
             progress('Completing vehicle data from installed TF3 objects…')
         catalog = NativeDonorCatalog.from_native(native)
-        match = catalog.match(model,model_path=model_path,requirements=tuple(requirements))
+        candidate_validator = None
+        if needs_gear or needs_waterline:
+            def candidate_validator(candidate):
+                # Validate a private copy with the same strict geometry rules
+                # used during completion. Reject unusable candidates before
+                # ranking rather than failing after selecting the closest one.
+                checked = complete_air_gear(result, candidate) if needs_gear else deepcopy(result)
+                values = {}
+                if needs_gear:
+                    values['airVehicleGearRadii'] = [
+                        {field: deepcopy(config.get(field, [])) for field in ('axleRadii', 'wheelRadii')}
+                        for config in checked['metadata']['airVehicle']['configs']]
+                if needs_waterline:
+                    _waterline(checked, candidate, {}, model_path)
+                    values['waterVehicleWaterLine'] = checked['metadata']['waterVehicle']['waterLine']
+                return values
+        match = catalog.match(model,model_path=model_path,requirements=tuple(requirements),
+                              candidate_validator=candidate_validator)
         # Reacquire mutable field owners after geometry's defensive deepcopy.
         owners = {row[2]:row for row in _scalar_fields(result)}
         for _,field,source_path,donor_path,factor in missing:
@@ -210,11 +269,50 @@ def complete_missing_model(model, native, *, model_path='', report=None, progres
     return result, match
 
 
-def complete_payload(model, native, raw_capacity, *, match=None, model_path='', report=None):
+def complete_payload(model, native, raw_capacity, *, match=None, model_path='', report=None, preserve_tf2=False):
     """Use a donor's declared ratio or its verified optional air-field omission."""
     _number(raw_capacity,'raw maximum cargo capacity')
+    hints = legacy_payload_hints(model)
     if raw_capacity == 0:
         return 0, 'no_payload_for_zero_capacity'
+    if hints and hints['weightMaxPayload'] is not None:
+        profile = classify_missing_model(model, model_path)
+        block = {'RAIL': 'landVehicle', 'TRAM': 'landVehicle', 'ROAD': 'landVehicle',
+                 'AIR': 'airVehicle', 'WATER': 'waterVehicle'}.get(profile.carrier)
+        if block is None:
+            raise ValueError('Authored EMP payload requires a verified physical vehicle carrier')
+        value, label = hints['weightMaxPayload'], 'authored_emp_payload_tonnes_to_kg'
+        if report is not None:
+            report.setdefault('dataCompletions', []).append({
+                'model': model_path, 'field': block+'.weightMaxPayload', 'sourceField': 'transportVehicle.maxWeight',
+                'sourceValue': hints['sourceFields']['maxWeight'], 'value': value,
+                'unitMultiplier': 1000, 'sourceUnit': 't', 'targetUnit': 'kg',
+                'schemaSource': hints['schemaSource'], 'estimated': False, 'method': label,
+                'nativeTest': 'not_run'})
+        return value, label
+    if preserve_tf2:
+        air = (model.get('metadata') or {}).get('airVehicle') or {}
+        supplied = air.get('maxPayload')
+        value = _number(supplied, 'airVehicle.maxPayload') if supplied is not None else 0
+        label = 'preserve_tf2_authored_payload' if supplied is not None else 'preserve_tf2_constant_vehicle_mass'
+        if report is not None:
+            report.setdefault('dataCompletions', []).append({'model': model_path,
+                'field': 'weightMaxPayload', 'value': value, 'sourceValue': supplied,
+                'rawCapacity': raw_capacity, 'method': label, 'estimated': supplied is None,
+                'nativeTest': 'not_run'})
+        return value, label
+    omission = _aircraft_payload_omission(model, native, model_path)
+    if omission is not None:
+        label = 'native_air_profile_omits_optional_payload'
+        if report is not None:
+            report.setdefault('dataCompletions', []).append({
+                'model': model_path, 'field': 'airVehicle.weightMaxPayload',
+                'sourceValue': None, 'value': None, 'donorValue': None,
+                'estimated': False, 'method': label, 'rawCapacity': raw_capacity,
+                'nativeClassPolicy': omission,
+                'requiredCheck': 'Verify the aircraft load behavior in TF3.',
+                'nativeTest': 'not_run'})
+        return None, label
     if match is None:
         match = NativeDonorCatalog.from_native(native).match(model,model_path=model_path,
                                                            requirements=('nativePayloadPolicy',))

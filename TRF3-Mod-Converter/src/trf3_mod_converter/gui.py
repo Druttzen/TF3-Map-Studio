@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import queue
+import json
+import os
 from dataclasses import replace
 import threading
 import tkinter as tk
@@ -9,12 +11,21 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from . import __version__
-from .batch import scan_mods, convert_queue, find_tf3_game
+from .batch import scan_mods, convert_queue, find_tf3_game, QueueItem, FORMAT
+from .conversion_choices import validate_emissions_policy, validate_vehicle_policy
+
+EMISSIONS_LABELS = {
+    'Review required': 'strict',
+    'Keep original values as noise': 'legacy_noise',
+    'Use TF3 automatic values': 'tf3_automatic',
+    'Average of the same vehicle class': 'class_average',
+}
 
 
 class ConverterApp:
-    def __init__(self, root: tk.Tk) -> None:
+    def __init__(self, root: tk.Tk, *, vehicle_mode=True) -> None:
         self.root = root
+        self.vehicle_mode = vehicle_mode
         root.title('TRF3 Mod Converter')
         root.geometry(f'{min(1080, root.winfo_screenwidth()-60)}x{min(820, root.winfo_screenheight()-60)}')
         root.minsize(840, 620)
@@ -24,6 +35,9 @@ class ConverterApp:
         self.stop_event = threading.Event()
         self.items, self.rows, self.controls = [], {}, []
         self.report = None
+        self.selected_item = None
+        self.emissions_eligible = set()
+        self.emissions_choice = tk.StringVar(value='Review required')
         self.variables = {key: tk.StringVar() for key in ('source', 'destination', 'tf3_game')}
         self.status = tk.StringVar(value='Choose a folder to build your queue')
         self.note = tk.StringVar(value='Subfolders are scanned automatically. Remove any mod you do not want to include.')
@@ -34,6 +48,44 @@ class ConverterApp:
             variable.trace_add('write', lambda *_args, k=key: self._changed(k))
         root.protocol('WM_DELETE_WINDOW', self._close)
         self.poll_id = root.after(60, self._poll)
+
+    def load_results(self, report_path):
+        """Reopen a saved queue for inspection; conversion still verifies receipts."""
+        report = json.loads(Path(report_path).read_text(encoding='utf-8'))
+        if not isinstance(report, dict) or report.get('format') != FORMAT or not isinstance(report.get('items'), list):
+            raise ValueError('Choose a saved TF3 converter batch report.')
+        if not isinstance(report.get('receipts', {}), dict):
+            raise ValueError('Invalid saved conversion receipts.')
+        items = []
+        for row in report['items']:
+            if not isinstance(row, dict):
+                raise ValueError('Invalid saved queue item.')
+            item = QueueItem(**{key:row[key] for key in QueueItem.__dataclass_fields__ if key in row})
+            validate_emissions_policy(item.emissions_policy)
+            validate_vehicle_policy(item.vehicle_policy)
+            if item.status not in ('pending', 'running', 'completed', 'failed'):
+                raise ValueError('Invalid saved conversion status.')
+            if item.status == 'running':
+                item.status, item.message = 'pending', 'Interrupted export; ready to retry'
+            items.append(item)
+        self.loading = True
+        try:
+            sources = [str(Path(i.source).parent) for i in items]
+            self.variables['source'].set(os.path.commonpath(sources) if sources else '')
+            self.variables['destination'].set(report.get('destination', ''))
+            games = {r.get('tf3Game') for r in report.get('receipts', {}).values() if isinstance(r, dict) and r.get('tf3Game')}
+            self.variables['tf3_game'].set(next(iter(games)) if len(games) == 1 else '')
+        finally:
+            self.loading = False
+        self.items, self.report = items, report
+        self._render_queue()
+        completed = sum(i.status == 'completed' for i in items)
+        failed = sum(i.status == 'failed' for i in items)
+        self.status.set(f'Saved results · {completed} exported · {failed} need review')
+        self.note.set('Click a mod name for its saved result. Convert again to verify exports and retry failures.')
+        self._buttons()
+        if items:
+            self.show_item(next((i for i in items if i.status == 'failed'), items[0]))
 
     def _styles(self):
         style = ttk.Style(self.root)
@@ -50,8 +102,8 @@ class ConverterApp:
     def _layout(self):
         header = tk.Frame(self.root, bg='#17283e', padx=18, pady=10)
         header.pack(fill='x')
-        tk.Label(header, text='Convert your mod collection.', bg='#17283e', fg='white', font=('Segoe UI Semibold', 18)).pack(anchor='w')
-        tk.Label(header, text=f'TRF3 MOD CONVERTER {__version__}  ·  Original mods preserved', bg='#17283e', fg='#b7c5d6', font=('Segoe UI', 9)).pack(anchor='w', pady=(2, 0))
+        tk.Label(header, text='Convert your vehicle collection.', bg='#17283e', fg='white', font=('Segoe UI Semibold', 18)).pack(anchor='w')
+        tk.Label(header, text=f'TRF3 MOD CONVERTER {__version__}  ·  Vehicles and appearance patches · Original mods preserved', bg='#17283e', fg='#b7c5d6', font=('Segoe UI', 9)).pack(anchor='w', pady=(2, 0))
         body = ttk.Frame(self.root, padding=12)
         body.pack(fill='both', expand=True)
         body.columnconfigure(0, weight=1)
@@ -97,6 +149,16 @@ class ConverterApp:
         detail_scroll = ttk.Scrollbar(details_host, command=self.details.yview)
         detail_scroll.grid(row=0, column=1, sticky='ns')
         self.details.configure(yscrollcommand=detail_scroll.set)
+        self.choice_frame = ttk.Frame(details_host)
+        self.choice_frame.grid(row=1, column=0, columnspan=2, sticky='ew', pady=(5, 0))
+        ttk.Label(self.choice_frame, text='Noise and pollution').pack(side='left', padx=(0, 8))
+        self.emissions_selector = ttk.Combobox(self.choice_frame, textvariable=self.emissions_choice,
+            values=tuple(EMISSIONS_LABELS), state='readonly', width=32)
+        self.emissions_selector.pack(side='left')
+        self.emissions_selector.bind('<<ComboboxSelected>>', self._choose_emissions)
+        self.choice_note = ttk.Label(self.choice_frame, text='')
+        self.choice_note.pack(side='left', padx=8)
+        self.choice_frame.grid_remove()
         self._set_details('Choose a mod folder or a Workshop collection. Click a mod name to see its result.\nA green ✓ confirms an export; test exported mods in TF3.')
         ttk.Label(body, textvariable=self.status, font=('Segoe UI Semibold', 10)).grid(row=4, column=0, sticky='w', pady=(6, 2))
         note = ttk.Label(body, textvariable=self.note, font=('Segoe UI', 9), wraplength=1000)
@@ -122,6 +184,9 @@ class ConverterApp:
             return
         self.report = None
         if key == 'source':
+            self.selected_item = None
+            self.emissions_eligible.clear()
+            self.choice_frame.grid_remove()
             self.items = []
             self._render_queue()
             self.status.set('Press Enter or choose a folder to scan')
@@ -132,6 +197,7 @@ class ConverterApp:
         self._buttons()
 
     def _buttons(self):
+        self.emissions_selector.configure(state='disabled' if self.busy else 'readonly')
         self.convert_button.configure(state='normal' if self.items and self.variables['destination'].get().strip() and not self.busy else 'disabled')
         self.stop_button.configure(state='normal' if self.busy else 'disabled')
         for control in self.controls:
@@ -188,8 +254,14 @@ class ConverterApp:
         self.progress.configure(mode='indeterminate')
         self.progress.start(15)
         def work():
+            scan_options = {'vehicles_only': True} if self.vehicle_mode else {}
             result = scan_mods(source, exclude=destination or None, stop=self.stop_event,
-                               progress=lambda message: self.events.put(('progress', {'message': message})))
+                               progress=lambda message: self.events.put(('progress', {'message': message})),
+                               **scan_options)
+            if self.vehicle_mode:
+                for item in result['items']:
+                    item.vehicle_policy = 'tf2_complete'
+                    item.emissions_policy = 'class_average'
             result['game'] = find_tf3_game(source) if game_missing else ''
             return result
         self._run(work, 'scanned')
@@ -198,6 +270,10 @@ class ConverterApp:
         if self.busy:
             return
         self.items = [item for item in self.items if item.key != key]
+        if self.selected_item is not None and self.selected_item.key == key:
+            self.selected_item = None
+            self.choice_frame.grid_remove()
+        self.emissions_eligible.discard(key)
         row = self.rows.pop(key, None)
         if row:
             row['frame'].destroy()
@@ -205,6 +281,9 @@ class ConverterApp:
         self._buttons()
 
     def _render_queue(self):
+        self.selected_item = None
+        self.emissions_eligible.clear()
+        self.choice_frame.grid_remove()
         for child in self.list_frame.winfo_children():
             child.destroy()
         self.rows = {}
@@ -238,7 +317,39 @@ class ConverterApp:
         row['status'].configure(text={'pending': 'Needs review' if item.scan_error else 'Listed', 'running': 'Converting…', 'completed': 'Exported', 'failed': 'Needs review'}[item.status], fg=color)
 
     def show_item(self, item):
-        self._set_details(f'{item.display_name}\n{item.message or item.scan_error or "Waiting in the queue"}\nSource: {item.source}' + (f'\nExport: {item.destination}' if item.destination else ''))
+        self.selected_item = item
+        policy = validate_emissions_policy(item.emissions_policy)
+        self.emissions_choice.set(next(label for label, value in EMISSIONS_LABELS.items() if value == policy))
+        if policy != 'strict' or 'noise/pollution' in item.message.lower():
+            self.emissions_eligible.add(item.key)
+        if item.key in self.emissions_eligible:
+            self.choice_frame.grid()
+        else:
+            self.choice_frame.grid_remove()
+        self.choice_note.configure(text={
+            'strict': 'Choose how to balance this draft.',
+            'legacy_noise': 'TF3 calculates pollution.',
+            'tf3_automatic': 'TF3 calculates noise and pollution.',
+            'class_average': 'Separate averages from installed TF3 vehicles of this class.',
+        }[policy])
+        warnings = self.report.get('receipts', {}).get(item.key, {}).get('vehicleWarnings', []) if self.report else []
+        warning_text = ''.join('\nWarning: '+row['message'] for row in warnings if isinstance(row, dict) and isinstance(row.get('message'), str))
+        self._set_details(f'{item.display_name}\n{item.message or item.scan_error or "Waiting in the queue"}\nSource: {item.source}' + (f'\nExport: {item.destination}' if item.destination else '') + warning_text)
+
+    def _choose_emissions(self, _event=None):
+        item = self.selected_item
+        if self.busy or item not in self.items:
+            return
+        policy = EMISSIONS_LABELS[self.emissions_choice.get()]
+        if item.emissions_policy == policy:
+            return
+        item.emissions_policy = policy
+        item.status = 'pending'
+        item.message = 'Noise and pollution choice saved. Ready to retry.'
+        self.report = None
+        self._update_row(item)
+        self.show_item(item)
+        self.status.set('Choice saved for this mod · convert to export or verify it')
 
     def convert_all(self):
         if self.busy or not self.items:
@@ -326,9 +437,14 @@ class ConverterApp:
         self.root.destroy()
 
 
-def main():
+def main(report_path=None):
     root = tk.Tk()
-    ConverterApp(root)
+    app = ConverterApp(root)
+    if report_path:
+        try:
+            app.load_results(report_path)
+        except (OSError, ValueError, TypeError) as error:
+            app._error(str(error))
     root.mainloop()
 
 
