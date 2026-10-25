@@ -3,11 +3,24 @@ local controls=ug_require "druttzen_osm_vanilla::/osm/controls.lua"
 local water=ug_require "druttzen_osm_vanilla::/osm/water.lua"
 local snapshot={}
 
+local detailLimit=30
+local function firstEntries(values)
+  values=values or {}
+  local shown={}
+  local total=#values
+  for index=1,math.min(total,detailLimit) do shown[index]=values[index] end
+  return shown,total-#shown
+end
+
 function snapshot.fromState(value,box)
   if type(value)~="table" or not value.datasetInfo then return nil end
   local info=value.datasetInfo
   local options=controls.options(value.options)
   local available,objectKinds=info.inventory.counts,info.inventory.kinds
+  -- Keep full conversion details in persisted datasetInfo. Only the short
+  -- display copy is transformed each quarter-second panel refresh.
+  local warnings,warningsOmitted=firstEntries(info.warnings)
+  local unavailableObjects,unavailableObjectsOmitted=firstEntries(info.unavailableObjects)
   return {
     datasetId=info.id,phase=value.phase or "ready",started=value.datasetId~=nil,
     mapSource=value.mapSource,mapReady=value.mapReady~=false and (not value.datasetId or value.datasetId==info.id),
@@ -22,9 +35,9 @@ function snapshot.fromState(value,box)
     waterBuilt=value.waterRecord and value.waterRecord.complete or false,
     waterCount=#(value.waterRecords or {})+(value.waterRecord and 1 or 0),
     mappedWaterCount=info.mappedWaterCount,mappedLakeCount=info.mappedLakeCount,
-    totals=controls.totalsFromInventory(info.inventory,options),warnings=controls.warnings(info),
+    totals=controls.totalsFromInventory(info.inventory,options),warnings=controls.warnings({warnings=warnings}),warningsOmitted=warningsOmitted,
     available=available,objectKinds=objectKinds,matchSummary=value.matchSummary,
-    unavailableObjects=info.unavailableObjects or {},builtTowns=value.builtTowns or 0,
+    unavailableObjects=unavailableObjects,unavailableObjectsOmitted=unavailableObjectsOmitted,builtTowns=value.builtTowns or 0,
     hasMappedObjectMetadata=info.hasMappedObjectMetadata,
     mapWidth=box.max.x-box.min.x,mapHeight=box.max.y-box.min.y,
     datasetWidth=info.size[1],datasetHeight=info.size[2],

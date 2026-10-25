@@ -504,19 +504,28 @@ local function buildWater(value,state)
   assert(not callbackError,callbackError)
 end
 
-function script.update(_userParams, state, _dt)
-  local previous=state:get()
-  local dirty=not dataset or attemptedSource~=(previous and previous.mapSource or false) or not previous or not previous.phase or previous.settingsRevision~=10
-  local value=initialState(state)
-  if value.phase=="error" and value.errorKind=="command_state" and not value.groundRecoveryChecked then
+local function checkGroundRecovery(value,requested)
+  if value.phase=="error" and (not value.groundRecoveryChecked or requested and value.errorKind=="command_state") then
     local allowed,reason=groundRecovery.check(dataset,value)
-    value.groundRecoveryChecked=true; dirty=true
+    value.groundRecoveryChecked=true
+    message("Saved ground failure check ("..tostring(value.errorKind).."): "..reason)
     if allowed then
       value.errorKind="preparation"
       value.notice=reason.." Use Retry failed step; saved progress is preserved."
       message(value.notice)
+    elseif value.errorKind=="command_state" then
+      value.notice="Saved import kept stopped. "..reason
     end
+    return true
   end
+  return false
+end
+
+function script.update(_userParams, state, _dt)
+  local previous=state:get()
+  local dirty=not dataset or attemptedSource~=(previous and previous.mapSource or false) or not previous or not previous.phase or previous.settingsRevision~=10
+  local value=initialState(state)
+  if checkGroundRecovery(value) then dirty=true end
   if not state:hasEventSubscriptions() then
     for _,name in ipairs({"osm.start","osm.pause","osm.resume","osm.retry","osm.skip","osm.status","osm.validate","osm.configure","osm.mapSize"}) do
       state:subscribeToEvent(name)
@@ -567,6 +576,7 @@ end
 function script.handleEvent(_userParams, state, _src, id, name, param)
   if id~=eventId then return end
   local value=initialState(state)
+  checkGroundRecovery(value,true)
   if name:sub(1,7)=="osm.map" and name~="osm.mapSize" then
     param=param or {}
     local ok,err=pcall(function()

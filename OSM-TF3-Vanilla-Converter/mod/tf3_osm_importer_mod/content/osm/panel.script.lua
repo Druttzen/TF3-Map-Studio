@@ -54,6 +54,48 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
       content=text(command.label),onClick=function() send(key) end,
     }
   end
+  rows[#rows+1]=text("Commands","font-scale-headline")
+  for _,row in ipairs(commandRows) do rows[#rows+1]=row end
+  rows[#rows+1]=text("Adjust import pace","font-scale-headline")
+  rows[#rows+1]=text("Automatically pause after successful build steps")
+  rows[#rows+1]=text("One step builds one road/rail segment, one scenery batch or one marker. Resume starts another run.")
+  local limits={}
+  local limitPreset=false
+  for _,limit in ipairs({0,10,100,1000,10000}) do
+    if limit==snapshot.options.stepLimit then limitPreset=true end
+    limits[#limits+1]=builtin.ComboBoxItem{value=limit,content=text(limit==0 and "No automatic pause" or tostring(limit).." steps")}
+  end
+  if not limitPreset then limits[#limits+1]=builtin.ComboBoxItem{value=snapshot.options.stepLimit,content=text(tostring(snapshot.options.stepLimit).." steps")} end
+  rows[#rows+1]=builtin.ComboBox{
+    meta={id="druttzen-osm-step-limit",class="osm-import-choice",enabled=not snapshot.checking},value=snapshot.options.stepLimit,items=limits,
+    onValueChange=function(value) send("configure",{stepLimit=tonumber(value)}) end,
+  }
+  rows[#rows+1]=text("These settings can be changed while the import is running or paused.")
+  rows[#rows+1]=text("Scenery items per step")
+  local batches={}
+  for _,size in ipairs({1,10,25,50,100}) do
+    batches[#batches+1]=builtin.ComboBoxItem{value=size,content=text(tostring(size))}
+  end
+  -- A console-set valid size outside the presets is still displayed accurately.
+  local preset=false
+  for _,size in ipairs({1,10,25,50,100}) do if size==snapshot.options.batchSize then preset=true end end
+  if not preset then batches[#batches+1]=builtin.ComboBoxItem{value=snapshot.options.batchSize,content=text(tostring(snapshot.options.batchSize))} end
+  rows[#rows+1]=builtin.ComboBox{
+    meta={id="druttzen-osm-batch",class="osm-import-choice"},value=snapshot.options.batchSize,items=batches,
+    onValueChange=function(value) send("configure",{batchSize=tonumber(value)}) end,
+  }
+  rows[#rows+1]=text("Delay between steps (simulation seconds)")
+  local delays={}
+  for _,delay in ipairs({0,0.1,0.5,1,2}) do
+    delays[#delays+1]=builtin.ComboBoxItem{value=delay,content=text(delay==0 and "Fastest" or tostring(delay).." seconds")}
+  end
+  preset=false
+  for _,delay in ipairs({0,0.1,0.5,1,2}) do if delay==snapshot.options.interval then preset=true end end
+  if not preset then delays[#delays+1]=builtin.ComboBoxItem{value=snapshot.options.interval,content=text(tostring(snapshot.options.interval).." seconds")} end
+  rows[#rows+1]=builtin.ComboBox{
+    meta={id="druttzen-osm-delay",class="osm-import-choice"},value=snapshot.options.interval,items=delays,
+    onValueChange=function(value) send("configure",{interval=tonumber(value)}) end,
+  }
   rows[#rows+1]=text("Choose Lua map","font-scale-headline")
   rows[#rows+1]=text("Selected: "..(snapshot.mapSource or "Installed content/osm/dataset.lua"),"osm-import-note")
   rows[#rows+1]=builtin.NativeFileDialogButton{
@@ -118,48 +160,9 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
   for _,entry in ipairs(snapshot.unavailableObjects) do
     rows[#rows+1]=text(string.format("Kept for reference, no supported automatic build: %s (%d).",entry.tag,entry.count),"osm-import-note")
   end
-  rows[#rows+1]=text("Commands","font-scale-headline")
-  for _,row in ipairs(commandRows) do rows[#rows+1]=row end
-  rows[#rows+1]=text("Adjust import pace","font-scale-headline")
-  rows[#rows+1]=text("Automatically pause after successful build steps")
-  rows[#rows+1]=text("One step builds one road/rail segment, one scenery batch or one marker. Resume starts another run.")
-  local limits={}
-  local limitPreset=false
-  for _,limit in ipairs({0,10,100,1000,10000}) do
-    if limit==snapshot.options.stepLimit then limitPreset=true end
-    limits[#limits+1]=builtin.ComboBoxItem{value=limit,content=text(limit==0 and "No automatic pause" or tostring(limit).." steps")}
+  if (snapshot.unavailableObjectsOmitted or 0)>0 then
+    rows[#rows+1]=text(string.format("%d more unsupported object details are hidden. See the original conversion report for the full list.",snapshot.unavailableObjectsOmitted),"osm-import-note")
   end
-  if not limitPreset then limits[#limits+1]=builtin.ComboBoxItem{value=snapshot.options.stepLimit,content=text(tostring(snapshot.options.stepLimit).." steps")} end
-  rows[#rows+1]=builtin.ComboBox{
-    meta={id="druttzen-osm-step-limit",class="osm-import-choice",enabled=not snapshot.checking},value=snapshot.options.stepLimit,items=limits,
-    onValueChange=function(value) send("configure",{stepLimit=tonumber(value)}) end,
-  }
-  rows[#rows+1]=text("These settings can be changed while the import is running or paused.")
-  rows[#rows+1]=text("Scenery items per step")
-  local batches={}
-  for _,size in ipairs({1,10,25,50,100}) do
-    batches[#batches+1]=builtin.ComboBoxItem{value=size,content=text(tostring(size))}
-  end
-  -- A console-set valid size outside the presets is still displayed accurately.
-  local preset=false
-  for _,size in ipairs({1,10,25,50,100}) do if size==snapshot.options.batchSize then preset=true end end
-  if not preset then batches[#batches+1]=builtin.ComboBoxItem{value=snapshot.options.batchSize,content=text(tostring(snapshot.options.batchSize))} end
-  rows[#rows+1]=builtin.ComboBox{
-    meta={id="druttzen-osm-batch",class="osm-import-choice"},value=snapshot.options.batchSize,items=batches,
-    onValueChange=function(value) send("configure",{batchSize=tonumber(value)}) end,
-  }
-  rows[#rows+1]=text("Delay between steps (simulation seconds)")
-  local delays={}
-  for _,delay in ipairs({0,0.1,0.5,1,2}) do
-    delays[#delays+1]=builtin.ComboBoxItem{value=delay,content=text(delay==0 and "Fastest" or tostring(delay).." seconds")}
-  end
-  preset=false
-  for _,delay in ipairs({0,0.1,0.5,1,2}) do if delay==snapshot.options.interval then preset=true end end
-  if not preset then delays[#delays+1]=builtin.ComboBoxItem{value=snapshot.options.interval,content=text(tostring(snapshot.options.interval).." seconds")} end
-  rows[#rows+1]=builtin.ComboBox{
-    meta={id="druttzen-osm-delay",class="osm-import-choice"},value=snapshot.options.interval,items=delays,
-    onValueChange=function(value) send("configure",{interval=tonumber(value)}) end,
-  }
   rows[#rows+1]=text("Dataset and map","font-scale-headline")
   rows[#rows+1]=text("Prepared area: "..tostring(snapshot.datasetWidth).." × "..tostring(snapshot.datasetHeight).." m")
   rows[#rows+1]=text(string.format("Current map: %.0f × %.0f m",snapshot.mapWidth,snapshot.mapHeight))
@@ -191,6 +194,9 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
     rows[#rows+1]=text("Conversion notes","font-scale-headline")
     for i,warning in ipairs(snapshot.warnings) do
       rows[#rows+1]=builtin.RichTextView{meta={localKey="warning-"..i,class="osm-import-note, font-scale-body"},text=warning,isHtml=false,isMarkdown=false}
+    end
+    if (snapshot.warningsOmitted or 0)>0 then
+      rows[#rows+1]=text(string.format("%d more conversion notes are hidden. See the original conversion report for all notes.",snapshot.warningsOmitted),"osm-import-note")
     end
   end
   local header={

@@ -1,5 +1,6 @@
 """Revision 10 recovery requires proof that no failed ground batch exists."""
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
 
 from lupa import LuaRuntime
@@ -146,6 +147,27 @@ class GroundRecoveryTests(unittest.TestCase):
         self.assert_blocked('cannot be checked')
         self.lua.execute('api.engine.forEachEntityWithComponent=function() error("unavailable") end')
         self.assert_blocked('check failed')
+
+    def test_userdata_api_namespace_can_enumerate_constructions(self):
+        api = self.lua.globals().api
+        self.lua.globals().api = SimpleNamespace(engine=api.engine, type=api.type, cmd=api.cmd)
+        self.assertEqual(self.lua.eval('type(api)'), 'userdata')
+        self.assertTrue(self.check()[0])
+
+    def test_userdata_namespaces_and_callables_are_invoked(self):
+        api = self.lua.globals().api
+        bounds = api.engine.terrain.getBoundingBox
+        component = api.engine.getComponent
+        enumerate_entities = api.engine.forEachEntityWithComponent
+        engine = SimpleNamespace(
+            terrain=SimpleNamespace(getBoundingBox=lambda: bounds()),
+            getComponent=lambda entity, kind: component(entity, kind),
+            forEachEntityWithComponent=lambda callback, kind: enumerate_entities(callback, kind),
+        )
+        self.lua.globals().api = SimpleNamespace(engine=engine, type=api.type, cmd=api.cmd)
+        self.assertEqual(self.lua.eval('type(api.engine)'), 'userdata')
+        self.assertEqual(self.lua.eval('type(api.engine.forEachEntityWithComponent)'), 'userdata')
+        self.assertTrue(self.check()[0])
 
     def test_incomplete_or_throwing_component_reads_are_blocked(self):
         self.lua.execute('api.engine.getComponent=function() return nil end')

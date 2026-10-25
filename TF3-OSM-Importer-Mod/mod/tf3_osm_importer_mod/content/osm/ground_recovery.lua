@@ -36,9 +36,11 @@ local function inspect(dataset,value)
     or type(value.options)~="table" then
     return false,"The failed source range is not safely identified."
   end
-  if type(controls.groundFace)~="function" or type(api)~="table" or not api.engine
-    or not api.engine.terrain or type(api.engine.terrain.getBoundingBox)~="function"
-    or type(api.engine.forEachEntityWithComponent)~="function" or type(api.engine.getComponent)~="function"
+  -- Native API namespaces and callable bindings can be userdata. Check their
+  -- availability here and let check()'s pcall verify that invocation succeeds.
+  if type(controls.groundFace)~="function" or not api or not api.engine
+    or not api.engine.terrain or not api.engine.terrain.getBoundingBox
+    or not api.engine.forEachEntityWithComponent or not api.engine.getComponent
     or not api.type or not api.type.ComponentType or api.type.ComponentType.CONSTRUCTION==nil then
     return false,"The live construction inventory cannot be checked."
   end

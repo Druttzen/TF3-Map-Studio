@@ -13,11 +13,11 @@ Four Transport Fever 3 tools in one project. Each folder includes its source, te
 
 Download and extract the package for the tool you need, then open its `.exe`. The packages include the runtime, so a separate Python installation is not required.
 
-- [OSM-TF3-Vanilla-Converter — Preview 0.16.2](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-10-25-fix3/OSM-TF3-Vanilla-Converter-0.16.2-Windows.zip)
+- [OSM-TF3-Vanilla-Converter — Preview 0.16.3](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-10-25-fix4/OSM-TF3-Vanilla-Converter-0.16.3-Windows.zip)
 - [TF3-Heightmap-Studio — Preview 0.11](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-10-25-fix2/TF3-Heightmap-Studio-0.11-Windows.zip)
 - [TRF3-Mod-Converter — 0.15.0](https://github.com/Druttzen/TF3-Map-Studio/releases/download/converter-v0.15.0/TRF3-Mod-Converter-0.15.0-Windows.zip)
 
-The [reviewed 25 October release](https://github.com/Druttzen/TF3-Map-Studio/releases/tag/map-studio-review-2026-10-25-fix3) includes the complete Windows bundle, standalone importer revision 10, source and checksums. Use the `main` branch for current source; older version tags retain their historical code.
+The [reviewed 25 October release](https://github.com/Druttzen/TF3-Map-Studio/releases/tag/map-studio-review-2026-10-25-fix4) includes the complete Windows bundle, standalone importer revision 11, source and checksums. Use the `main` branch for current source; older version tags retain their historical code.
 
 Heightmap Studio 0.11 reads large converter reports without the former 64 MB rejection. Select the converter JSON or use **Mod folder…** to select the folder containing `import-report.json`; the app discovers its matching Lua. A `.download.json` is a download log, and `.heightmap-report.json` describes an exported terrain: neither replaces the OSM conversion report.
 
@@ -25,9 +25,9 @@ TRF3-Mod-Converter source and Windows runtime are **0.15.0**, focusing on vehicl
 
 ## In-game importer mod — tool #4
 
-Current source is **revision 10**, bundled with converter Preview 0.16.2. Put converted `.lua` maps in the installed importer’s `content/osm/maps` folder before starting TF3, then choose a file in the in-game panel. The engine loads and restores the selected resource directly. Retain the original file of a started import. The GUI reads compact metadata, category totals use cached aggregates, and idle updates do not rewrite saved script state.
+Current source is **revision 11**, bundled with converter Preview 0.16.3. Ground faces that collapse at TF3 coordinate precision are omitted and explicitly counted, fixing the identified Huge-map stop after 172,300 scenery items. Existing datasets and saved source positions are retained. Retry preserves accepted objects; a legacy uncertain-outcome failure requires a live construction inventory before recovery. Put converted `.lua` maps in the installed importer’s `content/osm/maps` folder before starting TF3, then choose a file in the in-game panel. The engine loads and restores the selected resource directly. Retain the original file of a started import. The GUI reads compact metadata, category totals use cached aggregates, and idle updates do not rewrite saved script state.
 
-[Download TF3-OSM-Importer-Mod revision 10](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-10-25-fix3/TF3-OSM-Importer-Mod-Revision-10.zip). Extract `tf3_osm_importer_mod` into TF3's local mods folder and keep one installed copy. Preserve custom datasets and saved progress when updating; do not replace them with the fictional sample. The internal mod ID remains `druttzen_osm_vanilla` for existing saves. See [the importer instructions](TF3-OSM-Importer-Mod/README.md).
+[Download TF3-OSM-Importer-Mod revision 11](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-10-25-fix4/TF3-OSM-Importer-Mod-Revision-11.zip). Extract `tf3_osm_importer_mod` into TF3's local mods folder and keep one installed copy. Preserve custom datasets and saved progress when updating; do not replace them with the fictional sample. The internal mod ID remains `druttzen_osm_vanilla` for existing saves. See [the importer instructions](TF3-OSM-Importer-Mod/README.md).
 
 Experimental shallow-water excavation, model matching and functioning towns retain the documented testing limits. Read [the water investigation](TF3-OSM-Importer-Mod/WATER-RESEARCH.md) and [the review findings and fixes](CODE-REVIEW-2026-10-25.md).
 
