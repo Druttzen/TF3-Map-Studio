@@ -1,6 +1,6 @@
 -- GPL-3.0. TF3 builder using its installed API definitions and vanilla resources.
 local dataset
-local loadedSource,transfer
+local loadedSource,attemptedSource
 local maps = ug_require "druttzen_osm_vanilla::/osm/map_data.lua"
 local controls = ug_require "druttzen_osm_vanilla::/osm/controls.lua"
 local worldAudit = ug_require "druttzen_osm_vanilla::/osm/world_audit.lua"
@@ -22,9 +22,22 @@ end
 
 local function initialState(state)
   local value = state:get() or {}
-  if not dataset then
-    dataset=value.mapSource and {id="awaiting-map",edges={},scenery={},labels={},size={0,0}}
-      or ug_require "druttzen_osm_vanilla::/osm/dataset.lua"
+  if not dataset or attemptedSource~=(value.mapSource or false) then
+    attemptedSource=value.mapSource or false
+    loadedSource=nil
+    if value.mapSource then
+      local ok,result=pcall(function()
+        local data=maps.load(value.mapSource)
+        assert(data.id==value.mapExpectedId and (not value.datasetId or data.id==value.datasetId),"The original selected Lua map has changed")
+        if value.mapExpectedSize then assert(data.size[1]==value.mapExpectedSize[1] and data.size[2]==value.mapExpectedSize[2],"Saved map dimensions changed") end
+        return {data=data,info=maps.describe(data)}
+      end)
+      if ok then dataset=result.data; loadedSource=value.mapSource; value.datasetInfo=result.info
+      else
+        dataset={id="awaiting-map",edges={},scenery={},labels={},size={0,0}}
+        value.notice="Could not restore the original Lua map: "..tostring(result)
+      end
+    else dataset=ug_require "druttzen_osm_vanilla::/osm/dataset.lua" end
   end
   if not value.phase then
     value = { phase="ready", cursor=1, builtEdges=0, builtScenery=0, skipped=0, nodes={}, labels=0 }
@@ -39,28 +52,32 @@ local function initialState(state)
     value.settingsRevision=10
   end
   value.waterRecords=value.waterRecords or {}
-  if not value.mapSource and (not value.datasetInfo or value.datasetInfo.id~=dataset.id) then value.datasetInfo=maps.describe(dataset) end
+  if not value.datasetInfo or not value.mapSource and value.datasetInfo.id~=dataset.id then value.datasetInfo=maps.describe(dataset) end
   return value
 end
 
 local function mapReady(value)
-  return not value.mapSource or loadedSource==value.mapSource and dataset.id==value.mapExpectedId
+  if not value.mapSource then return true end
+  return loadedSource==value.mapSource and dataset.id==value.mapExpectedId
 end
 
 local function useMap(value,data,source)
   local info=maps.describe(data)
   if value.datasetId then
     assert(data.id==value.datasetId,"This save belongs to another Lua map. Select its original file.")
-    assert(data.size[1]==value.datasetInfo.size[1] and data.size[2]==value.datasetInfo.size[2],"Saved map dimensions changed")
+    if value.mapExpectedSize then
+      assert(data.size[1]==value.mapExpectedSize[1] and data.size[2]==value.mapExpectedSize[2],"Saved map dimensions changed")
+    end
   else
     value.options=controls.options(data.importOptions)
     if #data.edges+#data.scenery+#data.labels>1000 and not (data.importOptions and data.importOptions.stepLimit~=nil) then value.options.stepLimit=100 end
     value.phase="ready"; value.cursor=1; value.matches=nil; value.matchSummary=nil; value.audit=nil
     value.check=nil; value.error=nil; value.errorKind=nil; value.placeNamesPage=nil
   end
-  dataset=data; loadedSource=source
+  dataset=data; loadedSource=source; attemptedSource=source or false
   value.mapSource=source; value.mapExpectedId=data.id; value.mapReady=true; value.datasetInfo=info
-  value.mapTransfer=nil; value.notice="Lua map loaded. Check the map and match objects before starting."
+  value.mapExpectedSize=data.size
+  value.notice="Lua map loaded. Check the map and match objects before starting."
 end
 
 local function status(value)
@@ -186,6 +203,7 @@ end
 
 local function beginImport(value)
   value.datasetId=dataset.id; value.phase="scenery"; value.cursor=1; value.nodes={}; value.runSteps=0
+  value.mapExpectedSize=dataset.size
   -- Preserve older saves' height rules. New imports exclude construction
   -- alignments from their height reference, including future water basins.
   value.heightPolicy="base-v1"; value.heightReference={}; value.nodeHeights={}
@@ -481,7 +499,7 @@ end
 
 function script.update(_userParams, state, _dt)
   local previous=state:get()
-  local dirty=not previous or not previous.phase or previous.settingsRevision~=10
+  local dirty=not dataset or attemptedSource~=(previous and previous.mapSource or false) or not previous or not previous.phase or previous.settingsRevision~=10
   local value=initialState(state)
   if not state:hasEventSubscriptions() then
     for _,name in ipairs({"osm.start","osm.pause","osm.resume","osm.retry","osm.skip","osm.status","osm.validate","osm.configure","osm.mapSize"}) do
@@ -518,15 +536,14 @@ function script.update(_userParams, state, _dt)
   if not value.waterNextSubscribed then
     state:subscribeToEvent("osm.waterNext"); value.waterNextSubscribed=true; dirty=true
   end
-  if not value.mapSelectionSubscribed then
-    for _,name in ipairs({"osm.mapBegin","osm.mapChunk","osm.mapCommit","osm.mapCancel","osm.mapDefault","osm.mapNotice"}) do state:subscribeToEvent(name) end
-    value.mapSelectionSubscribed=true; dirty=true
+  if not value.mapResourceSubscribed then
+    for _,name in ipairs({"osm.mapSelect","osm.mapDefault","osm.mapNotice"}) do state:subscribeToEvent(name) end
+    value.mapResourceSubscribed=true; dirty=true
   end
   local ready=mapReady(value)
   if value.mapReady~=ready then value.mapReady=ready; dirty=true end
-  if value.mapTransfer and not transfer then value.mapTransfer=nil; dirty=true end
   if dirty then state:set(value) end
-  if not ready or value.mapTransfer then return end
+  if not ready then return end
   -- Return a serializable result only while there are build steps to run.
   if value.waterJob or value.phase=="checking" or value.phase=="edges" or value.phase=="scenery" or value.phase=="labels" then return {} end
 end
@@ -540,35 +557,21 @@ function script.handleEvent(_userParams, state, _src, id, name, param)
       if name=="osm.mapNotice" then
         assert(type(param.message)=="string","Invalid map notice")
         value.notice=param.message:sub(1,1500)
-        if transfer and transfer.token==param.token then transfer=nil; value.mapTransfer=nil end
-      elseif name=="osm.mapCancel" then
-        transfer=nil; value.mapTransfer=nil; value.notice="Map loading cancelled. The previous selection is retained."
-      elseif name=="osm.mapBegin" then
+      elseif name=="osm.mapSelect" then
         assert(not value.waterJob and not value.check,"Finish or cancel the current check before choosing a map")
-        assert(not value.datasetId or param.header and param.header.id==value.datasetId,"This save belongs to another Lua map; restore its original file")
-        transfer=maps.begin(param)
-        value.mapTransfer={token=transfer.token,seq=0,total=transfer.total,count=0,source=transfer.source}
-        value.mapReply=nil; value.notice="Loading Lua map. Nothing is being built."
-      elseif name=="osm.mapChunk" then
-        maps.accept(transfer,param)
-        value.mapTransfer={token=transfer.token,seq=transfer.seq,total=transfer.total,count=transfer.count,source=transfer.source}
-      elseif name=="osm.mapCommit" then
-        local data=maps.finish(transfer,param)
-        local source=transfer.source
-        useMap(value,data,source); transfer=nil
-        value.mapReply={token=param.token,done=true}
+        assert(not value.datasetId or not value.mapSource or param.resource==value.mapSource,"This save belongs to another Lua map; restore its original file")
+        useMap(value,maps.load(param.resource),param.resource)
       elseif name=="osm.mapDefault" then
-        assert(not value.datasetId and not value.check and not value.waterJob and not transfer,"Map selection is locked for this import")
+        assert(not value.datasetId and not value.check and not value.waterJob,"Map selection is locked for this import")
         useMap(value,ug_require "druttzen_osm_vanilla::/osm/dataset.lua",nil)
       end
     end)
     if not ok then
-      value.notice=tostring(err); value.mapReply={token=param.token,error=true}
-      transfer=nil; value.mapTransfer=nil
+      value.notice=tostring(err)
     end
     state:set(value); return
   end
-  if (not mapReady(value) or value.mapTransfer) and name~="osm.status" and name~="osm.mapSize" and name~="osm.pause" then
+  if not mapReady(value) and name~="osm.status" and name~="osm.mapSize" and name~="osm.pause" then
     value.notice="Wait for the selected Lua map to load, or select its original file again. No objects were built."
     state:set(value); return
   end
@@ -701,7 +704,7 @@ end
 
 function script.postUpdate(_userParams, state, _dt, _result)
   local value=initialState(state)
-  if not mapReady(value) or value.mapTransfer then return end
+  if not mapReady(value) then return end
   if value.waterJob then
     local ok,err=pcall(buildWater,value,state)
     if not ok then

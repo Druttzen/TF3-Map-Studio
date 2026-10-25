@@ -1,31 +1,25 @@
--- GPL-3.0. Compact map descriptions and bounded GUI-to-engine data transfers.
+-- GPL-3.0. Engine-only Lua map resources with compact presentation metadata.
 local controls=ug_require "druttzen_osm_vanilla::/osm/controls.lua"
-local maps={sections={"nodes","edges","scenery","labels","waterFeatures"},chunkSize=256}
-local fields={"schema","id","size","bounds","importOptions","warnings","unavailableObjects","objectMetadata"}
-
-function maps.relativePath(path,root)
-  assert(type(path)=="string" and #path<=4096,"Choose a converted Lua map file")
+local maps={}
+function maps.checkResource(resource)
+  assert(type(resource)=="string" and #resource<=4096 and resource:sub(1,9)=="osm/maps/"
+    and resource:sub(-4):lower()==".lua" and not resource:find("[\\:%z\r\n]")
+    and not resource:find("//",1,true),"Choose a Lua map from the importer's content/osm/maps folder")
+  for part in resource:gmatch("[^/]+") do assert(part~="." and part~="..","Invalid map path") end
+  return resource
+end
+function maps.resourcePath(path,root)
+  assert(type(path)=="string","Choose a converted Lua map")
   path=path:gsub("\\","/")
   root=root:gsub("\\","/"):gsub("/+$","")
-  local comparePath,compareRoot=path,root
-  if root:match("^%a:") then comparePath=path:lower(); compareRoot=root:lower() end
-  assert(comparePath:sub(1,#compareRoot+1)==compareRoot.."/",
-    "Copy the Lua map into TF3's userdata folder (for example local/osm_maps), then select it again. The game only supports reading userdata files.")
-  local relative=path:sub(#root+2)
-  maps.location(relative)
-  return relative
+  for _,folder in ipairs({"tf3_osm_importer_mod","druttzen_osm_vanilla"}) do
+    local prefix=root.."/mods/"..folder.."/content/"
+    local actual,expected=path,prefix
+    if root:match("^%a:") then actual=path:lower(); expected=prefix:lower() end
+    if actual:sub(1,#expected)==expected then return maps.checkResource(path:sub(#prefix+1)) end
+  end
+  error("Copy the converted Lua map into mods/tf3_osm_importer_mod/content/osm/maps inside TF3 userdata, restart TF3, then select it again.")
 end
-
-function maps.location(relative)
-  assert(type(relative)=="string" and #relative>4 and #relative<=4096
-    and not relative:find("[\\:%z\r\n]") and relative:sub(1,1)~="/","Invalid map path")
-  for part in relative:gmatch("[^/]+") do assert(part~="." and part~="..","Invalid map path") end
-  assert(not relative:find("//",1,true),"Invalid map path")
-  local directory,name=relative:match("^(.*)/([^/]+)%.[lL][uU][aA]$")
-  assert(directory and directory~="" and name~="","Choose a .lua file inside a userdata subfolder")
-  return directory,name
-end
-
 function maps.validate(data)
   assert(type(data)=="table" and data.schema==1 and type(data.id)=="string" and #data.id>0 and #data.id<=256,
     "This is not a converted OSM Lua map. Export a Lua map with OSM-TF3-Vanilla-Converter.")
@@ -44,66 +38,17 @@ function maps.validate(data)
   controls.configure(nil,data.importOptions or {},false)
   return data
 end
-
+function maps.load(resource)
+  maps.checkResource(resource)
+  local ok,data=pcall(ug_require,"druttzen_osm_vanilla::/"..resource)
+  assert(ok,"Could not read the selected Lua map. Keep it in content/osm/maps and restart TF3 after adding or replacing files. "..tostring(ok and "" or data))
+  return maps.validate(data)
+end
 function maps.describe(data)
   local lakes=0
   for _,feature in ipairs(data.waterFeatures or {}) do if feature.kind=="lake" then lakes=lakes+1 end end
   return {id=data.id,size=data.size,inventory=controls.inventory(data),warnings=data.warnings or {},
     unavailableObjects=data.unavailableObjects or {},hasMappedObjectMetadata=data.objectMetadata~=nil,
     mappedWaterCount=#(data.waterFeatures or {}),mappedLakeCount=lakes}
-end
-
-function maps.header(data)
-  maps.validate(data)
-  local header,counts={},{}
-  for _,key in ipairs(fields) do header[key]=data[key] end
-  for _,section in ipairs(maps.sections) do
-    local count=0
-    for _ in pairs(data[section] or {}) do count=count+1 end
-    counts[section]=count
-  end
-  return header,counts
-end
-
-function maps.begin(param)
-  assert(type(param)=="table" and type(param.token)=="string" and #param.token<=128,"Invalid map transfer")
-  maps.location(param.source)
-  local data={}
-  for _,key in ipairs(fields) do data[key]=param.header and param.header[key] end
-  local total=0
-  for _,section in ipairs(maps.sections) do
-    local count=param.counts and param.counts[section]
-    assert(type(count)=="number" and count>=0 and count%1==0 and count<=20000000,"Invalid map item count")
-    total=total+count; data[section]={}
-  end
-  assert(total<=20000000,"Lua map exceeds the transfer item limit")
-  maps.validate(data)
-  return {token=param.token,source=param.source,data=data,counts=param.counts,received={},total=total,count=0,seq=0}
-end
-
-function maps.accept(job,param)
-  assert(job and param.token==job.token and param.seq==job.seq+1,"Map transfer interrupted; select the file again")
-  local target=job.data[param.section]
-  assert(job.counts[param.section] and type(target)=="table" and type(param.items)=="table"
-    and #param.items>0 and #param.items<=maps.chunkSize,"Invalid map transfer chunk")
-  local received=job.received[param.section] or 0
-  assert(received+#param.items<=job.counts[param.section],"Too many map items")
-  for _,entry in ipairs(param.items) do
-    local key=entry.key
-    assert((type(key)=="string" and #key<=256 or type(key)=="number" and key%1==0 and key>=1)
-      and target[key]==nil and type(entry.value)=="table","Invalid or duplicate map item")
-    if param.section~="nodes" then assert(type(key)=="number" and key<=job.counts[param.section],"Invalid map array index") end
-    target[key]=entry.value
-  end
-  job.received[param.section]=received+#param.items; job.count=job.count+#param.items; job.seq=param.seq
-end
-
-function maps.finish(job,param)
-  assert(job and param.token==job.token and param.seq==job.seq and job.count==job.total,"Incomplete map transfer")
-  for _,section in ipairs(maps.sections) do
-    assert((job.received[section] or 0)==job.counts[section],"Incomplete map section")
-    if section~="nodes" then assert(#job.data[section]==job.counts[section],"Map array has gaps") end
-  end
-  return maps.validate(job.data)
 end
 return maps

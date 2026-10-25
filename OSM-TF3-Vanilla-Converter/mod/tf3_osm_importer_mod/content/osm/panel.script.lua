@@ -50,7 +50,7 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
     local key=command.key
     commandRows[#commandRows+1]=builtin.Button{
       meta={id="druttzen-osm-command-"..key,localKey=key,class="osm-import-command",
-        tooltip=command.help,enabled=snapshot.mapReady and not snapshot.mapTransfer and controls.enabled(key,ruleState) and not (key=="waterBuild" and snapshot.waterBuilt)},
+        tooltip=command.help,enabled=snapshot.mapReady and controls.enabled(key,ruleState) and not (key=="waterBuild" and snapshot.waterBuilt)},
       content=text(command.label),onClick=function() send(key) end,
     }
   end
@@ -60,17 +60,17 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
     meta={id="druttzen-osm-map-choose",class="osm-import-command",enabled=not snapshot.mapSelectionLocked and (not snapshot.started or not snapshot.mapReady)},
     content=text(snapshot.started and "Restore original Lua map..." or "Choose .lua map..."),
     title="Select converted OSM Lua map",filters={{"OSM Lua map","lua"}},
-    onOpen=function(files) if files and files[1] then mapLoader.choose(files[1]) end end,
+    onOpen=function(files)
+      if files and files[1] then mapLoader.choose(files[1]) end
+    end,
   }
   rows[#rows+1]=builtin.Button{
     meta={id="druttzen-osm-map-default",class="osm-import-command",enabled=not snapshot.started and not snapshot.mapSelectionLocked},
     content=text("Use installed dataset.lua"),onClick=function() send("mapDefault") end,
   }
-  rows[#rows+1]=text("Choose a converted Lua dataset inside TF3's userdata folder, for example local/osm_maps or local/save_maps. Heightmaps and saved games are different files. Keep the selected Lua file for save/reload.","osm-import-note")
-  if snapshot.mapTransfer then
-    rows[#rows+1]=text(string.format("Loading map: %d / %d items. Nothing is being built.",snapshot.mapTransfer.count,snapshot.mapTransfer.total),"osm-import-note")
-    rows[#rows+1]=builtin.Button{meta={id="druttzen-osm-map-cancel",class="osm-import-command"},content=text("Cancel map loading"),onClick=mapLoader.cancel}
-  elseif not snapshot.mapReady then
+  rows[#rows+1]=text("Put converted Lua maps in mods/tf3_osm_importer_mod/content/osm/maps inside TF3 userdata before starting the game. Select a file here before import. Restart TF3 after adding or replacing maps. Keep the original selected file for save/reload.","osm-import-note")
+  rows[#rows+1]=builtin.Button{meta={id="druttzen-osm-map-folder",class="osm-import-command"},content=text("Open TF3 user folder"),onClick=function() app.openUserDataFolder() end}
+  if not snapshot.mapReady then
     rows[#rows+1]=text("Waiting for the original Lua map. If it moved or could not be read, select it again. Import progress is retained.","osm-import-note")
   end
   rows[#rows+1]=text("What to import","font-scale-headline")

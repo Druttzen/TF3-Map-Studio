@@ -3,19 +3,19 @@
   "validationDate": "2026-10-25",
   "provenance": {
     "source": "TF3-OSM-Importer-Mod/mod/tf3_osm_importer_mod",
-    "companionVersion": "0.16.1-preview",
+    "companionVersion": "0.16.2-preview",
     "modId": "druttzen_osm_vanilla",
     "modRevision": 10,
     "runtimeMetadataAndSampleDatasetUnchanged": false,
     "previousResourceAuditGameBuild": "25533170",
-    "changeScope": "Native Lua file chooser, bounded GUI-to-engine transfer, original-file restoration and compact counting/state updates",
+    "changeScope": "Native file chooser for Lua map resources, engine-only source loading/restoration and compact counting/state updates",
     "fictionalSampleDatasetUnchanged": false,
     "displayName": "TF3-OSM-Importer-Mod",
     "installFolder": "tf3_osm_importer_mod",
     "fictionalSampleGeometryUnchanged": true
   },
   "automatedTests": {
-    "passed": 175,
+    "passed": 179,
     "failed": 0,
     "luaAndStateMachine": 55,
     "panelAndResourceEntrypoints": 21,
@@ -58,7 +58,7 @@
       "Native town limits, duplicate names, unchanged existing town policies and simulated-building audit"
     ],
     "worldAudit": 24,
-    "subtestsPassed": 92,
+    "subtestsPassed": 94,
     "experimentalWater": 17,
     "shallowWater": 6
   },
@@ -89,7 +89,7 @@
   },
   "nativeTF3EngineImport": {
     "verified": true,
-    "scope": "Historical revision 4 fictional complete import and restart/reload. Revision 6 water testing is recorded separately; current large-map import is not established.",
+    "scope": "Historical revision 4 journal/audit proof; revision 10 selected-file import and restart restoration are recorded separately in revision10Validation.",
     "gameBuild": 40408,
     "steamBuildId": "25533170",
     "activeMods": [
@@ -260,13 +260,36 @@
     "scope": "Cross-tool reports, saved project identity, polygon holes, clipped structure heights, paused-import object matches and release consistency"
   },
   "revision10Validation": {
-    "automatedTestsPassed": 175,
-    "subtestsPassed": 92,
-    "nativeFileSelection": "pending",
-    "externalFileRead": "Only documented userdata reader is used; no arbitrary filesystem reader is claimed",
-    "transferChunkItems": 256,
+    "automatedTestsPassed": 179,
+    "subtestsPassed": 94,
+    "nativeFileSelection": true,
+    "selectedMapLocation": "installed importer content/osm/maps/*.lua",
+    "sourceReader": "ug_require in engine; native resources must exist before TF3 starts",
     "savedStateContainsSourceGeometry": false,
-    "sourceRestoration": "Original selected path and map ID required; no build while unavailable",
-    "newNativeGameTest": "pending"
+    "sourceRestoration": "Same resource, map ID and dimensions; missing or changed original blocks builds",
+    "nativeDataReaderResearch": "app.loadUserdata is restricted to named preset directories and function data() files, so the original converter Lua format uses the native mod-resource reader instead",
+    "nativeOriginalResourceRestoredAfterFullRestart": true,
+    "nativeCompleteFictionalImport": {
+      "roadsRails": 10,
+      "scenery": 117,
+      "markers": 1,
+      "skippedSteps": 0
+    },
+    "gameBuild": 40425,
+    "steamBuildId": "26129055",
+    "report": "NATIVE-MAP-SELECTION-2026-10-25.md",
+    "nativeLargeMapPerformanceTested": false,
+    "actualVehicleRoutesTested": false,
+    "nativeBuiltObjectAudit": {
+      "passed": true,
+      "nodes": 12,
+      "roads": 8,
+      "rails": 2,
+      "vehicleLaneEdges": 10,
+      "models": 115,
+      "groundItems": 2,
+      "markers": 1,
+      "connectedGroups": 2
+    }
   }
 }

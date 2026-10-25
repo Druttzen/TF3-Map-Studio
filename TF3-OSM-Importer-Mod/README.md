@@ -1,6 +1,6 @@
 # TF3-OSM-Importer-Mod
 
-Tool 4 in TF3 Map Studio: the standalone **in-game OSM importer** for Transport Fever 3, revision 10, also bundled with tool 1 Preview 0.16.1. New imports use base-terrain or explicitly sourced road/rail heights at construction time and save accepted heights for verification. Mapped ponds and small waterways have an experimental 0.5 m bed and Landscaping Water Dirty treatment. A separate elevated-water test builds a decorative surface without terrain alignment. Incremental checks, automatic pause and positive-boundary handling are retained.
+Tool 4 in TF3 Map Studio: the standalone **in-game OSM importer** for Transport Fever 3, revision 10, also bundled with tool 1 Preview 0.16.2. New imports use base-terrain or explicitly sourced road/rail heights at construction time and save accepted heights for verification. Mapped ponds and small waterways have an experimental 0.5 m bed and Landscaping Water Dirty treatment. A separate elevated-water test builds a decorative surface without terrain alignment. Incremental checks, automatic pause and positive-boundary handling are retained.
 
 The mod imports a prepared Lua dataset using vanilla roads, railways, vegetation, ground surfaces, decorative objects and place marker models. It provides an **OSM Import** button, separate scroll areas for messages and controls, and saved import progress. **Show place names** displays names and coordinates from saved importer records. TF3 can optimize models into unnamed asset groups, so their ordinary game windows may not show those names. Use [OSM-TF3-Vanilla-Converter](../OSM-TF3-Vanilla-Converter/README.md) to download/convert OSM XML and prepare `dataset.lua`.
 
@@ -18,9 +18,9 @@ When upgrading, close TF3, back up the installed mod, then replace its runtime f
 
 ## Use your own OSM data
 
-Export a converted Lua map into a subfolder of TF3's userdata folder, such as `local/osm_maps` or `local/save_maps`. In the game, open **OSM Import → Choose .lua map**, select the file, then **Check map and match objects** before **Start import**. TF3's supported reader only reads userdata: copy files from other locations there first. A converted Lua file is an importer dataset, not a heightmap, saved game or mod script. Match the converter's dimensions and geographic bounds to the game map and heightmap.
+Put converted `.lua` maps in `mods/tf3_osm_importer_mod/content/osm/maps` inside TF3's userdata folder, then start TF3. Keep different maps under different filenames. In the game, open **OSM Import → Choose .lua map**, select a file from that folder, then **Check map and match objects** before **Start import**. Restart TF3 after adding or replacing map files. The native engine resource reader loads the original converter format directly; arbitrary external paths and the game's unrelated userdata-preset format are not used. A converted Lua map is not a heightmap, saved game or mod script. Match its dimensions and geographic bounds to the game map and heightmap.
 
-Map loading uses acknowledged chunks of at most 256 items. The chosen path, map identity and compact counts are saved; the source geometry stays in runtime memory. On save/reload the GUI reloads the original file automatically before building can continue. Missing or changed files block progress and expose **Restore original Lua map**. A started import cannot change to another dataset. Keep the original file available. **Use installed dataset.lua** retains the traditional workflow; close TF3 before replacing that installed resource and restart afterwards.
+The selected resource name, map identity and compact counts are saved; source geometry stays in the engine's runtime memory. On save/reload the engine restores the original file before building can continue. Missing or changed files block progress and expose **Restore original Lua map**. A started import cannot change to another dataset. Keep its original file and filename available. **Use installed dataset.lua** retains the traditional workflow. Close TF3 before replacing any installed resource and restart afterwards.
 
 Revision 10 also removes idle script-state writes and computes category totals from cached aggregates. Selecting categories no longer rescans every map item. The GUI reads compact persisted metadata instead of loading its own copy of the full dataset.
 
@@ -94,3 +94,5 @@ New matching/town behaviour has automated tests and resource checks but awaits p
 Revision 9 rejects checks of a different dataset during a paused import before
 saved model matches can be overwritten. The original dataset of any started
 import must still be retained. See the [25 October review](../CODE-REVIEW-2026-10-25.md).
+
+Revision 10 native Windows verification selected a Lua map in the in-game file dialog, restored it after a full restart, and completed the fictional sample: 10/10 road/rail segments, 117/117 scenery items and 1/1 marker, with no skipped steps. See [the exact scope and API findings](NATIVE-MAP-SELECTION-2026-10-25.md).

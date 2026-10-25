@@ -1,5 +1,5 @@
 TF3-OSM-Importer-Mod
-Companion Preview 0.16.1 | Mod revision 10 | GPL-3.0 | 25 October 2026
+Companion Preview 0.16.2 | Mod revision 10 | GPL-3.0 | 25 October 2026
 
 INSTALL
 Copy this tf3_osm_importer_mod folder into:
@@ -19,26 +19,25 @@ Click OSM Import in the mod button area, then Check map and match objects.
 Start import begins the selected import. Use a temporary map first.
 
 DATASET PREPARATION
-Use the companion OSM-TF3-Vanilla-Converter to download/convert OSM XML.
-Export a Lua map inside TF3's userdata folder, for example local/osm_maps
-or local/save_maps. Open OSM Import in the game, click Choose .lua map,
-and select that file. Check the map and match objects, then Start import.
-The native file dialog can browse other folders, but TF3 only exposes a
-supported data reader for files inside userdata. Copy external Lua maps
-there first. A dataset is not a heightmap, saved game or a mod script.
+Export a Lua map with OSM-TF3-Vanilla-Converter, then put it in:
+mods/tf3_osm_importer_mod/content/osm/maps inside TF3 userdata.
+Keep different maps under different filenames. Start or restart TF3 after
+adding/replacing map files. Open OSM Import > Choose .lua map and select
+the file from this folder. Check map and match objects, then Start import.
+A dataset is not a heightmap, saved game or arbitrary mod script.
 Match the game dimensions and heightmap bounds before starting.
 
-The selected filename and map identity are saved; the file is loaded again
-through the GUI when the save opens. Keep the original file in place.
-If missing or different, the importer waits without building. Restore the
-original file with Restore original Lua map. Started imports cannot switch
-to a different dataset. Loading transfers at most 256 items per acknowledged
-chunk; it can be cancelled before replacement. Source geometry is held in
-runtime memory rather than copied into the saved script state or UI snapshot.
+The native engine resource reader loads the original converter format.
+Only the chosen resource name crosses from the file dialog to the engine.
+The GUI reads compact metadata, not another copy of the full map.
+The selected filename and identity are saved. The engine restores that
+original file on reload; missing/changed files stop building. Keep the
+original file. Started imports cannot switch to another dataset.
 
 Use installed dataset.lua selects the traditional bundled data. Close TF3
-before replacing that installed file, and restart afterwards. Update runtime
-files while preserving content/osm/dataset.lua and import-report.json.
+before replacing installed resources, and restart afterwards. Update runtime
+files while preserving content/osm/dataset.lua, content/osm/maps/*.lua
+and import-report.json. Open TF3 user folder helps locate the local folder.
 
 PANEL CONTROLS
 OSM Import toggles a movable window. Scroll its list for commands/settings.

@@ -25,7 +25,7 @@ TRF3-Mod-Converter source and Windows runtime are **0.15.0**, focusing on vehicl
 
 ## In-game importer mod — tool #4
 
-Current source is **revision 10**, bundled with converter Preview 0.16.2. Choose a converted `.lua` map from a subfolder of TF3 userdata in the in-game panel. Loading uses small acknowledged transfers, compact metadata and automatic original-file restoration on save/reload. Retain the original file of a started import. Category totals use cached aggregates and idle updates do not rewrite saved script state.
+Current source is **revision 10**, bundled with converter Preview 0.16.2. Put converted `.lua` maps in the installed importer’s `content/osm/maps` folder before starting TF3, then choose a file in the in-game panel. The engine loads and restores the selected resource directly. Retain the original file of a started import. The GUI reads compact metadata, category totals use cached aggregates, and idle updates do not rewrite saved script state.
 
 [Download TF3-OSM-Importer-Mod revision 10](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-10-25-fix3/TF3-OSM-Importer-Mod-Revision-10.zip). Extract `tf3_osm_importer_mod` into TF3's local mods folder and keep one installed copy. Preserve custom datasets and saved progress when updating; do not replace them with the fictional sample. The internal mod ID remains `druttzen_osm_vanilla` for existing saves. See [the importer instructions](TF3-OSM-Importer-Mod/README.md).
 

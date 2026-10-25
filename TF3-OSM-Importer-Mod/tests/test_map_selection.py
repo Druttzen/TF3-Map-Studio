@@ -1,10 +1,12 @@
-"""Real transfer/state contracts with separate simulated GUI and engine callbacks."""
+"""Native resource-based map choice, original-file restoration and compact UI state."""
 import unittest
 from lupa import LuaError
 import test_game_scripts as game
 import test_panel as panel
 from test_game_scripts import CONTENT, load_script
 
+SOURCE='osm/maps/fictional.lua'
+RESOURCE='druttzen_osm_vanilla::/'+SOURCE
 
 class MapSelectionTests(unittest.TestCase):
     def setUp(self):
@@ -15,26 +17,12 @@ class MapSelectionTests(unittest.TestCase):
           chosen={schema=1,id="second-fictional-map",size={800,800},nodes={},edges={},scenery={},labels={}}
           for i=1,700 do chosen.scenery[i]={category="objects",model="::/assets/test.mdl",pos={i%100,0}} end
         ''')
+        self.lua.globals().modules[RESOURCE]=self.lua.globals().chosen
 
-    def transfer(self, data=None, source='osm_maps/fictional.lua'):
-        data=data or self.lua.globals().chosen
-        header,counts=self.maps.header(data)
-        token='test-transfer'
-        self.h.event('mapBegin',{'source':source,'token':token,'header':header,'counts':counts})
-        if self.h.state.value.mapTransfer is None:
-            return
-        seq=0
-        for section in self.maps.sections.values():
-            source_data=data[section]
-            entries=list(source_data.items()) if source_data is not None else []
-            for offset in range(0,len(entries),256):
-                seq+=1
-                items=self.lua.table_from([self.lua.table_from({'key':k,'value':v}) for k,v in entries[offset:offset+256]])
-                self.h.event('mapChunk',{'token':token,'seq':seq,'section':section,'items':items})
-        self.h.event('mapCommit',{'token':token,'seq':seq})
+    def choose(self): self.h.event('mapSelect',{'resource':SOURCE})
 
-    def test_map_choice_updates_engine_and_compact_snapshot_before_start(self):
-        self.transfer()
+    def test_choice_updates_engine_and_compact_snapshot_before_start(self):
+        self.choose()
         value=self.h.state.value
         self.assertEqual(value.mapExpectedId,'second-fictional-map')
         self.assertEqual(value.datasetInfo.inventory.counts.objects,700)
@@ -49,98 +37,147 @@ class MapSelectionTests(unittest.TestCase):
         self.h.event('start')
         self.assertEqual(value.datasetId,'second-fictional-map')
 
-    def test_wrong_or_incomplete_file_never_replaces_previous_selection(self):
+    def test_missing_or_invalid_file_never_replaces_previous_selection(self):
         before=self.h.state.value.datasetInfo.id
-        header,counts=self.maps.header(self.lua.globals().chosen)
-        self.h.event('mapBegin',{'source':'osm_maps/new.lua','token':'partial','header':header,'counts':counts})
-        self.h.event('start')
-        self.assertIsNone(self.h.state.value.datasetId)
-        self.h.event('mapCommit',{'token':'partial','seq':0})
+        self.h.event('mapSelect',{'resource':'osm/maps/missing.lua'})
+        self.assertIn('restart TF3',self.h.state.value.notice)
+        self.lua.globals().modules[RESOURCE]=self.lua.table()
+        self.choose()
+        self.assertIn('not a converted OSM',self.h.state.value.notice)
         self.assertEqual(self.h.state.value.datasetInfo.id,before)
         self.assertIsNone(self.h.state.value.mapSource)
-        self.assertIn('Incomplete',self.h.state.value.notice)
         self.assertEqual(len(self.lua.globals().commands),0)
 
     def test_started_import_rejects_other_maps_and_default_without_losing_progress(self):
         self.h.event('start'); self.h.step(); self.h.event('pause')
         cursor=self.h.state.value.cursor
-        self.transfer()
+        self.choose()
         self.assertIn('another Lua map',self.h.state.value.notice)
         self.h.event('mapDefault')
         self.assertEqual(self.h.state.value.cursor,cursor)
         self.assertEqual(self.h.state.value.phase,'paused')
         self.assertEqual(self.h.state.value.datasetId,self.lua.globals().dataset.id)
 
-    def test_script_reload_blocks_builds_until_original_map_is_restored(self):
-        self.transfer(); self.h.event('start'); self.h.step(); self.h.event('pause')
+    def test_reload_automatically_restores_original_map_without_gui_file_io(self):
+        self.choose(); self.h.event('start'); self.h.step(); self.h.event('pause')
         cursor=self.h.state.value.cursor
         count=len(self.lua.globals().commands)
+        self.h.script=load_script(self.lua,CONTENT/'importer.script.lua')
+        self.h.step()
+        self.assertTrue(self.h.state.value.mapReady)
+        self.assertEqual(self.h.state.value.cursor,cursor)
+        self.assertEqual(len(self.lua.globals().commands),count)
+        self.h.event('resume'); self.h.step()
+        self.assertGreater(len(self.lua.globals().commands),count)
+
+    def test_separate_native_callback_instances_resolve_the_same_selected_resource(self):
+        event_script=self.h.script
+        update_script=load_script(self.lua,CONTENT/'importer.script.lua')
+        build_script=load_script(self.lua,CONTENT/'importer.script.lua')
+        self.choose()
+        update_script.update(None,self.h.state,1)
+        self.assertTrue(self.h.state.value.mapReady)
+        self.h.event('start')
+        result=update_script.update(None,self.h.state,1)
+        build_script.postUpdate(None,self.h.state,1,result)
+        self.assertEqual(self.h.state.value.datasetId,'second-fictional-map')
+        self.assertGreater(self.h.state.value.builtScenery,0)
+        self.assertTrue(self.h.state.value.mapReady)
+
+    def test_missing_source_blocks_builds_and_can_restore_same_resource(self):
+        self.choose(); self.h.event('start'); self.h.step(); self.h.event('pause')
+        cursor=self.h.state.value.cursor
+        count=len(self.lua.globals().commands)
+        original=self.lua.globals().chosen
+        self.lua.globals().modules[RESOURCE]=None
         self.h.script=load_script(self.lua,CONTENT/'importer.script.lua')
         self.h.step()
         self.assertFalse(self.h.state.value.mapReady)
         self.h.event('resume'); self.h.step()
         self.assertEqual(len(self.lua.globals().commands),count)
-        self.transfer()
+        self.lua.globals().modules[RESOURCE]=original
+        self.choose()
         self.assertTrue(self.h.state.value.mapReady)
         self.assertEqual(self.h.state.value.cursor,cursor)
-        self.h.event('resume'); self.h.step()
-        self.assertGreater(len(self.lua.globals().commands),count)
 
-    def test_missing_source_on_reload_does_not_load_default_dataset(self):
-        self.transfer()
-        self.lua.execute('modules["druttzen_osm_vanilla::/osm/dataset.lua"]=nil')
+    def test_changed_original_file_identity_is_rejected_on_reload(self):
+        self.choose(); self.h.event('start'); self.h.event('pause')
+        self.lua.globals().chosen.id='changed'
         self.h.script=load_script(self.lua,CONTENT/'importer.script.lua')
         self.h.step()
         self.assertFalse(self.h.state.value.mapReady)
+        self.assertIn('original selected Lua map has changed',self.h.state.value.notice)
+        self.choose()
+        self.assertFalse(self.h.state.value.mapReady)
+        self.assertEqual(self.h.state.value.datasetId,'second-fictional-map')
+
+    def test_external_source_does_not_load_the_installed_default_on_reload(self):
+        self.choose()
+        self.lua.globals().modules['druttzen_osm_vanilla::/osm/dataset.lua']=None
+        self.h.script=load_script(self.lua,CONTENT/'importer.script.lua')
+        self.h.step()
+        self.assertTrue(self.h.state.value.mapReady)
         self.assertEqual(self.h.state.value.datasetInfo.id,'second-fictional-map')
+
+    def test_legacy_installed_dataset_can_restore_original_file(self):
+        original=self.lua.globals().dataset
+        self.h.event('start'); self.h.event('pause')
+        self.lua.globals().modules['druttzen_osm_vanilla::/osm/dataset.lua']=self.lua.globals().chosen
+        self.h.script=load_script(self.lua,CONTENT/'importer.script.lua')
+        self.h.step()
+        helper=self.lua.globals().modules['druttzen_osm_vanilla::/osm/ui_snapshot.lua']
+        self.assertFalse(helper.fromState(self.h.state.value,self.lua.globals().api.engine.terrain.getBoundingBox()).mapReady)
+        self.lua.globals().modules[RESOURCE]=original
+        self.choose()
+        self.assertTrue(self.h.state.value.mapReady)
+        self.assertEqual(self.h.state.value.datasetId,original.id)
+
+    def test_check_and_water_job_lock_map_selection(self):
+        before=self.h.state.value.datasetInfo.id
+        for field in ('check','waterJob'):
+            self.h.state.value[field]=self.lua.table()
+            self.choose()
+            self.assertEqual(self.h.state.value.datasetInfo.id,before)
+            self.h.state.value[field]=None
 
     def test_idle_updates_do_not_write_save_state(self):
         self.lua.execute('writes=0; local old=state.set; state.set=function(self,v) writes=writes+1; return old(self,v) end')
         for _ in range(600): self.h.step()
         self.assertEqual(self.lua.globals().writes,0)
 
-    def test_path_normalization_and_external_or_traversal_rejection(self):
-        self.assertEqual(self.maps.relativePath('c:\\Games\\Local\\osm_maps\\å karta.lua','C:/Games/Local'),'osm_maps/å karta.lua')
-        for path in ('C:/Elsewhere/map.lua','C:/Games/Local-other/map.lua','C:/Games/Local/../map.lua','C:/Games/Local/osm/map.sav'):
-            with self.subTest(path=path),self.assertRaises(LuaError):
-                self.maps.relativePath(path,'C:/Games/Local')
-
-    def test_duplicate_and_out_of_order_chunks_are_rejected(self):
-        header,counts=self.maps.header(self.lua.globals().chosen)
-        self.h.event('mapBegin',{'source':'osm_maps/map.lua','token':'job','header':header,'counts':counts})
-        self.h.event('mapChunk',{'token':'job','seq':2,'section':'scenery','items':self.lua.table()})
-        self.assertIsNone(self.h.state.value.mapTransfer)
-        self.assertIsNone(self.h.state.value.mapSource)
-
+    def test_path_normalization_and_library_only_restrictions(self):
+        root='C:/fictional/local'
+        valid='c:\\fictional\\local\\mods\\tf3_osm_importer_mod\\content\\osm\\maps\\å karta.lua'
+        self.assertEqual(self.maps.resourcePath(valid,root),'osm/maps/å karta.lua')
+        for path in ('C:/Elsewhere/map.lua',root+'/save_maps/map.lua',root+'/mods/tf3_osm_importer_mod/content/osm/maps/../map.lua'):
+            with self.subTest(path=path),self.assertRaises(LuaError): self.maps.resourcePath(path,root)
+        for resource in ('osm/controls.lua','osm/maps/../../controls.lua','osm/maps/map.sav','foreign::/osm/maps/a.lua'):
+            with self.subTest(resource=resource),self.assertRaises(LuaError): self.maps.checkResource(resource)
 
 class MapPanelTests(unittest.TestCase):
-    def test_native_picker_is_first_and_locked_after_start(self):
+    def test_picker_sends_only_resource_name_and_locks_after_start(self):
         h=panel.PanelTests(); h.setUp()
+        h.lua.globals().modules[RESOURCE]=h.lua.globals().dataset
         picker=h.node('map-choose')
         self.assertEqual(picker.kind,'NativeFileDialogButton')
         self.assertEqual(picker.params.filters[1][2],'lua')
         self.assertTrue(picker.params.meta.enabled)
+        picker.params.onOpen(h.lua.table_from(['C:/fictional/local/mods/tf3_osm_importer_mod/content/'+SOURCE]))
+        event=h.lua.globals().emitted[1]
+        self.assertEqual(event.name,'osm.mapSelect')
+        self.assertEqual(list(event.param.keys()),['resource'])
+        self.assertEqual(event.param.resource,SOURCE)
+        self.assertEqual(h.lua.globals().state.value.mapSource,SOURCE)
         h.node('command-start').params.onClick()
         self.assertFalse(h.node('map-choose').params.meta.enabled)
 
-    def test_gui_file_transfer_and_automatic_reload_use_acknowledged_chunks(self):
+    def test_gui_snapshot_never_requires_full_dataset(self):
         h=panel.PanelTests(); h.setUp()
-        h.lua.execute('''
-          app.loadUserdata=function(directory,name)
-            assert(directory=="osm_maps" and name=="test")
-            return {schema=1,id="gui-fixture",size={500,500},nodes={},edges={},labels={},scenery={{model="::/a.mdl",pos={0,0}}}}
-          end
-        ''')
-        h.node('map-choose').params.onOpen(h.lua.table_from(['C:/fictional/local/osm_maps/test.lua']))
-        for _ in range(8): h.lua.globals().bridge.guiUpdate(None,h.lua.globals().state,None)
-        self.assertEqual(h.lua.globals().state.value.mapExpectedId,'gui-fixture')
-        self.assertTrue(h.lua.globals().state.value.mapReply.done)
-        # A new engine module loses its private dataset, while GUI state needs no large payload.
-        h.lua.globals().engineScript=load_script(h.lua,CONTENT/'importer.script.lua')
-        h.lua.globals().engineScript.update(None,h.lua.globals().state,1)
-        self.assertFalse(h.lua.globals().state.value.mapReady)
-        for _ in range(8): h.lua.globals().bridge.guiUpdate(None,h.lua.globals().state,None)
-        self.assertTrue(h.lua.globals().state.value.mapReady)
-        self.assertEqual(h.lua.globals().state.value.datasetInfo.id,'gui-fixture')
+        h.lua.globals().modules['druttzen_osm_vanilla::/osm/dataset.lua']=None
+        h.lua.globals().modules['druttzen_osm_vanilla::/osm/ui_snapshot.lua']=h.lua.execute((CONTENT/'ui_snapshot.lua').read_text(encoding='utf-8'))
+        helper=h.lua.globals().modules['druttzen_osm_vanilla::/osm/ui_snapshot.lua']
+        snap=helper.fromState(h.lua.globals().state.value,h.lua.globals().api.engine.terrain.getBoundingBox())
+        self.assertEqual(snap.totals.edges,10)
+        self.assertEqual(snap.totals.scenery,117)
 
 if __name__=='__main__': unittest.main()

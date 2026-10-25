@@ -544,8 +544,9 @@
   "importer10Update": {
     "date": "2026-10-25",
     "bundledRevision": 10,
-    "automatedTestsPassed": 293,
-    "subtestsPassed": 221,
-    "scope": "Includes identical standalone importer runtime and its map-selection/aggregate-count regression tests; converter GUI guide updated"
+    "automatedTestsPassed": 297,
+    "subtestsPassed": 223,
+    "scope": "Includes identical standalone importer runtime and its map-selection/aggregate-count regression tests; converter GUI guide updated",
+    "nativeImporterReport": "../TF3-OSM-Importer-Mod/NATIVE-MAP-SELECTION-2026-10-25.md"
   }
 }

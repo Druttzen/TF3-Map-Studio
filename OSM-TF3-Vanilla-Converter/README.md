@@ -78,4 +78,4 @@ dataset during a paused import before saved object matches can change. These
 fixes have conversion/Lua regressions; native game validation remains limited
 to the previously documented sample.
 
-Importer revision 10 adds an in-game Lua file chooser for maps inside TF3 userdata. See the bundled importer README for loading, saved progress and original-file restoration.
+Importer revision 10 adds an in-game Lua file chooser for maps in the installed importer’s content/osm/maps folder. See the bundled importer README for loading, saved progress and original-file restoration.

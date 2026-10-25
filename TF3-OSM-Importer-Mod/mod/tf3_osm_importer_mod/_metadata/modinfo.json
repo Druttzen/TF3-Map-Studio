@@ -1,7 +1,7 @@
 {
   "name": "TF3-OSM-Importer-Mod",
   "summary": "Choose a converted Lua map in the game, with saved progress and category controls.",
-  "description": "Preview OSM importer revision 10. Select a converted .lua map from TF3 userdata in the native file dialog before starting. Map data transfers in small acknowledged chunks and reloads from its selected file. Started imports retain their original map. Compact UI metadata and aggregate category counts reduce repeated work. Object matching, optional towns, network heights and experimental small-water treatment are retained. See README.txt for scope and limits.",
+  "description": "Preview OSM importer revision 10. Put converted .lua maps in content/osm/maps before starting TF3 and choose one in the native in-game file dialog. The engine loads and restores the selected resource directly. Started imports retain their original map. Compact GUI metadata, cached category aggregates and fewer idle state writes reduce repeated work. Object matching, optional towns, network heights and experimental small-water treatment are retained. See README.txt for scope and limits.",
   "authors": [
     {
       "name": "VacuumTube",

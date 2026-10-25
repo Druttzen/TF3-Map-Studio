@@ -11,6 +11,8 @@ CONTENT=Path(__file__).resolve().parents[1]/'mod/tf3_osm_importer_mod/content/os
 
 UI_MOCK=r'''
 recipes={}; recipeContracts={}; emitted={}; added=0; removed=0; visible=false
+steps={}; applicationTime=0
+api.util={getApplicationTime=function() applicationTime=applicationTime+0.1; return applicationTime end}
 renderDepth=0; scriptLookups=0; scriptReads=0
 gameScriptAvailable=true; gameScriptComponentAvailable=true; gameScriptStateAvailable=true
 local builtin={type={Orientation={Vertical=0,Horizontal=1},ScrollBarPolicy={AlwaysOff=0,AsNeeded=1}}}
@@ -41,7 +43,7 @@ local function register(name,fn,wrappedKind)
  return checked
 end
 app={getUserDataFolder=function() return "C:/fictional/local" end}
-local react={RegisterRecipe=function(name,fn) return register(name,fn) end,
+local react={onStep=function(fn) steps[#steps+1]=fn end,RegisterRecipe=function(name,fn) return register(name,fn) end,
  RegisterPluginRecipe=function(extension,name,fn)
   assert(extension.id=="::MainModButtonAreaExtension")
   return register(name,fn)

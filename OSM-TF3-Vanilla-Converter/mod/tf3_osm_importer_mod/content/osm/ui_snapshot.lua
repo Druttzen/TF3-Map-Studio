@@ -10,8 +10,8 @@ function snapshot.fromState(value,box)
   local available,objectKinds=info.inventory.counts,info.inventory.kinds
   return {
     datasetId=info.id,phase=value.phase or "ready",started=value.datasetId~=nil,
-    mapSource=value.mapSource,mapReady=value.mapReady~=false,mapTransfer=value.mapTransfer,
-    mapSelectionLocked=value.check~=nil or value.waterJob~=nil or value.mapTransfer~=nil,
+    mapSource=value.mapSource,mapReady=value.mapReady~=false and (not value.datasetId or value.datasetId==info.id),
+    mapSelectionLocked=value.check~=nil or value.waterJob~=nil,
     builtEdges=value.builtEdges or 0,builtScenery=value.builtScenery or 0,labels=value.labels or 0,
     skipped=value.skipped or 0,error=value.error,notice=value.notice,options=options,
     errorKind=value.errorKind,datasetMatches=value.mapReady~=false and (value.datasetId==nil or value.datasetId==info.id),

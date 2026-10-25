@@ -391,4 +391,4 @@ ready-to-run program; development instructions use the separate source ZIP.
 Text encoding is corrected. An offline packaged runtime check exercises all
 three export modes, mod templates, SQLite part merging, TLS and PNG support.
 
-Importer revision 10 adds an in-game Lua file chooser for maps inside TF3 userdata. See the bundled importer README for loading, saved progress and original-file restoration.
+Importer revision 10 adds an in-game Lua file chooser for maps in the installed importer’s content/osm/maps folder. See the bundled importer README for loading, saved progress and original-file restoration.
