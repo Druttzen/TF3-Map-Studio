@@ -15,7 +15,7 @@ from job import Cancelled
 from map_sizes import CUSTOM, SIZES, FORMATS, dimensions, experimental, matching_preset, validate_preset
 
 MODES=['Save Lua map file','Update installed mod','Create standalone mod folder']
-APP_VERSION='0.16.2-preview'
+APP_VERSION='0.16.3-preview'
 LABELS={
     'forest_spacing':'Forest spacing (m)', 'shrub_spacing':'Shrub spacing (m)',
     'max_generated_trees':'Maximum generated trees / shrubs', 'tree_jitter':'Position variation (0–0.49)',

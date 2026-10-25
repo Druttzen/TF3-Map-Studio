@@ -191,6 +191,43 @@ function controls.finiteHeight(z)
   return type(z)=="number" and z==z and math.abs(z)<math.huge
 end
 
+-- Ground fill uses native float coordinates. Thin clipped polygons can have
+-- positive double-precision area but collapse at Huge-map world coordinates.
+-- Retain source coordinates/heights, removing only native duplicate vertices.
+function controls.groundFace(source,box)
+  assert(type(source)=="table","Invalid ground polygon")
+  local face,xy={},{}
+  for _,point in ipairs(source) do
+    assert(type(point)=="table" and controls.finiteHeight(point[1]) and controls.finiteHeight(point[2]),"Invalid ground coordinate")
+    local p=box and controls.position(point,box) or point
+    local x=string.unpack("f",string.pack("f",p[1]))
+    local y=string.unpack("f",string.pack("f",p[2]))
+    assert(controls.finiteHeight(x) and controls.finiteHeight(y),"Unrepresentable ground coordinate")
+    local previous=xy[#xy]
+    if not previous or x~=previous[1] or y~=previous[2] then
+      face[#face+1]={p[1],p[2],p[3]}; xy[#xy+1]={x,y}
+    end
+  end
+  if #xy>1 and xy[1][1]==xy[#xy][1] and xy[1][2]==xy[#xy][2] then
+    face[#face]=nil; xy[#xy]=nil
+  end
+  local area=0
+  if #xy>=3 then
+    local origin=xy[1]
+    for i=2,#xy-1 do
+      area=area+(xy[i][1]-origin[1])*(xy[i+1][2]-origin[2])-(xy[i][2]-origin[2])*(xy[i+1][1]-origin[1])
+    end
+  end
+  if #xy<3 or area==0 then return nil,"Ground face collapses at TF3 coordinate precision" end
+  -- Converter faces are already counterclockwise. Normalize older inputs too.
+  if area<0 then
+    local reversed={face[1]}
+    for i=#face,2,-1 do reversed[#reversed+1]=face[i] end
+    face=reversed
+  end
+  return face
+end
+
 function controls.elevation(node)
   if node.elevation==nil then return nil end
   local e=node.elevation

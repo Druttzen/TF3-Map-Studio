@@ -198,6 +198,7 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
     text(string.format("Roads / rails: %d / %d    Scenery: %d / %d    Markers: %d / %d",
       snapshot.builtEdges,snapshot.totals.edges,snapshot.builtScenery,snapshot.totals.scenery,snapshot.labels,snapshot.totals.labels)),
     text("Skipped steps: "..snapshot.skipped),
+    text("Unbuildable ground faces omitted: "..(snapshot.omittedScenery or 0)),
     text(string.format("Functioning towns: %d / %d",snapshot.builtTowns,snapshot.totals.towns)),
     text("Recorded experimental water patches: "..snapshot.waterCount),
   }

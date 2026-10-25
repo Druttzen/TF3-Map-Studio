@@ -1,5 +1,5 @@
 TF3-OSM-Importer-Mod
-Companion Preview 0.16.2 | Mod revision 10 | GPL-3.0 | 25 October 2026
+Companion Preview 0.16.3 | Mod revision 11 | GPL-3.0 | 25 October 2026
 
 INSTALL
 Copy this tf3_osm_importer_mod folder into:
@@ -216,3 +216,15 @@ Map checking refuses a different dataset before replacing saved object matches
 in a paused import. Border-crossing bridge/tunnel heights are corrected in
 new converter exports; preserve the dataset of an already-started import.
 No new physical TF3 gameplay validation is claimed.
+
+REVISION 11
+Ground polygons are checked at TF3 float32 coordinate precision and duplicate
+vertices are cleaned. A very thin Huge-map triangle became a line in native
+coordinates, stopping the reported import after 172,300 scenery items.
+Only unbuildable ground faces are omitted; their count and original scenery
+indices are saved and logged. Valid batch items continue. Keep the original
+dataset: its source cursor and previously accepted objects are preserved.
+Retry distinguishes command preparation failures from uncertain submissions.
+Older uncertain-outcome saves can recover only after a live-world check finds
+no unjournalled accepted constructions. Do not restart the import or replace
+its dataset. A complete Huge-map import has not been established.

@@ -3,6 +3,7 @@ local dataset
 local loadedSource,attemptedSource
 local maps = ug_require "druttzen_osm_vanilla::/osm/map_data.lua"
 local controls = ug_require "druttzen_osm_vanilla::/osm/controls.lua"
+local groundRecovery = ug_require "druttzen_osm_vanilla::/osm/ground_recovery.lua"
 local worldAudit = ug_require "druttzen_osm_vanilla::/osm/world_audit.lua"
 local water = ug_require "druttzen_osm_vanilla::/osm/water.lua"
 local matcher = ug_require "druttzen_osm_vanilla::/osm/object_matcher.lua"
@@ -84,7 +85,7 @@ local function status(value)
   message(string.format("%s | roads/rails %d/%d | scenery %d/%d | markers %d/%d | skipped jobs %d%s",
     value.phase, value.builtEdges or 0, #dataset.edges, value.builtScenery or 0, #dataset.scenery,
     value.labels or 0, #dataset.labels,
-    value.skipped or 0, value.error and " | "..value.error or ""))
+    value.skipped or 0, (value.omittedScenery and " | unbuildable ground faces "..value.omittedScenery or "")..(value.error and " | "..value.error or "")))
 end
 
 local function requireResource(rep, name)
@@ -398,13 +399,23 @@ local function sceneryProposal(value)
     if source and controls.selectedScenery(source,value.options) and source.model then
       requireResource(api.res.modelRep,source.model)
       local pos=controls.position(source.pos,api.engine.terrain.getBoundingBox())
-      items[#items+1]={model=source.model,rotation=source.rotation,
+      items[#items+1]={sourceIndex=i,model=source.model,rotation=source.rotation,
         pos={pos[1],pos[2],terrainZ(pos)}}
     elseif source and controls.selectedScenery(source,value.options) and source.texture then
+      local prepared,reason=controls.groundFace(source.face,api.engine.terrain.getBoundingBox())
+      if not prepared then
+        value.sceneryOmissions=value.sceneryOmissions or {}
+        if not value.sceneryOmissions[i] then
+          value.sceneryOmissions[i]=reason
+          value.omittedScenery=(value.omittedScenery or 0)+1
+          message("Omitted ground face at source scenery "..i..": "..reason)
+        end
+        included=included-1
+      else
       local face={}
       local shallow=source.category=="waterways"
-      if shallow then water.checkEmpty(source.face,20) end
-      for _,sourcePos in ipairs(source.face) do
+      if shallow then water.checkEmpty(prepared,20) end
+      for _,sourcePos in ipairs(prepared) do
         local p=controls.position(sourcePos,api.engine.terrain.getBoundingBox())
         local z=terrainZ(p)
         if shallow then
@@ -418,7 +429,8 @@ local function sceneryProposal(value)
         end
         face[#face+1]={p[1],p[2],z}
       end
-      items[#items+1]={texture=source.texture,face=face,depth=shallow and 0.5 or nil}
+      items[#items+1]={sourceIndex=i,texture=source.texture,face=face,depth=shallow and 0.5 or nil}
+      end
     end
   end
   if included==0 then return nil,last,0 end
@@ -444,13 +456,8 @@ local function proposedModelPositions(value,phase,last,proposal)
   end
   if phase=="labels" then save(value.cursor,items[1])
   else
-    local itemIndex=0
-    for index=value.cursor,last do
-      local source=controls.resolvedItem(dataset.scenery[index],index,value)
-      if source and controls.selectedScenery(source,value.options) and (source.model or source.texture) then
-        itemIndex=itemIndex+1
-        if source.model then save(index,items[itemIndex]) end
-      end
+    for _,item in ipairs(items) do
+      if item.model then save(item.sourceIndex,item) end
     end
   end
   return positions
@@ -501,6 +508,15 @@ function script.update(_userParams, state, _dt)
   local previous=state:get()
   local dirty=not dataset or attemptedSource~=(previous and previous.mapSource or false) or not previous or not previous.phase or previous.settingsRevision~=10
   local value=initialState(state)
+  if value.phase=="error" and value.errorKind=="command_state" and not value.groundRecoveryChecked then
+    local allowed,reason=groundRecovery.check(dataset,value)
+    value.groundRecoveryChecked=true; dirty=true
+    if allowed then
+      value.errorKind="preparation"
+      value.notice=reason.." Use Retry failed step; saved progress is preserved."
+      message(value.notice)
+    end
+  end
   if not state:hasEventSubscriptions() then
     for _,name in ipairs({"osm.start","osm.pause","osm.resume","osm.retry","osm.skip","osm.status","osm.validate","osm.configure","osm.mapSize"}) do
       state:subscribeToEvent(name)
@@ -807,8 +823,12 @@ function script.postUpdate(_userParams, state, _dt, _result)
     local modelPositions=proposedModelPositions(value,phase,last,proposal)
     value.failedLast=last
     local called=false
+    -- Native construction evaluation can fail while preparing this command.
+    -- Nothing has been submitted then, so the same source range is safe to
+    -- retry. Only an exception after sendCommand starts has an unknown outcome.
+    local command=api.cmd.makeWorldBuildProposalCmd(proposal,nil,false,false)
     submitted=true
-    api.cmd.sendCommand(api.cmd.makeWorldBuildProposalCmd(proposal,nil,false,false),function(res,success,resultEntities)
+    api.cmd.sendCommand(command,function(res,success,resultEntities)
       called=true
       local callbackOk,callbackError=pcall(function()
       if success then

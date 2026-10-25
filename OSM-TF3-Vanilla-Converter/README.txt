@@ -1,5 +1,5 @@
 OSM IMPORTER - TRANSPORT FEVER 3 VANILLA
-Preview 0.16.2 | GPL-3.0 | 25 October 2026
+Preview 0.16.3 | GPL-3.0 | 25 October 2026
 
 DOWNLOAD OPENSTREETMAP (0.15)
 Project > Download OSM opens an interactive OpenStreetMap view. No OSM account
@@ -392,3 +392,14 @@ Text encoding is corrected. An offline packaged runtime check exercises all
 three export modes, mod templates, SQLite part merging, TLS and PNG support.
 
 Importer revision 10 adds an in-game Lua file chooser for maps in the installed importer’s content/osm/maps folder. See the bundled importer README for loading, saved progress and original-file restoration.
+
+PREVIEW 0.16.3 / IMPORTER REVISION 11
+A Huge-map ground triangle collapsed to a line at native float32 precision,
+stopping the reported import after 172,300 scenery items. New exports clean
+duplicate clipped vertices and omit only zero-area native faces, reporting
+their count in dataset/report warnings. Representable thin faces remain.
+The bundled runtime guards existing datasets too, saves/logs omitted counts
+and original source indices, and preserves the dataset and source cursor.
+Command preparation failures are safely retryable. Older uncertain-outcome
+saves require a live-world check for unjournalled accepted constructions
+before recovery. This does not establish a completed Huge-map import.

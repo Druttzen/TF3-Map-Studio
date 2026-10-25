@@ -13,7 +13,7 @@ function snapshot.fromState(value,box)
     mapSource=value.mapSource,mapReady=value.mapReady~=false and (not value.datasetId or value.datasetId==info.id),
     mapSelectionLocked=value.check~=nil or value.waterJob~=nil,
     builtEdges=value.builtEdges or 0,builtScenery=value.builtScenery or 0,labels=value.labels or 0,
-    skipped=value.skipped or 0,error=value.error,notice=value.notice,options=options,
+    skipped=value.skipped or 0,omittedScenery=value.omittedScenery or 0,error=value.error,notice=value.notice,options=options,
     errorKind=value.errorKind,datasetMatches=value.mapReady~=false and (value.datasetId==nil or value.datasetId==info.id),
     pendingAccepted=value.pendingOwnership~=nil or value.pendingScenery~=nil or value.pendingTown~=nil,
     acceptedUnjournalled=value.acceptedUnjournalled and true or false,

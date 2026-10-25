@@ -21,7 +21,9 @@ local function itemKey(item,box)
   end
   if item.texture and item.face then
     local points={}
-    for _,p in ipairs(item.face) do
+    local face=controls.groundFace(item.face,box)
+    if not face then return nil end
+    for _,p in ipairs(face) do
       local pos=coordinate(p,box)
       if not pos then return nil end
       points[#points+1]=pos
@@ -90,7 +92,7 @@ function audit.inspect(dataset,value)
   local options=controls.options(value.options or dataset.importOptions)
   local report={
     ok=false,partial=false,missingModelHeights=0,phase=value.phase or "ready",datasetId=value.datasetId,
-    skipped=value.skipped or 0,problems={},problemCounts={},degrees={},
+    skipped=value.skipped or 0,omittedScenery=value.omittedScenery or 0,problems={},problemCounts={},degrees={},
     expected={nodes=0,edges=0,usableEdges=0,streets=0,tracks=0,scenery=0,models=0,surfaces=0,labels=0,components=0},
     current={nodes=0,edges=0,usableEdges=0,streets=0,tracks=0,scenery=0,models=0,surfaces=0,labels=0,components=0,constructions=0,assetGroups=0},
     counters={edges=value.builtEdges or 0,scenery=value.builtScenery or 0,labels=value.labels or 0},
@@ -118,6 +120,9 @@ function audit.inspect(dataset,value)
   if report.phase~="finished" then problem("progress","Import is "..report.phase.."; verification requires a finished import.") end
   if value.datasetId~=dataset.id then problem("progress","Saved import does not match the current dataset.") end
   if report.skipped>0 then problem("progress",tostring(report.skipped).." import jobs were skipped.") end
+  if report.omittedScenery>0 then
+    problem("omittedGround",tostring(report.omittedScenery).." ground faces could not be represented at TF3 coordinate precision and were omitted; their source indices are saved.")
+  end
 
   local expectedNodes,expectedEdges,expectedGraph={},{},{}
   for index,edge in ipairs(dataset.edges or {}) do
@@ -302,7 +307,7 @@ function audit.inspect(dataset,value)
     return false
   end
   for index,item in ipairs(dataset.scenery or {}) do
-    if not item.unmatched and controls.selectedScenery(item,options) then
+    if not item.unmatched and controls.selectedScenery(item,options) and not (value.sceneryOmissions and value.sceneryOmissions[index]) then
       local key=itemKey(item)
       if key then expectedItems[key]=(expectedItems[key] or 0)+1
       else problem("wrongScenery","A selected dataset scenery item has invalid saved parameters.") end

@@ -1,3 +1,4 @@
+local controls = ug_require "druttzen_osm_vanilla::/osm/controls.lua"
 local script = {}
 
 function script.updateFn(_captureParams, params)
@@ -10,6 +11,8 @@ function script.updateFn(_captureParams, params)
         transf = {c,s,0,0, -s,c,0,0, 0,0,1,0, item.pos[1],item.pos[2],item.pos[3],1},
       }
     elseif item.texture then
+      local groundFace,reason=controls.groundFace(item.face)
+      assert(groundFace,reason)
       if item.depth~=nil then
         assert(item.depth==0.5 and item.texture=="druttzen_osm_vanilla::/osm/dirty_water.gtex","Invalid shallow-water construction")
         assert(#item.face==3,"Shallow-water bed must be a triangle")
@@ -21,7 +24,7 @@ function script.updateFn(_captureParams, params)
         sub.terrainAlignmentLists[#sub.terrainAlignmentLists+1]={type="LESS",faces={face},slopeLow=0.5,slopeHigh=0.5}
       end
       sub.groundFaces[#sub.groundFaces+1] = {
-        face = item.face,
+        face = groundFace,
         modes = {{type="FILL",key=item.texture}},
         loop = true,
       }

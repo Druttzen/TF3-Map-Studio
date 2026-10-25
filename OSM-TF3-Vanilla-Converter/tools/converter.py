@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import random
 import shutil
+import struct
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
@@ -115,7 +116,36 @@ def inside(p, ring):
 
 
 def signed_area(ring):
-    return sum(a[0]*b[1]-b[0]*a[1] for a,b in zip(ring,ring[1:]+ring[:1]))/2
+    if len(ring)<3: return 0.0
+    x,y=ring[0]
+    return sum((a[0]-x)*(b[1]-y)-(b[0]-x)*(a[1]-y)
+               for a,b in zip(ring,ring[1:]+ring[:1]))/2
+
+
+def clean_surface_face(points):
+    """Remove repeated native corners while retaining original coordinates."""
+    face=[]; keys=[]
+    for point in points:
+        try:
+            key=tuple(struct.unpack('<f',struct.pack('<f',point[axis]))[0]
+                      for axis in (0,1))
+        except (OverflowError,struct.error):
+            key=tuple(point[:2])
+        if not keys or key!=keys[-1]:
+            face.append(point); keys.append(key)
+    if len(face)>1 and keys[-1]==keys[0]: face.pop()
+    return face
+
+
+def native_surface_area(face):
+    """TF3 ground faces use float32 world coordinates, including on Huge maps."""
+    try:
+        native=[tuple(struct.unpack('<f',struct.pack('<f',p[axis]))[0]
+                      for axis in (0,1)) for p in face]
+    except (OverflowError,struct.error):
+        return 0.0
+    area=signed_area(native)
+    return area if math.isfinite(area) else 0.0
 
 
 def join_rings(parts):
@@ -410,7 +440,7 @@ def convert(path,bounds,size,spacing=18,max_trees=100000,*,options=None,progress
         if category and id not in covered and len(refs)>3 and refs[0]==refs[-1]:
             areas.append((category,tags,[refs[:-1]],[],id))
     seed=hashlib.sha256((options['seed'] or json.dumps([bounds,size],sort_keys=True)).encode()).hexdigest()
-    rng=random.Random(seed); trees=0
+    rng=random.Random(seed); trees=0; collapsed_surface_faces=0
     for area_index,(category,tags,outer_ids,inner_ids,id) in enumerate(areas):
         job.portion(60,85,area_index,len(areas),'Generating scenery',f'Area {id}; {trees:,} trees')
         if not features['forests' if category=='forest' else 'shrubs' if category=='shrubs' else 'surfaces']: continue
@@ -443,11 +473,18 @@ def convert(path,bounds,size,spacing=18,max_trees=100000,*,options=None,progress
             try:
                 for triangle in triangulate(outers+inners):
                     job.check()
-                    face=clip_polygon(triangle,*size)
-                    if len(face)>2 and abs(signed_area(face))>1e-5:
+                    clipped=clip_polygon(triangle,*size)
+                    if len(clipped)>2 and abs(signed_area(clipped))>1e-5:
+                        face=clean_surface_face(clipped)
+                        if len(face)<3 or native_surface_area(face)==0:
+                            collapsed_surface_faces+=1
+                            continue
+                        if abs(signed_area(face))<=1e-5: continue
                         if signed_area(face)<0: face.reverse()
                         data['scenery'].append({'texture':MATERIALS[options['surface_materials'][category]],'face':[list(p) for p in face],'category':'surfaces'})
             except ValueError as exc: warn(f'Area {id}: {exc}; inspect surface boundaries.')
+    if collapsed_surface_faces:
+        warn(f'{collapsed_surface_faces} ground surface face(s) omitted because they collapse to zero area at TF3 coordinate precision. Other scenery was retained.')
     for i,(id,(lat,lon,tags)) in enumerate(nodes.items()):
         if i%256==0: job.portion(85,90,i,len(nodes),'Placing objects and names')
         p=positions[id]

@@ -125,6 +125,8 @@ class GameScriptTests(unittest.TestCase):
             'druttzen_osm_vanilla::/osm/towns.lua':self.lua.execute((CONTENT/'towns.lua').read_text(encoding='utf-8')),
         })
         self.lua.execute(MOCK)
+        self.lua.globals().modules['druttzen_osm_vanilla::/osm/ground_recovery.lua']=self.lua.execute(
+            (CONTENT/'ground_recovery.lua').read_text(encoding='utf-8'))
         install_map_modules(self.lua)
         self.lua.globals().modules['druttzen_osm_vanilla::/osm/ui_snapshot.lua']=self.lua.execute(
             (CONTENT/'ui_snapshot.lua').read_text(encoding='utf-8'))
