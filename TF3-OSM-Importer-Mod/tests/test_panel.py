@@ -5,7 +5,7 @@ This verifies recipe shape, wiring and state rules, not native rendering.
 from pathlib import Path
 import unittest
 from lupa import LuaRuntime
-from test_game_scripts import MOCK,load_script
+from test_game_scripts import MOCK,load_script,install_map_modules
 
 CONTENT=Path(__file__).resolve().parents[1]/'mod/tf3_osm_importer_mod/content/osm'
 
@@ -15,7 +15,7 @@ renderDepth=0; scriptLookups=0; scriptReads=0
 gameScriptAvailable=true; gameScriptComponentAvailable=true; gameScriptStateAvailable=true
 local builtin={type={Orientation={Vertical=0,Horizontal=1},ScrollBarPolicy={AlwaysOff=0,AsNeeded=1}}}
 local builtinKinds={}
-for _,name in ipairs({"TextView","RichTextView","Window","Component","BoxLayout","ScrollArea","Button","CheckBox","ComboBox","ComboBoxItem","DoubleSpinBox"}) do
+for _,name in ipairs({"TextView","RichTextView","Window","Component","BoxLayout","ScrollArea","Button","NativeFileDialogButton","CheckBox","ComboBox","ComboBoxItem","DoubleSpinBox"}) do
  local kind=name
  builtin[kind]=function(params) return {kind=kind,params=params} end
  builtinKinds[builtin[kind]]=kind
@@ -40,6 +40,7 @@ local function register(name,fn,wrappedKind)
  recipeContracts[name]={wrappedKind=wrappedKind}
  return checked
 end
+app={getUserDataFolder=function() return "C:/fictional/local" end}
 local react={RegisterRecipe=function(name,fn) return register(name,fn) end,
  RegisterPluginRecipe=function(extension,name,fn)
   assert(extension.id=="::MainModButtonAreaExtension")
@@ -116,6 +117,7 @@ class PanelTests(unittest.TestCase):
             'druttzen_osm_vanilla::/osm/towns.lua':self.lua.execute((CONTENT/'towns.lua').read_text(encoding='utf-8')),
         })
         self.lua.execute(MOCK)
+        install_map_modules(self.lua)
         self.lua.globals().modules['druttzen_osm_vanilla::/osm/world_audit.lua']=self.lua.execute(
             (CONTENT/'world_audit.lua').read_text(encoding='utf-8'))
         self.lua.globals().modules['druttzen_osm_vanilla::/osm/ui_snapshot.lua']=self.lua.execute(

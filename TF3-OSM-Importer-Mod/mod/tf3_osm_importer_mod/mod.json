@@ -1,6 +1,6 @@
 {
   "modId": "druttzen_osm_vanilla",
-  "revision": 9,
+  "revision": 10,
   "severityAdd": "None",
   "severityRemove": "Critical",
   "visible": true,

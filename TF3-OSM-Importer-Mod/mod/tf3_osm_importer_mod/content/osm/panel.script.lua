@@ -6,6 +6,7 @@ local windows=ug_require "::/gui/main/game_react_globals.tl"
 local polling=ug_require "::/gui/main/engine_react_util.tl"
 local controls=ug_require "druttzen_osm_vanilla::/osm/controls.lua"
 local uiSnapshot=ug_require "druttzen_osm_vanilla::/osm/ui_snapshot.lua"
+local mapLoader=ug_require "druttzen_osm_vanilla::/osm/map_loader.lua"
 local panelId="druttzen-osm-import-panel"
 local result={}
 
@@ -49,9 +50,28 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
     local key=command.key
     commandRows[#commandRows+1]=builtin.Button{
       meta={id="druttzen-osm-command-"..key,localKey=key,class="osm-import-command",
-        tooltip=command.help,enabled=controls.enabled(key,ruleState) and not (key=="waterBuild" and snapshot.waterBuilt)},
+        tooltip=command.help,enabled=snapshot.mapReady and not snapshot.mapTransfer and controls.enabled(key,ruleState) and not (key=="waterBuild" and snapshot.waterBuilt)},
       content=text(command.label),onClick=function() send(key) end,
     }
+  end
+  rows[#rows+1]=text("Choose Lua map","font-scale-headline")
+  rows[#rows+1]=text("Selected: "..(snapshot.mapSource or "Installed content/osm/dataset.lua"),"osm-import-note")
+  rows[#rows+1]=builtin.NativeFileDialogButton{
+    meta={id="druttzen-osm-map-choose",class="osm-import-command",enabled=not snapshot.mapSelectionLocked and (not snapshot.started or not snapshot.mapReady)},
+    content=text(snapshot.started and "Restore original Lua map..." or "Choose .lua map..."),
+    title="Select converted OSM Lua map",filters={{"OSM Lua map","lua"}},
+    onOpen=function(files) if files and files[1] then mapLoader.choose(files[1]) end end,
+  }
+  rows[#rows+1]=builtin.Button{
+    meta={id="druttzen-osm-map-default",class="osm-import-command",enabled=not snapshot.started and not snapshot.mapSelectionLocked},
+    content=text("Use installed dataset.lua"),onClick=function() send("mapDefault") end,
+  }
+  rows[#rows+1]=text("Choose a converted Lua dataset inside TF3's userdata folder, for example local/osm_maps or local/save_maps. Heightmaps and saved games are different files. Keep the selected Lua file for save/reload.","osm-import-note")
+  if snapshot.mapTransfer then
+    rows[#rows+1]=text(string.format("Loading map: %d / %d items. Nothing is being built.",snapshot.mapTransfer.count,snapshot.mapTransfer.total),"osm-import-note")
+    rows[#rows+1]=builtin.Button{meta={id="druttzen-osm-map-cancel",class="osm-import-command"},content=text("Cancel map loading"),onClick=mapLoader.cancel}
+  elseif not snapshot.mapReady then
+    rows[#rows+1]=text("Waiting for the original Lua map. If it moved or could not be read, select it again. Import progress is retained.","osm-import-note")
   end
   rows[#rows+1]=text("What to import","font-scale-headline")
   rows[#rows+1]=text(snapshot.started and "Selections are saved and locked for this import." or "Choose the parts to build before pressing Start import.")
@@ -143,7 +163,7 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
   rows[#rows+1]=text("Dataset and map","font-scale-headline")
   rows[#rows+1]=text("Prepared area: "..tostring(snapshot.datasetWidth).." × "..tostring(snapshot.datasetHeight).." m")
   rows[#rows+1]=text(string.format("Current map: %.0f × %.0f m",snapshot.mapWidth,snapshot.mapHeight))
-  rows[#rows+1]=text("Prepare or replace OSM data with the desktop converter while TF3 is closed.")
+  rows[#rows+1]=text("Export a Lua map with the desktop converter, then select it above before starting. A started import keeps its original map.")
   rows[#rows+1]=text("Signals and functioning towns use the vanilla game tools. Read marker names with Show place names.")
   rows[#rows+1]=text("New imports use base terrain heights for roads/rails, excluding construction terrain alignments. Explicit sourced heights in game coordinates take priority. Terrain alignment occurs through the road/rail build proposal.")
   rows[#rows+1]=text("Mapped water","font-scale-headline")

@@ -1,5 +1,5 @@
 TF3-OSM-Importer-Mod
-Companion Preview 0.16 | Mod revision 9 | GPL-3.0 | 25 October 2026
+Companion Preview 0.16.1 | Mod revision 10 | GPL-3.0 | 25 October 2026
 
 INSTALL
 Copy this tf3_osm_importer_mod folder into:
@@ -20,10 +20,25 @@ Start import begins the selected import. Use a temporary map first.
 
 DATASET PREPARATION
 Use the companion OSM-TF3-Vanilla-Converter to download/convert OSM XML.
-Close TF3 before changing its data. Choose Update installed mod in the
-converter and select this folder, or export a Lua map and copy it to
-content/osm/dataset.lua. Match the game dimensions and heightmap bounds.
-Restart TF3 afterwards. The dataset is not a heightmap or a game save.
+Export a Lua map inside TF3's userdata folder, for example local/osm_maps
+or local/save_maps. Open OSM Import in the game, click Choose .lua map,
+and select that file. Check the map and match objects, then Start import.
+The native file dialog can browse other folders, but TF3 only exposes a
+supported data reader for files inside userdata. Copy external Lua maps
+there first. A dataset is not a heightmap, saved game or a mod script.
+Match the game dimensions and heightmap bounds before starting.
+
+The selected filename and map identity are saved; the file is loaded again
+through the GUI when the save opens. Keep the original file in place.
+If missing or different, the importer waits without building. Restore the
+original file with Restore original Lua map. Started imports cannot switch
+to a different dataset. Loading transfers at most 256 items per acknowledged
+chunk; it can be cancelled before replacement. Source geometry is held in
+runtime memory rather than copied into the saved script state or UI snapshot.
+
+Use installed dataset.lua selects the traditional bundled data. Close TF3
+before replacing that installed file, and restart afterwards. Update runtime
+files while preserving content/osm/dataset.lua and import-report.json.
 
 PANEL CONTROLS
 OSM Import toggles a movable window. Scroll its list for commands/settings.

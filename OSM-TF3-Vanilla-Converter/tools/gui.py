@@ -15,7 +15,7 @@ from job import Cancelled
 from map_sizes import CUSTOM, SIZES, FORMATS, dimensions, experimental, matching_preset, validate_preset
 
 MODES=['Save Lua map file','Update installed mod','Create standalone mod folder']
-APP_VERSION='0.16.1-preview'
+APP_VERSION='0.16.2-preview'
 LABELS={
     'forest_spacing':'Forest spacing (m)', 'shrub_spacing':'Shrub spacing (m)',
     'max_generated_trees':'Maximum generated trees / shrubs', 'tree_jitter':'Position variation (0–0.49)',
@@ -215,7 +215,7 @@ class App(tk.Tk):
     def build_game(self):
         f=self.pages['In game']; self.note(f,'These defaults travel with the dataset and appear in the in-game OSM Import panel. The panel lets you change batch size and pace during an import.',0)
         for row,key in enumerate(['import_batch_size','import_delay','waterway_width'],1): self.field(f,row,LABELS[key],self.values[key])
-        self.note(f,'After conversion: enable the standalone mod on a separate test map, then click OSM Import. Check map and resources works in small steps on large datasets; Pause cancels a check without building. OSM and heightmap dimensions must match the game map.\n\nLarge datasets start with automatic pause after 100 successful build steps. One step is one road/rail segment, one scenery batch or one marker. Select a smaller limit for a first trial. Inspect and save each run; Resume starts the next run. You can change the limit in the game panel.\n\nVerify built objects reads completed import records without building. Show place names displays recorded marker names and coordinates. Ground appearance and actual vehicle routes require a map check.\n\nSave Lua exports a dataset, not a heightmap or game save. Copy it to content/osm/dataset.lua, or use Update installed mod. Install the revision 8 runtime separately before updating an older mod’s dataset.',3)
+        self.note(f,'After conversion: enable the standalone mod on a separate test map, then click OSM Import. Check map and resources works in small steps on large datasets; Pause cancels a check without building. OSM and heightmap dimensions must match the game map.\n\nLarge datasets start with automatic pause after 100 successful build steps. One step is one road/rail segment, one scenery batch or one marker. Select a smaller limit for a first trial. Inspect and save each run; Resume starts the next run. You can change the limit in the game panel.\n\nVerify built objects reads completed import records without building. Show place names displays recorded marker names and coordinates. Ground appearance and actual vehicle routes require a map check.\n\nSave Lua exports a dataset, not a heightmap or game save. With importer revision 10, save inside TF3 userdata (for example local/osm_maps) and choose the .lua file in the game panel. Updating the installed dataset.lua still requires a full game restart. Install the revision 10 runtime separately when upgrading an older importer.',3)
 
     @staticmethod
     def default_target():

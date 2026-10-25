@@ -1,7 +1,7 @@
 {
   "name": "TF3-OSM-Importer-Mod",
-  "summary": "OSM category selections, vanilla-first loaded-model matching and optional functioning towns.",
-  "description": "Preview OSM importer revision 9. Choose available dataset categories before starting. Preview static-model matches from vanilla first, then active mods. Building substitutes are decorative. Named city/town/village/hamlet tags can create native functioning towns. Disabling future town roads freezes all automatic town growth; initial streets can still be generated. New object matching and towns await physical TF3 validation. Existing network-height priority and experimental small-water logic are retained. No game assets are bundled. See README.txt.",
+  "summary": "Choose a converted Lua map in the game, with saved progress and category controls.",
+  "description": "Preview OSM importer revision 10. Select a converted .lua map from TF3 userdata in the native file dialog before starting. Map data transfers in small acknowledged chunks and reloads from its selected file. Started imports retain their original map. Compact UI metadata and aggregate category counts reduce repeated work. Object matching, optional towns, network heights and experimental small-water treatment are retained. See README.txt for scope and limits.",
   "authors": [
     {
       "name": "VacuumTube",

@@ -1,5 +1,5 @@
 {
-  "version": "0.16.1-preview",
+  "version": "0.16.2-preview",
   "gameBuildInspected": "25533170",
   "automatedTests": {
     "passed": 277,
@@ -540,5 +540,12 @@
         "sqliteIncluded": true
       }
     }
+  },
+  "importer10Update": {
+    "date": "2026-10-25",
+    "bundledRevision": 10,
+    "automatedTestsPassed": 293,
+    "subtestsPassed": 221,
+    "scope": "Includes identical standalone importer runtime and its map-selection/aggregate-count regression tests; converter GUI guide updated"
   }
 }

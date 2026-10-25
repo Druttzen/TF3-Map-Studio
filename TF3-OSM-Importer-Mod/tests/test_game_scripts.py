@@ -11,6 +11,11 @@ from lupa import LuaRuntime
 ROOT = Path(__file__).resolve().parents[1]
 CONTENT = ROOT/'mod/tf3_osm_importer_mod/content/osm'
 
+def install_map_modules(lua):
+    for name in ('map_data','map_loader'):
+        lua.globals().modules['druttzen_osm_vanilla::/osm/'+name+'.lua']=lua.execute(
+            (CONTENT/(name+'.lua')).read_text(encoding='utf-8'))
+
 def load_script(lua,path):
     """Mirror TF3 resource loading in a fresh environment, then call data()."""
     return lua.eval('''function(source,name)
@@ -120,6 +125,7 @@ class GameScriptTests(unittest.TestCase):
             'druttzen_osm_vanilla::/osm/towns.lua':self.lua.execute((CONTENT/'towns.lua').read_text(encoding='utf-8')),
         })
         self.lua.execute(MOCK)
+        install_map_modules(self.lua)
         self.lua.globals().modules['druttzen_osm_vanilla::/osm/ui_snapshot.lua']=self.lua.execute(
             (CONTENT/'ui_snapshot.lua').read_text(encoding='utf-8'))
         self.lua.globals().modules['druttzen_osm_vanilla::/osm/world_audit.lua']=self.lua.execute(

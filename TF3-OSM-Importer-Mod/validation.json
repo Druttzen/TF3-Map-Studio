@@ -1,21 +1,21 @@
 {
   "component": "TF3-OSM-Importer-Mod",
-  "validationDate": "2026-10-04",
+  "validationDate": "2026-10-25",
   "provenance": {
     "source": "TF3-OSM-Importer-Mod/mod/tf3_osm_importer_mod",
-    "companionVersion": "0.14-preview",
+    "companionVersion": "0.16.1-preview",
     "modId": "druttzen_osm_vanilla",
-    "modRevision": 8,
+    "modRevision": 10,
     "runtimeMetadataAndSampleDatasetUnchanged": false,
     "previousResourceAuditGameBuild": "25533170",
-    "changeScope": "In-game category/type selections, loaded-resource object matching and optional native town creation with explicit all-growth freeze limitation",
+    "changeScope": "Native Lua file chooser, bounded GUI-to-engine transfer, original-file restoration and compact counting/state updates",
     "fictionalSampleDatasetUnchanged": false,
     "displayName": "TF3-OSM-Importer-Mod",
     "installFolder": "tf3_osm_importer_mod",
     "fictionalSampleGeometryUnchanged": true
   },
   "automatedTests": {
-    "passed": 159,
+    "passed": 175,
     "failed": 0,
     "luaAndStateMachine": 55,
     "panelAndResourceEntrypoints": 21,
@@ -58,7 +58,7 @@
       "Native town limits, duplicate names, unchanged existing town policies and simulated-building audit"
     ],
     "worldAudit": 24,
-    "subtestsPassed": 87,
+    "subtestsPassed": 92,
     "experimentalWater": 17,
     "shallowWater": 6
   },
@@ -224,7 +224,7 @@
     "nativeModBrowserNameVerified": false,
     "definition": "https://wiki.transportfever3.com/doku.php?id=modding:general:moddefinition"
   },
-  "version": "revision-8",
+  "version": "revision-10",
   "revision8Validation": {
     "physicalTF3TestRun": false,
     "vanillaResourceNamesChecked": 47,
@@ -258,5 +258,15 @@
   "review20261025": {
     "nativeGameTestPerformed": false,
     "scope": "Cross-tool reports, saved project identity, polygon holes, clipped structure heights, paused-import object matches and release consistency"
+  },
+  "revision10Validation": {
+    "automatedTestsPassed": 175,
+    "subtestsPassed": 92,
+    "nativeFileSelection": "pending",
+    "externalFileRead": "Only documented userdata reader is used; no arbitrary filesystem reader is claimed",
+    "transferChunkItems": 256,
+    "savedStateContainsSourceGeometry": false,
+    "sourceRestoration": "Original selected path and map ID required; no build while unavailable",
+    "newNativeGameTest": "pending"
   }
 }

@@ -116,13 +116,24 @@ function controls.selectedScenery(item,options)
     and (not item.match or options["object_"..item.match.kind]~=false)
 end
 
-local availabilityCache={}
-function controls.available(dataset)
-  local signature=tostring(#dataset.edges)..":"..tostring(#dataset.scenery)..":"..tostring(#dataset.labels)
-  local cached=availabilityCache[dataset]
-  if cached and cached.signature==signature then return cached.counts,cached.kinds end
+-- Dataset tables are immutable while selected. Retain only small aggregates;
+-- changing a category must not rescan every source item on the GUI thread.
+-- Weak keys also release aggregates when a different map replaces the source.
+local countsCache=setmetatable({},{__mode="k"})
+function controls.invalidateCounts(dataset)
+  if dataset then countsCache[dataset]=nil
+  else countsCache=setmetatable({},{__mode="k"}) end
+end
+
+local function sourceCounts(dataset)
+  local cached=countsCache[dataset]
+  if cached and cached.id==dataset.id and cached.edges==dataset.edges
+    and cached.scenery==dataset.scenery and cached.labels==dataset.labels
+    and cached.edgeCount==#dataset.edges and cached.sceneryCount==#dataset.scenery
+    and cached.labelCount==#dataset.labels then return cached end
   local counts={}
   local kinds={}
+  local buckets={}
   for _,category in ipairs(controls.categories) do counts[category.key]=0 end
   for _,edge in ipairs(dataset.edges or {}) do
     local key=edge.kind=="TRACK" and "railways" or "roads"; counts[key]=counts[key]+1
@@ -130,13 +141,40 @@ function controls.available(dataset)
   for _,item in ipairs(dataset.scenery or {}) do
     local key=controls.sceneryCategory(item); counts[key]=counts[key]+1
     if item.match then local kind=item.match.kind; kinds[kind]=(kinds[kind] or 0)+1 end
+    if not item.unmatched then
+      local byKind=buckets[key]
+      if not byKind then byKind={}; buckets[key]=byKind end
+      -- false distinguishes an unconditional item from any named match kind.
+      local kind=item.match and item.match.kind or false
+      byKind[kind]=(byKind[kind] or 0)+1
+    end
   end
   counts.places=#(dataset.labels or {})
   for _,label in ipairs(dataset.labels or {}) do
     if controls.placeMode(label,{towns=true})=="town" then counts.towns=counts.towns+1 end
   end
-  availabilityCache[dataset]={signature=signature,counts=counts,kinds=kinds}
-  return counts,kinds
+  cached={id=dataset.id,edges=dataset.edges,scenery=dataset.scenery,labels=dataset.labels,
+    edgeCount=#dataset.edges,sceneryCount=#dataset.scenery,labelCount=#dataset.labels,
+    counts=counts,kinds=kinds,buckets=buckets}
+  countsCache[dataset]=cached
+  return cached
+end
+
+function controls.available(dataset)
+  local cached=sourceCounts(dataset)
+  return cached.counts,cached.kinds
+end
+
+function controls.inventory(dataset)
+  local cached=sourceCounts(dataset)
+  if not cached.inventory then
+    local buckets={}
+    for category,byKind in pairs(cached.buckets) do
+      for kind,count in pairs(byKind) do buckets[#buckets+1]={category=category,kind=kind or nil,count=count} end
+    end
+    cached.inventory={counts=cached.counts,kinds=cached.kinds,buckets=buckets}
+  end
+  return cached.inventory
 end
 
 function controls.position(p,box)
@@ -223,26 +261,22 @@ function controls.warnings(dataset)
   return result
 end
 
-local totalsCache={}
 function controls.totals(dataset,options)
-  local key=""
-  for _,category in ipairs(controls.categories) do key=key..(options[category.key] and "1" or "0") end
-  for _,kind in ipairs(controls.objectKinds) do key=key..(options["object_"..kind.key]~=false and "1" or "0") end
-  totalsCache[dataset]=totalsCache[dataset] or {}
-  if totalsCache[dataset][key] then return totalsCache[dataset][key] end
+  return controls.totalsFromInventory(controls.inventory(dataset),options)
+end
+
+function controls.totalsFromInventory(cached,options)
+  local counts=cached.counts
   local totals={edges=0,scenery=0,labels=0,towns=0}
-  for _,label in ipairs(dataset.labels or {}) do
-    local mode=controls.placeMode(label,options)
-    if mode=="town" then totals.towns=totals.towns+1
-    elseif mode=="marker" then totals.labels=totals.labels+1 end
+  if options.roads then totals.edges=totals.edges+counts.roads end
+  if options.railways then totals.edges=totals.edges+counts.railways end
+  if options.towns then totals.towns=counts.towns end
+  if options.places then totals.labels=counts.places-totals.towns end
+  for _,bucket in ipairs(cached.buckets) do
+    if options[bucket.category] and (not bucket.kind or options["object_"..bucket.kind]~=false) then
+      totals.scenery=totals.scenery+bucket.count
+    end
   end
-  for _,edge in ipairs(dataset.edges) do
-    if options[edge.kind=="TRACK" and "railways" or "roads"] then totals.edges=totals.edges+1 end
-  end
-  for _,item in ipairs(dataset.scenery) do
-    if controls.selectedScenery(item,options) then totals.scenery=totals.scenery+1 end
-  end
-  totalsCache[dataset][key]=totals
   return totals
 end
 return controls

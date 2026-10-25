@@ -1,5 +1,5 @@
 OSM IMPORTER - TRANSPORT FEVER 3 VANILLA
-Preview 0.16.1 | GPL-3.0 | 25 October 2026
+Preview 0.16.2 | GPL-3.0 | 25 October 2026
 
 DOWNLOAD OPENSTREETMAP (0.15)
 Project > Download OSM opens an interactive OpenStreetMap view. No OSM account
@@ -390,3 +390,5 @@ directly in that folder. No Python is needed. START-HERE.txt identifies the
 ready-to-run program; development instructions use the separate source ZIP.
 Text encoding is corrected. An offline packaged runtime check exercises all
 three export modes, mod templates, SQLite part merging, TLS and PNG support.
+
+Importer revision 10 adds an in-game Lua file chooser for maps inside TF3 userdata. See the bundled importer README for loading, saved progress and original-file restoration.

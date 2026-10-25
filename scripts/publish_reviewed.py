@@ -248,8 +248,9 @@ def main():
         mod = source/'TF3-OSM-Importer-Mod/mod/tf3_osm_importer_mod'
         mod_entries = {f'tf3_osm_importer_mod/{path.relative_to(mod).as_posix()}': path
                        for path in mod.rglob('*') if path.is_file()}
-        assert json.loads((mod/'mod.json').read_text())['revision'] == 9
-        mod_zip = work/'TF3-OSM-Importer-Mod-Revision-9.zip'
+        revision=json.loads((mod/'mod.json').read_text())['revision']
+        assert isinstance(revision,int) and revision>=9, 'Invalid reviewed importer revision'
+        mod_zip = work/f'TF3-OSM-Importer-Mod-Revision-{revision}.zip'
         zip_files(mod_zip, mod_entries)
         assets.append(mod_zip)
         all_entries.update({f'TF3-Map-Studio/TF3-OSM-Importer-Mod/mod/{name}': path for name, path in mod_entries.items()})

@@ -1,5 +1,7 @@
 -- GPL-3.0. TF3 builder using its installed API definitions and vanilla resources.
-local dataset = ug_require "druttzen_osm_vanilla::/osm/dataset.lua"
+local dataset
+local loadedSource,transfer
+local maps = ug_require "druttzen_osm_vanilla::/osm/map_data.lua"
 local controls = ug_require "druttzen_osm_vanilla::/osm/controls.lua"
 local worldAudit = ug_require "druttzen_osm_vanilla::/osm/world_audit.lua"
 local water = ug_require "druttzen_osm_vanilla::/osm/water.lua"
@@ -20,6 +22,10 @@ end
 
 local function initialState(state)
   local value = state:get() or {}
+  if not dataset then
+    dataset=value.mapSource and {id="awaiting-map",edges={},scenery={},labels={},size={0,0}}
+      or ug_require "druttzen_osm_vanilla::/osm/dataset.lua"
+  end
   if not value.phase then
     value = { phase="ready", cursor=1, builtEdges=0, builtScenery=0, skipped=0, nodes={}, labels=0 }
     if #dataset.edges+#dataset.scenery+#dataset.labels>1000 and not (dataset.importOptions and dataset.importOptions.stepLimit~=nil) then
@@ -27,10 +33,34 @@ local function initialState(state)
       value.notice="Large dataset: automatic pause is set to 100 successful build steps per run. Inspect and save each run before resuming."
     end
   end
-  value.options=controls.options(value.options or dataset.importOptions)
-  value.waterSettings=water.settings(value.waterSettings)
+  if value.settingsRevision~=10 or not value.options or not value.waterSettings then
+    value.options=controls.options(value.options or dataset.importOptions)
+    value.waterSettings=water.settings(value.waterSettings)
+    value.settingsRevision=10
+  end
   value.waterRecords=value.waterRecords or {}
+  if not value.mapSource and (not value.datasetInfo or value.datasetInfo.id~=dataset.id) then value.datasetInfo=maps.describe(dataset) end
   return value
+end
+
+local function mapReady(value)
+  return not value.mapSource or loadedSource==value.mapSource and dataset.id==value.mapExpectedId
+end
+
+local function useMap(value,data,source)
+  local info=maps.describe(data)
+  if value.datasetId then
+    assert(data.id==value.datasetId,"This save belongs to another Lua map. Select its original file.")
+    assert(data.size[1]==value.datasetInfo.size[1] and data.size[2]==value.datasetInfo.size[2],"Saved map dimensions changed")
+  else
+    value.options=controls.options(data.importOptions)
+    if #data.edges+#data.scenery+#data.labels>1000 and not (data.importOptions and data.importOptions.stepLimit~=nil) then value.options.stepLimit=100 end
+    value.phase="ready"; value.cursor=1; value.matches=nil; value.matchSummary=nil; value.audit=nil
+    value.check=nil; value.error=nil; value.errorKind=nil; value.placeNamesPage=nil
+  end
+  dataset=data; loadedSource=source
+  value.mapSource=source; value.mapExpectedId=data.id; value.mapReady=true; value.datasetInfo=info
+  value.mapTransfer=nil; value.notice="Lua map loaded. Check the map and match objects before starting."
 end
 
 local function status(value)
@@ -450,38 +480,53 @@ local function buildWater(value,state)
 end
 
 function script.update(_userParams, state, _dt)
+  local previous=state:get()
+  local dirty=not previous or not previous.phase or previous.settingsRevision~=10
   local value=initialState(state)
   if not state:hasEventSubscriptions() then
     for _,name in ipairs({"osm.start","osm.pause","osm.resume","osm.retry","osm.skip","osm.status","osm.validate","osm.configure","osm.mapSize"}) do
       state:subscribeToEvent(name)
     end
+    dirty=true
   end
   -- GUI requests use the same native subscription mechanism as engine events.
   -- Keep this separate so saves started with revision 3 gain the new request.
   if not value.uiSnapshotSubscribed then
     state:subscribeToEvent("osm.ui.snapshot")
     value.uiSnapshotSubscribed=true
+    dirty=true
   end
   if not value.worldAuditSubscribed then
     state:subscribeToEvent("osm.verify")
     value.worldAuditSubscribed=true
+    dirty=true
   end
   if not value.placeNamesSubscribed then
     state:subscribeToEvent("osm.placeNames")
     value.placeNamesSubscribed=true
+    dirty=true
   end
   if not value.waterSupportSubscribed then
-    state:subscribeToEvent("osm.waterSupport"); value.waterSupportSubscribed=true
+    state:subscribeToEvent("osm.waterSupport"); value.waterSupportSubscribed=true; dirty=true
   end
   if not value.waterTestSubscribed then
     for _,name in ipairs({"osm.waterConfigure","osm.waterCheck","osm.waterBuild"}) do state:subscribeToEvent(name) end
     value.waterTestSubscribed=true
+    dirty=true
   end
-  state:set(value)
   -- TF3 schedules postUpdate for scripts that return an update result.
   if not value.waterNextSubscribed then
-    state:subscribeToEvent("osm.waterNext"); value.waterNextSubscribed=true; state:set(value)
+    state:subscribeToEvent("osm.waterNext"); value.waterNextSubscribed=true; dirty=true
   end
+  if not value.mapSelectionSubscribed then
+    for _,name in ipairs({"osm.mapBegin","osm.mapChunk","osm.mapCommit","osm.mapCancel","osm.mapDefault","osm.mapNotice"}) do state:subscribeToEvent(name) end
+    value.mapSelectionSubscribed=true; dirty=true
+  end
+  local ready=mapReady(value)
+  if value.mapReady~=ready then value.mapReady=ready; dirty=true end
+  if value.mapTransfer and not transfer then value.mapTransfer=nil; dirty=true end
+  if dirty then state:set(value) end
+  if not ready or value.mapTransfer then return end
   -- Return a serializable result only while there are build steps to run.
   if value.waterJob or value.phase=="checking" or value.phase=="edges" or value.phase=="scenery" or value.phase=="labels" then return {} end
 end
@@ -489,6 +534,44 @@ end
 function script.handleEvent(_userParams, state, _src, id, name, param)
   if id~=eventId then return end
   local value=initialState(state)
+  if name:sub(1,7)=="osm.map" and name~="osm.mapSize" then
+    param=param or {}
+    local ok,err=pcall(function()
+      if name=="osm.mapNotice" then
+        assert(type(param.message)=="string","Invalid map notice")
+        value.notice=param.message:sub(1,1500)
+        if transfer and transfer.token==param.token then transfer=nil; value.mapTransfer=nil end
+      elseif name=="osm.mapCancel" then
+        transfer=nil; value.mapTransfer=nil; value.notice="Map loading cancelled. The previous selection is retained."
+      elseif name=="osm.mapBegin" then
+        assert(not value.waterJob and not value.check,"Finish or cancel the current check before choosing a map")
+        assert(not value.datasetId or param.header and param.header.id==value.datasetId,"This save belongs to another Lua map; restore its original file")
+        transfer=maps.begin(param)
+        value.mapTransfer={token=transfer.token,seq=0,total=transfer.total,count=0,source=transfer.source}
+        value.mapReply=nil; value.notice="Loading Lua map. Nothing is being built."
+      elseif name=="osm.mapChunk" then
+        maps.accept(transfer,param)
+        value.mapTransfer={token=transfer.token,seq=transfer.seq,total=transfer.total,count=transfer.count,source=transfer.source}
+      elseif name=="osm.mapCommit" then
+        local data=maps.finish(transfer,param)
+        local source=transfer.source
+        useMap(value,data,source); transfer=nil
+        value.mapReply={token=param.token,done=true}
+      elseif name=="osm.mapDefault" then
+        assert(not value.datasetId and not value.check and not value.waterJob and not transfer,"Map selection is locked for this import")
+        useMap(value,ug_require "druttzen_osm_vanilla::/osm/dataset.lua",nil)
+      end
+    end)
+    if not ok then
+      value.notice=tostring(err); value.mapReply={token=param.token,error=true}
+      transfer=nil; value.mapTransfer=nil
+    end
+    state:set(value); return
+  end
+  if (not mapReady(value) or value.mapTransfer) and name~="osm.status" and name~="osm.mapSize" and name~="osm.pause" then
+    value.notice="Wait for the selected Lua map to load, or select its original file again. No objects were built."
+    state:set(value); return
+  end
   if value.waterJob and name~="osm.status" and name~="osm.waterSupport" then
     value.notice="Test water build is pending; wait for completion before another command."; state:set(value); return
   end
@@ -618,6 +701,7 @@ end
 
 function script.postUpdate(_userParams, state, _dt, _result)
   local value=initialState(state)
+  if not mapReady(value) or value.mapTransfer then return end
   if value.waterJob then
     local ok,err=pcall(buildWater,value,state)
     if not ok then

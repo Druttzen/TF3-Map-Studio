@@ -1,10 +1,10 @@
 # OSM-TF3-Vanilla-Converter
 
-Preview 0.16.1 converts OpenStreetMap XML to a Transport Fever 3 importer dataset using vanilla resource references. The desktop app can download a selected OSM area, save its overview PNG, export a Lua map, update an installed importer mod, or create a standalone mod folder.
+Preview 0.16.2 converts OpenStreetMap XML to a Transport Fever 3 importer dataset using vanilla resource references. The desktop app can download a selected OSM area, save its overview PNG, export a Lua map, update an installed importer mod, or create a standalone mod folder.
 
 Large OSM downloads are fetched sequentially in smaller areas rather than one large server request. HTTP 504 and server XML resource-limit errors subdivide the affected area further. HTTP 429/502/503 receive one delayed retry, respecting a supported Retry-After value; cancellation remains available while waiting. Complete ways, nested relations and referenced nodes outside the selection are retained, shared objects are deduplicated on disk, and the saved bounds remain the exact selected frame. Conflicting objects or an incomplete part stop the download without replacing previous outputs. Limits of 64 completed areas and 128 requests prevent unbounded retries; a server that remains overloaded may still require a later retry or a regional .osm extract. The download log records successful area bounds and request count.
 
-The `mod/tf3_osm_importer_mod` folder includes importer revision 9 and a fictional demonstration dataset. Its native panel has separate scrolling areas for progress/messages and commands. **Verify built objects** compares saved import records with live nodes, roads, rails and model groups without building anything. **Show place names** displays recorded marker names and coordinates; TF3 may remove model names when optimizing them into asset groups. The sample completed in TF3 Windows build 40408. Ground appearance, actual vehicle routes and large real-world imports still require testing.
+The `mod/tf3_osm_importer_mod` folder includes importer revision 10 and a fictional demonstration dataset. Its native panel has separate scrolling areas for progress/messages and commands. **Verify built objects** compares saved import records with live nodes, roads, rails and model groups without building anything. **Show place names** displays recorded marker names and coordinates; TF3 may remove model names when optimizing them into asset groups. The sample completed in TF3 Windows build 40408. Ground appearance, actual vehicle routes and large real-world imports still require testing.
 
 Revision 5 checks large datasets in blocks of at most 1000 items and rejects prepared dimensions larger than the game map before scanning geometry. **Automatic pause** stops each run after a chosen number of successful build steps. New large datasets default to 100 steps; one step is one segment, one scenery batch or one marker. Save and inspect each run before resuming. Matching map dimensions alone do not establish heightmap alignment.
 
@@ -77,3 +77,5 @@ chains crossing the map boundary. Revision 9 also refuses checking a foreign
 dataset during a paused import before saved object matches can change. These
 fixes have conversion/Lua regressions; native game validation remains limited
 to the previously documented sample.
+
+Importer revision 10 adds an in-game Lua file chooser for maps inside TF3 userdata. See the bundled importer README for loading, saved progress and original-file restoration.
