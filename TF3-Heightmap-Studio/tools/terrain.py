@@ -237,6 +237,12 @@ def load_project(path):
  if saved_options is None:saved_options={}
  if isinstance(saved_options,dict) and 'source_priority' not in saved_options:saved_options={**saved_options,'source_priority':'File list order'}
  data['options']=normalize(saved_options)
+ discovery=data.get('discovery',{})
+ if not isinstance(discovery,dict) or any(k not in {'localFolder','autoSearch','provider'} for k in discovery):raise ValueError('Invalid saved data-search settings.')
+ if not isinstance(discovery.get('localFolder',''),str) or len(discovery.get('localFolder',''))>4000:raise ValueError('Saved search folder must be a path.')
+ if type(discovery.get('autoSearch',True)) is not bool or not isinstance(discovery.get('provider',''),str):raise ValueError('Invalid saved search preferences.')
+ if discovery.get('localFolder'):discovery={**discovery,'localFolder':str((path.resolve().parent/Path(discovery['localFolder'])).resolve())}
+ data['discovery']=discovery
  for key in ['converterReport','osmFile','output','convertedLua']:
   if not isinstance(data.get(key,''),str):raise ValueError('Project paths must be text.')
  if not isinstance(data.get('elevationFiles'),list) or any(not isinstance(p,str) for p in data['elevationFiles']):raise ValueError('Project elevation files must be a list of paths.')

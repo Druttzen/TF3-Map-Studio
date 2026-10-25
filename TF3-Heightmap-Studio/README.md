@@ -1,6 +1,6 @@
 # TF3 Heightmap Studio
 
-Preview 0.10 is the terrain companion to OSM-TF3-Vanilla-Converter. It uses the
+Preview 0.11 is the terrain companion to OSM-TF3-Vanilla-Converter. It uses the
 converter's JSON report, exported Lua and original OSM file to align measured
 elevation with a Transport Fever 3 map. It supports local and public elevation
 sources, terrain editing, and optional vanilla biome exports.
@@ -47,6 +47,27 @@ portable synthetic examples and licence notices. Native TF3 heightmap and biome
 import still require verification in a game session.
 
 ## Set up and run
+
+In Preview 0.11, open **LiDAR** after choosing the map. **Automatic for map**
+selects the regional catalog. Choose a local folder to find matching elevation
+and LAS/LAZ files from their geographic headers, including subfolders. Local
+results appear before the online search finishes. **Search local only** avoids
+waiting for a catalog. Search never downloads terrain automatically.
+
+Header metadata and successful searches are cached. Unknown CRS, missing
+geotransforms, GCP/RPC rasters and HGT remain manual-review candidates. RGB
+imagery is excluded. **Add all matching local files** includes only known,
+non-review matches. Terrain building still validates samples, units and gaps.
+
+**API access setup** accepts approved Lantmäteriet credentials and a personal
+OpenTopography key in masked fields. **Test Lantmäteriet access** checks a
+selected ground-model file. Credentials stay in this session. Official links
+guide personal key creation and product approval; no shared key is supplied.
+See [data sources and access](LIDAR-SOURCES.md).
+
+Over-limit catalog results remain visible. **Allow selected tile count**
+explicitly changes the download limit, up to 512 files, without starting a
+download. Incomplete catalog results remain blocked.
 
 Use Python 3.14 with Tkinter. In PowerShell, from this folder:
 

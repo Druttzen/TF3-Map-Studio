@@ -74,7 +74,8 @@ def verify_executable(executable, source, tool):
             files += [(p.stem, p) for p in (source/'vendor').glob('*.py')]
         launcher = source/'tools/gui.py'
         entry = 'gui'
-        expected_count = 16 if tool == 'TF3-Heightmap-Studio' else 11 if osm_self_check else 10
+        heightmap_helpers = [name for name in ('local_sources','data_access') if (source/'tools'/f'{name}.py').is_file()] if tool == 'TF3-Heightmap-Studio' else []
+        expected_count = 16+len(heightmap_helpers) if tool == 'TF3-Heightmap-Studio' else 11 if osm_self_check else 10
     for name, path in files:
         if name in pyz.toc:
             code = pyz.extract(name)
@@ -89,6 +90,8 @@ def verify_executable(executable, source, tool):
     assert code == compile(launcher.read_text(encoding='utf-8-sig'), code.co_filename,
                            'exec', dont_inherit=True), f'Launcher differs: {tool}'
     assert len(checked) == expected_count, f'Unexpected module coverage: {tool}: {checked}'
+    if tool == 'TF3-Heightmap-Studio':
+        assert all(name in checked for name in heightmap_helpers), 'Heightmap discovery/access helpers are missing'
     if osm_self_check:
         assert 'runtime_check' in checked, 'OSM packaged startup check is missing'
     if tool == 'OSM-TF3-Vanilla-Converter':
@@ -225,7 +228,8 @@ def main():
         all_entries = {'TF3-Map-Studio/README.md': source/'README.md',
                        'TF3-Map-Studio/CODE-REVIEW-2026-10-25.md': source/'CODE-REVIEW-2026-10-25.md',
                        'TF3-Map-Studio/build-manifest.json': manifest}
-        versions = {'TF3-Heightmap-Studio': '0.10',
+        heightmap_gui=(source/'TF3-Heightmap-Studio/tools/gui.py').read_text(encoding='utf-8')
+        versions = {'TF3-Heightmap-Studio': osm_version(source/'TF3-Heightmap-Studio') if 'APP_VERSION=' in heightmap_gui else '0.10',
                     'OSM-TF3-Vanilla-Converter': osm_version(source/'OSM-TF3-Vanilla-Converter')}
         for tool, exe in (('TF3-Heightmap-Studio', heightmap), ('OSM-TF3-Vanilla-Converter', osm), ('TRF3-Mod-Converter', vehicle)):
             entries = docs(source/tool)

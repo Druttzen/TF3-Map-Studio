@@ -1,5 +1,5 @@
 TF3 HEIGHTMAP STUDIO - STEP 2
-Preview 0.9 | GPL-3.0 | 4 October 2026
+Preview 0.11 | GPL-3.0 | 25 October 2026
 
 AUTOMATIC GAME FOLDERS
 The app reads the installed TF3 and Steam Windows registry paths, checks the

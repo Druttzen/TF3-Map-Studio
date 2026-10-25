@@ -15,6 +15,7 @@ from job import Cancelled
 from game_paths import detect, suggested_output, select_user_folder
 import biomes
 from osm_converter import atomic_write
+APP_VERSION='0.11-preview'
 
 LABELS={
  'lidar_max_points':'Maximum points read per LiDAR file',
@@ -39,7 +40,7 @@ LABELS={
 
 class App(tk.Tk):
  def __init__(self):
-  super().__init__();self.title('TF3 Heightmap Studio · 0.10-preview · Step 2');self.geometry('1100x670');self.minsize(980,620);self.configure(bg='#edf2f4')
+  super().__init__();self.title(f'TF3 Heightmap Studio · {APP_VERSION} · Step 2');self.geometry('1180x740');self.minsize(980,620);self.configure(bg='#edf2f4')
   self.busy=False;self.loading=True;self.dirty=False;self.result=None;self.report=None;self.undo=[];self.strokes=[]
   self.biome_strokes=[];self.biome_undo=[]
   self.events=queue.Queue();self.cancel_event=threading.Event();self.started=0;self.close_when_done=False;self.sources=[];self.image_bounds=None;self.render_pending=False;self.last_stamp=None
@@ -95,6 +96,7 @@ class App(tk.Tk):
    b=ttk.Button(buttons,text=text,command=fn);b.pack(side='right',padx=(8,0));self.project_buttons.append(b)
   self.show('1. Run the OSM converter and keep its JSON report.\n2. Choose that report, its converted .lua and the original .osm here.\n3. Add a measured elevation file, or choose Download public terrain.\n4. Build terrain, review the map, and fine-tune settings or brush edits.\n5. Export the 16-bit PNG and use the exact import heights in its instructions.\n\nOSM and converter logs align features; they do not measure terrain elevation. Local surveyed/LiDAR DEMs can supply finer detail than public tiles. No automatic vertical datum conversion is performed.\n\nOptional OSM refinements change terrain for water areas and road/rail corridors. Bridge/tunnel interiors are excluded. These are authored edits, not extra elevation measurements.\n\nNative TF3 heightmap import remains to be checked in a game session.')
   for var in [self.report_path,self.osm_path,self.lua_path,*self.values.values()]:var.trace_add('write',lambda *args:self.changed())
+  for var in [self.report_path,self.osm_path,self.local_folder,self.lidar_provider]:var.trace_add('write',lambda *args:self.schedule_lidar_search())
   self.loading=False;self.after(80,self.poll)
 
  def page(self,name):
@@ -185,33 +187,107 @@ class App(tk.Tk):
 
  def build_lidar(self):
   from lidar_sources import PROVIDERS
-  f=self.pages['LiDAR'];self.lidar_provider=tk.StringVar(value=PROVIDERS[0]);self.lidar_rows=[]
+  f=self.pages['LiDAR'];self.lidar_provider=tk.StringVar(value=PROVIDERS[-1]);self.lidar_rows=[]
+  self.local_folder=tk.StringVar();self.auto_lidar=tk.BooleanVar(value=True)
+  self.discovery_generation=0;self.discovery_cancel=threading.Event();self.discovery_running=False;self.discovery_timer=None
   self.lidar_user=tk.StringVar();self.lidar_password=tk.StringVar();self.lidar_info=tk.StringVar(value='Choose your OSM/XML or converter report, then search its map area.')
+  self.access_info=tk.StringVar(value='Provider access has not been tested. Public catalogs and local files need no key.')
   self.field(f,0,'Data region',self.lidar_provider,PROVIDERS)
-  self.note(f,1,'Find ground elevation for this map. Fine LiDAR coverage is regional. Sweden uses Lantmäteriet; USGS provides free regional ground DEMs; OpenTopography searches surveys worldwide. No global 1-metre coverage is assumed.')
-  ttk.Button(f,text='Find data for this map',command=self.search_lidar).grid(row=2,column=0,columnspan=3,sticky='w',pady=6)
-  self.lidar_list=tk.Listbox(f,height=8,exportselection=False);self.lidar_list.grid(row=3,column=0,columnspan=3,sticky='ew');self.lidar_list.bind('<<ListboxSelect>>',self.describe_lidar)
-  ttk.Label(f,textvariable=self.lidar_info,wraplength=480).grid(row=4,column=0,columnspan=3,sticky='w',pady=8)
+  self.note(f,1,'Automatic chooses the catalog for your map: Lantmäteriet in Sweden, USGS in the USA, regional OpenTopography elsewhere. Local files are matched by their geographic headers; filenames alone are not enough.')
+  ttk.Checkbutton(f,text='Search automatically when the selected map changes',variable=self.auto_lidar,command=self.schedule_lidar_search).grid(row=2,column=0,columnspan=3,sticky='w')
+  self.path(f,3,'Local LiDAR / elevation folder (subfolders included)',self.local_folder,self.choose_lidar_folder)
   controls=ttk.Frame(f);controls.grid(row=5,column=0,columnspan=3,sticky='w',pady=6)
-  ttk.Button(controls,text='Download selected data',command=self.download_lidar).pack(side='left',padx=(0,6))
-  ttk.Button(controls,text='Open data provider',command=self.open_lidar).pack(side='left')
-  self.note(f,6,'Downloads become local elevation files. Build terrain crops them to the exact converter map. Raw LAS/LAZ/COPC files can be added in Elevation: only classified ground is used, and gaps stay visible. Roads and railways are not raised or flattened automatically.')
-  ttk.Label(f,text='Lantmäteriet API username (this session only)').grid(row=7,column=0,columnspan=3,sticky='w');ttk.Entry(f,textvariable=self.lidar_user).grid(row=8,column=0,columnspan=3,sticky='ew')
-  ttk.Label(f,text='Lantmäteriet API password (this session only)').grid(row=9,column=0,columnspan=3,sticky='w',pady=(8,0));ttk.Entry(f,textvariable=self.lidar_password,show='•').grid(row=10,column=0,columnspan=3,sticky='ew')
-  self.note(f,11,'Swedish downloads are free but require an approved Geotorget API order. Use its API credentials. They are kept in memory and never written into projects, reports or cache metadata. Open data needs no account.')
-  self.field(f,12,'lidar_max_points')
+  ttk.Button(controls,text='Find online + local data',command=self.search_lidar).pack(side='left',padx=(0,6))
+  ttk.Button(controls,text='Search local only',command=lambda:self.search_lidar(online=False)).pack(side='left',padx=(0,6))
+  self.stop_search_button=ttk.Button(controls,text='Stop search',command=self.stop_lidar_search,state='disabled');self.stop_search_button.pack(side='left')
+  self.lidar_list=tk.Listbox(f,height=7,selectmode='extended',exportselection=False);self.lidar_list.grid(row=6,column=0,columnspan=3,sticky='ew');self.lidar_list.bind('<<ListboxSelect>>',self.describe_lidar)
+  ttk.Label(f,textvariable=self.lidar_info,wraplength=510).grid(row=7,column=0,columnspan=3,sticky='w',pady=8)
+  controls=ttk.Frame(f);controls.grid(row=8,column=0,columnspan=3,sticky='w',pady=6)
+  ttk.Button(controls,text='Use selected data',command=self.download_lidar).pack(side='left',padx=(0,6))
+  ttk.Button(controls,text='Open provider / folder',command=self.open_lidar).pack(side='left')
+  controls=ttk.Frame(f);controls.grid(row=9,column=0,columnspan=3,sticky='w',pady=4)
+  ttk.Button(controls,text='Add all matching local files',command=self.add_matching_local).pack(side='left',padx=(0,6))
+  ttk.Button(controls,text='Allow selected tile count',command=self.allow_dataset_tiles).pack(side='left')
+  controls=ttk.Frame(f);controls.grid(row=10,column=0,columnspan=3,sticky='w',pady=6)
+  ttk.Button(controls,text='API access setup…',command=self.setup_access).pack(side='left',padx=(0,6))
+  ttk.Button(controls,text='Test Lantmäteriet access',command=self.check_data_access).pack(side='left')
+  ttk.Label(f,textvariable=self.access_info,wraplength=510).grid(row=11,column=0,columnspan=3,sticky='w',pady=6)
+  self.note(f,12,'Searches never download terrain automatically. Select files or a dataset to add/download them. Unknown coordinate systems require review. Point files use classified ground only; Build terrain checks actual coverage and gaps.')
+  self.field(f,13,'lidar_max_points')
 
  def lidar_cache(self):
   return Path(os.environ.get('LOCALAPPDATA',tempfile.gettempdir()))/'Druttzen/TF3-Heightmap/cache/catalogs'
 
- def search_lidar(self):
-  if self.busy:return
-  from lidar_sources import area_bounds,discover
-  from job import Job
-  try:bounds=area_bounds(self.report_path.get().strip(),self.osm_path.get().strip());options=self.options()
-  except (ValueError,OSError) as exc:messagebox.showerror('Choose map area',str(exc),parent=self);return
+ def choose_lidar_folder(self):
+  path=filedialog.askdirectory(parent=self,title='Find LiDAR and elevation files in this folder',initialdir=self.local_folder.get() or str(Path.home()))
+  if path:
+   self.local_folder.set(path)
+   if not self.auto_lidar.get():self.search_lidar(online=False)
+
+ def schedule_lidar_search(self):
+  if self.loading:return
+  if self.discovery_timer:self.after_cancel(self.discovery_timer)
+  if self.discovery_running:self.stop_lidar_search()
+  self.lidar_rows=[];self.lidar_list.delete(0,'end')
+  if not self.auto_lidar.get():
+   self.discovery_timer=None;self.lidar_info.set('Map or search settings changed. Find data to refresh the results.');return
+  self.discovery_timer=self.after(800,lambda:self.search_lidar(automatic=True))
+
+ def stop_lidar_search(self):
+  self.discovery_cancel.set();self.discovery_generation+=1;self.discovery_running=False
+  self.stop_search_button.configure(state='disabled');self.lidar_info.set('Search stopped. Existing files were kept.')
+
+ def search_lidar(self,automatic=False,online=True):
+  if self.loading or self.busy:return
+  self.discovery_timer=None
+  report=self.report_path.get().strip();osm=self.osm_path.get().strip();folder=self.local_folder.get().strip()
+  if not report and not osm:
+   if not automatic:self.lidar_info.set('Choose the converter report or an OSM file first.')
+   return
+  try:options=normalize({'public_max_tiles':float(self.values['public_max_tiles'].get()),'download_max_mb':float(self.values['download_max_mb'].get())})
+  except ValueError as exc:self.lidar_info.set(str(exc));return
   provider=self.lidar_provider.get();cache=self.lidar_cache()
-  self.start_worker(lambda progress:discover(bounds,provider,options,cache,Job(progress,self.cancel_event)),'lidar_search')
+  self.discovery_cancel.set();self.discovery_cancel=threading.Event();cancel=self.discovery_cancel
+  self.discovery_generation+=1;generation=self.discovery_generation;self.discovery_running=True
+  self.stop_search_button.configure(state='normal');self.lidar_info.set('Finding map-specific data… You can keep using the app.')
+  def progress(percent,stage,detail):self.events.put(('discovery_progress',(generation,stage,detail)))
+  def worker():
+   from lidar_sources import area_bounds,discover
+   from local_sources import discover_local
+   from job import Job
+   job=Job(progress,cancel)
+   try:
+    bounds=area_bounds(report,osm,job);local_rows=[];online_rows=[];warnings=[];details=[]
+    if folder:
+     result=discover_local(folder,bounds,cache/'local',job);local_rows=result['rows'];warnings.extend(result['warnings'])
+     details.append(f"Local folder: {result['scanned']} files inspected; {result['cached']} cached headers.")
+     if online:self.events.put(('discovery_partial',(generation,{'bounds':bounds,'rows':local_rows,'warnings':list(warnings),'details':list(details)})))
+    if online:
+     result=discover(bounds,provider,options,cache,job);online_rows=result['rows'];warnings.extend(result['warnings'])
+     details.append('Online catalog cache used.' if result.get('fromCache') else 'Online catalogs checked.')
+    job.check();self.events.put(('discovery_result',(generation,{'bounds':bounds,'rows':online_rows+local_rows,'warnings':warnings,'details':details})))
+   except Cancelled:self.events.put(('discovery_stopped',generation))
+   except Exception as exc:self.events.put(('discovery_error',(generation,str(exc))))
+  threading.Thread(target=worker,daemon=True).start()
+
+ def handle_discovery(self,kind,value):
+  if kind=='discovery_stopped':generation=value
+  else:generation=value[0]
+  if generation!=self.discovery_generation:return
+  if kind=='discovery_progress':
+   self.lidar_info.set(value[1]+(' · '+value[2] if value[2] else ''));return
+  partial=kind=='discovery_partial'
+  if not partial:self.discovery_running=False;self.stop_search_button.configure(state='disabled')
+  if kind in ('discovery_result','discovery_partial'):
+   result=value[1];self.lidar_rows=result['rows'];self.lidar_list.delete(0,'end')
+   for row in self.lidar_rows:self.lidar_list.insert('end',('Local: ' if row.get('access')=='local' else '')+row['name'])
+   known=sum(r.get('coverage')=='overlap' for r in self.lidar_rows if r.get('access')=='local')
+   self.lidar_info.set(f"{len(self.lidar_rows)} sources found · {known} local files overlap the map. "+('Some results need review; see Report.' if result['warnings'] else 'Select data to inspect access and coverage.'))
+   if partial:self.lidar_info.set(f'{known} matching local files are ready. Checking online catalogs…')
+   if self.lidar_rows:self.lidar_list.selection_set(0)
+   if not self.busy:self.show('Data search bounds (S,W,N,E): '+str(result['bounds'])+'\n\n'+'\n'.join(result['details']+result['warnings'] or ['No matching sources. Choose a local folder or another catalog.']))
+  elif kind=='discovery_error':self.lidar_info.set('Search could not finish: '+value[1])
+  else:self.lidar_info.set('Search stopped.')
 
  def selected_lidar(self):
   selected=self.lidar_list.curselection()
@@ -221,21 +297,76 @@ class App(tk.Tk):
  def describe_lidar(self,event=None):
   try:row=self.selected_lidar()
   except ValueError:return
-  access={'open':'Open download; no account','account':'Free with approved API access','unknown':'Provider access is checked when downloading','portal':'Download raw data from provider, then Add files'}
-  self.lidar_info.set(row['resolution']+'\n'+access[row['access']]+'\n'+row['surface']+'\nVertical datum: '+row['verticalDatum'])
+  access={'open':'Open download; no account','account':'Approved API access required','unknown':'Access checked when downloading','portal':'Download via provider, then choose its local folder','local':'Local file; no account'}
+  extra=row.get('downloadHint','')
+  if row.get('access')=='local':extra=row['path']+'\n'+('Overlaps map; actual samples checked at build.' if row.get('coverage')=='overlap' else 'Unknown coordinates: choose the known CRS before use.')
+  self.lidar_info.set(row['resolution']+'\n'+access[row['access']]+'\n'+row['surface']+'\nVertical datum: '+row['verticalDatum']+'\n'+extra)
 
  def open_lidar(self):
-  try:webbrowser.open(self.selected_lidar()['site'])
+  try:
+   row=self.selected_lidar()
+   if row.get('access')=='local':os.startfile(str(Path(row['path']).parent))
+   else:webbrowser.open(row['site'])
   except ValueError as exc:messagebox.showerror('Select data',str(exc),parent=self)
 
  def download_lidar(self):
   if self.busy:return
   from lidar_sources import area_bounds,download_selection
   from job import Job
-  try:selection=deepcopy(self.selected_lidar());bounds=area_bounds(self.report_path.get().strip(),self.osm_path.get().strip());options=self.options()
+  try:
+   selected=[self.lidar_rows[i] for i in self.lidar_list.curselection()]
+   if selected and all(row.get('access')=='local' for row in selected):self.use_local_paths([row['path'] for row in selected]);return
+   if len(selected)>1:raise ValueError('Select one online dataset, or select local files together.')
+   selection=deepcopy(self.selected_lidar());options=self.options()
+   if selection.get('downloadBlocked'):raise ValueError(selection.get('downloadHint','Increase the download tile limit before downloading.'))
+   report=self.report_path.get().strip();osm=self.osm_path.get().strip()
   except (ValueError,OSError) as exc:messagebox.showerror('Select map and data',str(exc),parent=self);return
   credentials=(self.lidar_user.get().strip(),self.lidar_password.get());cache=self.lidar_cache()
-  self.start_worker(lambda progress:download_selection(selection,bounds,options,cache,Job(progress,self.cancel_event),credentials),'lidar_download')
+  self.start_worker(lambda progress:download_selection(selection,area_bounds(report,osm,Job(progress,self.cancel_event)),options,cache,Job(progress,self.cancel_event),credentials),'lidar_download')
+
+ def use_local_paths(self,paths):
+  self.sources.extend(str(Path(p)) for p in paths if str(Path(p)) not in self.sources);self.update_sources();self.changed()
+  self.lidar_info.set(f'{len(paths)} local files selected. Build terrain checks samples, units and coverage.')
+
+ def add_matching_local(self):
+  if self.busy:return
+  paths=[r['path'] for r in self.lidar_rows if r.get('access')=='local' and r.get('coverage')=='overlap' and not r.get('needsReview')]
+  if paths:self.use_local_paths(paths)
+  else:self.lidar_info.set('No georeferenced local matches yet. Choose a folder and search it first.')
+
+ def allow_dataset_tiles(self):
+  try:
+   row=self.selected_lidar();count=row.get('requiredTileLimit',len(row.get('assets',[])))
+   if not count or count>RANGES['public_max_tiles'][1]:raise ValueError('This dataset exceeds the supported batch. Use a smaller map or download its tiles manually.')
+   self.values['public_max_tiles'].set(str(count));row['downloadBlocked']=False;row['downloadHint']=f'Download limit set to {count} files. Select Use selected data to download.';self.describe_lidar()
+  except ValueError as exc:messagebox.showerror('Dataset size',str(exc),parent=self)
+
+ def setup_access(self):
+  from data_access import GUIDE,GEOTORGET,LM_PRODUCT,LM_LASER,LM_API_PORTAL,OT_KEYS
+  existing=getattr(self,'access_window',None)
+  if existing is not None and existing.winfo_exists():existing.lift();return
+  window=tk.Toplevel(self);self.access_window=window;window.title('Data provider access · this session only');window.geometry('760x720')
+  form=ttk.Frame(window,padding=14);form.pack(fill='both',expand=True);form.columnconfigure(1,weight=1)
+  for row,label,var,masked in [(0,'Lantmäteriet API username',self.lidar_user,False),(1,'Lantmäteriet API password',self.lidar_password,True),(2,'OpenTopography API key',self.api_key,True)]:
+   ttk.Label(form,text=label).grid(row=row,column=0,sticky='w',padx=(0,8),pady=5);ttk.Entry(form,textvariable=var,show='•' if masked else '').grid(row=row,column=1,sticky='ew')
+  ttk.Button(form,text='Test Lantmäteriet file access',command=self.check_data_access).grid(row=3,column=0,columnspan=2,sticky='w',pady=7)
+  ttk.Label(form,textvariable=self.access_info,wraplength=700).grid(row=4,column=0,columnspan=2,sticky='w',pady=6)
+  links=ttk.Frame(form);links.grid(row=5,column=0,columnspan=2,sticky='w',pady=5)
+  for label,url in [('Geotorget',GEOTORGET),('Ground model',LM_PRODUCT),('Raw LiDAR',LM_LASER),('Create API keys',LM_API_PORTAL),('OpenTopography key',OT_KEYS)]:ttk.Button(links,text=label,command=lambda u=url:webbrowser.open(u)).pack(side='left',padx=(0,4))
+  text=tk.Text(form,wrap='word',height=24,font=('Segoe UI',10));text.grid(row=6,column=0,columnspan=2,sticky='nsew',pady=8);form.rowconfigure(6,weight=1);text.insert('1.0',GUIDE);text.configure(state='disabled')
+
+ def check_data_access(self):
+  if self.busy:return
+  from data_access import test_lantmateriet_access
+  from job import Job
+  try:
+   rows=[r for r in self.lidar_rows if r.get('provider')=='Lantmäteriet' and r.get('assets')]
+   selection=deepcopy(self.selected_lidar()) if self.lidar_list.curselection() else deepcopy(rows[0]) if rows else {}
+   credentials=(self.lidar_user.get().strip(),self.lidar_password.get())
+   if not all(credentials):raise ValueError('Enter API-approved credentials in API access setup first.')
+   if selection.get('provider')!='Lantmäteriet':raise ValueError('Find and select Lantmäteriet data for this map first.')
+  except ValueError as exc:messagebox.showerror('Provider access',str(exc),parent=self);return
+  self.start_worker(lambda progress:test_lantmateriet_access(selection,credentials,Job(progress,self.cancel_event)),'access_check')
 
  def open_provider(self):
   try:
@@ -380,7 +511,8 @@ class App(tk.Tk):
    'convertedLua':self.lua_path.get(),'luaSha256':self.lua_sha,
    'converterDataset':r['dataset'],'osmSha256':r.get('sourceSha256'),'bounds':r['bounds'],'mapSize':r['mapSize'],
    'elevationFiles':list(self.sources),'options':self.options(),'brushStrokes':list(self.strokes),
-   'biomeStrokes':list(self.biome_strokes),'biomeSourceSha256':(self.result.get('biomeSource') or {}).get('sha256') if self.result and not self.dirty else None,'output':self.output_path.get()}
+   'biomeStrokes':list(self.biome_strokes),'biomeSourceSha256':(self.result.get('biomeSource') or {}).get('sha256') if self.result and not self.dirty else None,'output':self.output_path.get(),
+   'discovery':{'localFolder':self.local_folder.get(),'autoSearch':self.auto_lidar.get(),'provider':self.lidar_provider.get()}}
 
  def save(self):
   try:
@@ -396,6 +528,9 @@ class App(tk.Tk):
    if r['bounds']!=p['bounds'] or r['mapSize']!=p['mapSize'] or r['dataset']!=p.get('converterDataset'):
     raise ValueError('The converter report has changed since this project was saved. Restore its original report.')
    self.loading=True
+   discovery=p.get('discovery',{});self.local_folder.set(discovery.get('localFolder',''));self.auto_lidar.set(discovery.get('autoSearch',True))
+   from lidar_sources import PROVIDERS
+   self.lidar_provider.set(discovery.get('provider') if discovery.get('provider') in PROVIDERS else PROVIDERS[-1])
    for key,var in self.values.items():var.set(p['options'][key])
    self.auto_output=''
    self.report_path.set(p['converterReport']);self.osm_path.set(p['osmFile']);self.output_path.set(p.get('output',''));self.sources=p['elevationFiles'];self.update_sources();self.strokes=p['brushStrokes'];self.undo=[];self.report=r
@@ -409,7 +544,7 @@ class App(tk.Tk):
    self.biome_strokes=p['biomeStrokes'];self.biome_undo=[];self.biome_undo_button.configure(state='disabled')
    self.result=None;self.dirty=True;self.export_button.configure(state='disabled');self.undo_button.configure(state='disabled');self.status.set('Project loaded · Build terrain to recreate its preview');self.quality.set('Build terrain to inspect this project’s elevation sources.');self.show('Project loaded. Build terrain to recreate its preview and source report.');self.percent.set('0%');self.progress['value']=0;self.render()
   except (ValueError,OSError) as exc:messagebox.showerror('Could not load project',str(exc),parent=self)
-  finally:self.loading=False;self.refresh_alignment()
+  finally:self.loading=False;self.refresh_alignment();self.schedule_lidar_search()
 
  def freeze(self,busy):
   if busy:
@@ -429,6 +564,7 @@ class App(tk.Tk):
   self.biome_undo_button.configure(state='normal' if not busy and self.biome_undo else 'disabled')
 
  def start_worker(self,fn,mode):
+  if self.discovery_running:self.stop_lidar_search()
   self.busy=True;self.close_when_done=False;self.cancel_event.clear();self.started=time.monotonic();self.freeze(True);self.progress['value']=0;self.percent.set('0%');self.status.set('Starting '+mode+'…')
   def progress(percent,stage,detail):self.events.put(('progress',(percent,stage,detail)))
   def worker():
@@ -473,6 +609,8 @@ class App(tk.Tk):
   while True:
    try:kind,value=self.events.get_nowait()
    except queue.Empty:break
+   if kind.startswith('discovery_'):
+    self.handle_discovery(kind,value);continue
    if kind=='progress':
     percent,stage,detail=value;self.progress['value']=percent;self.percent.set(f'{percent:.0f}%')
     if not self.cancel_event.is_set():self.status.set(stage+(' · '+detail if detail else ''))
@@ -507,6 +645,8 @@ class App(tk.Tk):
    elif kind=='lidar_download':
     self.sources.extend(str(p) for p in value if str(p) not in self.sources);self.update_sources();self.values['source_mode'].set('Local elevation files');self.changed()
     self.status.set('Elevation downloaded · Build terrain to check map coverage');self.lidar_info.set(f'{len(value)} files downloaded. Ground coverage and gaps are checked when building terrain.')
+   elif kind=='access_check':
+    self.access_info.set(value['message']);self.status.set('Provider access verified' if value['ok'] else 'Provider access needs attention')
    else:self.status.set('Cancelled' if kind=='cancelled' else 'Heightmap operation failed · see report');self.show(value);self.view.select(1)
    self.freeze(False)
    if self.close_when_done:self.destroy();return
@@ -612,6 +752,8 @@ class App(tk.Tk):
   if path.exists():os.startfile(str(path.resolve().parent))
 
  def close(self):
+  self.discovery_cancel.set()
+  if self.discovery_timer:self.after_cancel(self.discovery_timer)
   if self.busy:self.close_when_done=True;self.cancel()
   else:self.destroy()
 

@@ -37,6 +37,13 @@ def check(output):
    assert enhanced[4,4]==49 and enhanced[5,5]==10 and enhanced[0,0]==10
    assert metadata[0]['file']==str(files[1].resolve())
    assert np.allclose(affine@(.5,.5),(x0,y1))
+   from local_sources import discover_local
+   from data_access import GUIDE
+   found=discover_local(folder,bounds,folder/'discovery-cache')
+   assert all(str(p.resolve()) in found['paths'] for p in files)
+   repeated=discover_local(folder,bounds,folder/'discovery-cache')
+   assert repeated['cached']>=len(files)
+   assert 'ConsumerKey' in GUIDE
    xml=folder/'fictional.osm';xml.write_text('<osm version="0.6"><bounds minlat="0" minlon="0" maxlat=".0001" maxlon=".0001"/><node id="1" lat=".00005" lon=".00005"/></osm>',encoding='utf-8')
    context=folder/'fictional.report.json';context.write_text(json.dumps({'dataset':'fictional-runtime','input':xml.name,'bounds':bounds,'mapSize':[128,128],'sourceSha256':hashlib.sha256(xml.read_bytes()).hexdigest(),'settings':{}}),encoding='utf-8')
    from alignment import read_report
@@ -49,6 +56,7 @@ def check(output):
    result={'ok':True,'certificateBundle':'packaged CA roots loaded for HTTPS verification','laspy':laspy.__version__,'lazCompression':'round-trip passed','projection':'EPSG:3857 verified','groundFiltering':'building excluded','geotiff':'written and read','geotiffDetail':'priority, nodata fallback and OSM bounds passed',
            'nativeExportRouting':'heightmap, biomes and companions separated; fictional temporary folders only',
            'streamingConverterReport':'ijson parser and report contract passed',
+           'localDiscovery':'header matching and repeat-search cache passed; no credentials used',
            'tf3RegistryDiscovery':{'installationFound':installed.installation is not None,'userFolderSelected':installed.local is not None}}
  except Exception as exc:result['error']=str(exc)
  finally:

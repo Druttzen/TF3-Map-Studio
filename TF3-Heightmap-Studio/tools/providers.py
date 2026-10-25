@@ -63,7 +63,7 @@ def validate_geotiff(path):
 class ScopedRedirect(HTTPRedirectHandler):
  def redirect_request(self,req,fp,code,msg,headers,newurl):
   before=urlsplit(req.full_url);after=urlsplit(newurl)
-  if after.scheme!='https':raise ValueError('Elevation server redirected to a non-HTTPS address.')
+  if after.scheme!='https' or after.username or after.password:raise ValueError('Elevation server redirected to an unsafe address; credentials were not sent.')
   redirected=super().redirect_request(req,fp,code,msg,headers,newurl)
   if (before.hostname,before.port)!=(after.hostname,after.port):redirected.remove_header('Authorization')
   return redirected

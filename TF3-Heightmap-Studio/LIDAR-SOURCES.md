@@ -1,4 +1,4 @@
-# LiDAR and detailed ground elevation — Preview 0.7
+# LiDAR and detailed ground elevation — Preview 0.11
 
 The **LiDAR** tab searches the converter report's chosen crop. With only an
 OSM/XML file selected, it searches its `<bounds>` or the extent of its nodes.
@@ -14,6 +14,31 @@ No account is needed to search the supported catalogs.
    If its vertical units are absent, choose the known Metres or Feet explicitly.
 
 ## Verified sources and access
+
+Preview 0.11 automatically chooses the regional catalog for the selected map.
+Complete successful online searches are cached for 24 hours. Local folder
+searches read headers only, match geographic footprints and cache metadata with
+file and sidecar identities. Linked directories are skipped. Missing CRS or
+geotransforms, GCP/RPC rasters and HGT remain manual candidates. Local matches
+appear while online discovery continues. No files are downloaded automatically.
+
+Lantmäteriet ground-model discovery explicitly filters `collections=dtm-cog`;
+raw COPC files are not sent to the GeoTIFF downloader. Actual source method and
+uncertainty are retained where supplied. Ground-model data may come from laser
+scanning or photogrammetry, and is not labeled as a pure raw laser survey.
+
+Open **API access setup** for masked session-only credentials and official
+provider links. Basic data-file access uses the API-approved account for the
+selected product. The API portal separately issues OAuth ConsumerKey/Secret
+credentials; those do not replace product permission or provide universal
+cross-provider access. No personal account, order or key was created by this
+release. The user performs account/key actions in the official portal.
+
+Official access pages: [Geotorget](https://geotorget.lantmateriet.se/),
+[ground model](https://geotorget.lantmateriet.se/geodataprodukter/markhojdmodell-nedladdning-api),
+[raw laser data](https://geotorget.lantmateriet.se/geodataprodukter/laserdata-nedladdning-skog-api),
+[API portal](https://apimanager.lantmateriet.se/devportal/),
+[OpenTopography personal APIs](https://opentopography.org/developers).
 
 | Source | Implemented search/download | Access and coverage |
 |---|---|---|

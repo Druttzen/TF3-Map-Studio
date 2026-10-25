@@ -41,7 +41,7 @@ RANGES={
  'river_width':(1,2000),'river_depth':(0,1000),'river_smoothing':(0,1000),
  'road_width':(1,500),'road_blend':(0,1000),'road_smoothing':(0,1000),'road_grade':(0,100),
  'rail_width':(1,500),'rail_blend':(0,1000),'rail_smoothing':(0,1000),'rail_grade':(0,100),
- 'download_max_mb':(1,4096),'range_min':(-20000,20000),'range_max':(-20000,20000),'public_max_tiles':(1,64),
+ 'download_max_mb':(1,4096),'range_min':(-20000,20000),'range_max':(-20000,20000),'public_max_tiles':(1,512),
  'lidar_max_points':(1,2000000000),
  'biome_highland_m':(-20000,20000),'biome_alpine_m':(-20000,20000),'biome_rock_slope':(0,90),
 }

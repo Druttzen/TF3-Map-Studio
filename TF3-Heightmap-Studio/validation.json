@@ -1,9 +1,9 @@
 {
-  "version": "0.10-preview",
+  "version": "0.11-preview",
   "automatedTerrainTests": {
-    "passed": 211,
+    "passed": 256,
     "failed": 0,
-    "skipped": 1
+    "skipped": 2
   },
   "converterModTests": {
     "passed": 73,
@@ -238,17 +238,23 @@
     "scope": "Cross-tool reports, saved project identity, polygon holes, clipped structure heights, paused-import object matches and release consistency"
   },
   "windowsExecutable": {
-    "version": "0.10-preview",
+    "version": "0.11-preview",
     "build": "passed",
-    "sha256": "e31844966b0d030e1a7adb62a46728df6052ec55770c3993c5bba72b42dbee52",
+    "sha256": "c4877d101dd59d0cfd085563447dc193650bb4690105ee032ba3499f8ee6cd5e",
     "nativeUIThisVersionVerified": false,
     "historicalEvidence": {
+      "version": "0.10-preview",
       "build": "passed",
-      "nativeLocalDemBuildExport": "passed on 0.4 with a 140 MB Lua; float64 export and transform match engine exactly",
-      "brushStampAndUndo": "passed; exported float64 values match the original terrain exactly",
-      "publicTerrainCacheBuildExport": "passed; exported float64 values match engine output exactly",
-      "highDpiLayout": "passed at 150% scaling",
-      "sha256": "661b495bbcc19aa524406ef1a7fad6f745de7343c87eea73f71b2543a2477bca"
+      "sha256": "e31844966b0d030e1a7adb62a46728df6052ec55770c3993c5bba72b42dbee52",
+      "nativeUIThisVersionVerified": false,
+      "historicalEvidence": {
+        "build": "passed",
+        "nativeLocalDemBuildExport": "passed on 0.4 with a 140 MB Lua; float64 export and transform match engine exactly",
+        "brushStampAndUndo": "passed; exported float64 values match the original terrain exactly",
+        "publicTerrainCacheBuildExport": "passed; exported float64 values match engine output exactly",
+        "highDpiLayout": "passed at 150% scaling",
+        "sha256": "661b495bbcc19aa524406ef1a7fad6f745de7343c87eea73f71b2543a2477bca"
+      }
     }
   },
   "validationDate": "2026-10-25",
@@ -263,9 +269,16 @@
     "geotiffDetail": "priority, nodata fallback and OSM bounds passed",
     "nativeExportRouting": "heightmap, biomes and companions separated; fictional temporary folders only",
     "streamingConverterReport": "ijson parser and report contract passed",
+    "localDiscovery": "header matching and repeat-search cache passed; no credentials used",
     "tf3RegistryDiscovery": {
       "installationFound": true,
       "userFolderSelected": true
     }
+  },
+  "discovery011": {
+    "local": "header-only recursive matching and identity-aware cache",
+    "online": "automatic regional catalog and complete-search 24h cache",
+    "credentials": "session only; no accounts or keys generated",
+    "authenticatedLiveAccessVerified": false
   }
 }
