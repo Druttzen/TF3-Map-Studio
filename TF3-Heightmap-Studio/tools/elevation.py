@@ -2,6 +2,7 @@
 from contextlib import ExitStack
 from datetime import datetime, timezone
 import gzip, json, math, os, re, ssl, tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.request import Request, urlopen
 import certifi
@@ -179,6 +180,104 @@ def masked_source(source, destination_transform, shape, stack, job):
  return {**source,'source':rasterio.band(masked,1),'transform':affine,'nodata':np.nan}
 
 
+def source_window(source,destination_transform,shape,halo=3):
+ """Native source cells needed by the map, with the interpolation neighbours.
+
+ This only bounds disk I/O. It must not crop away the neighbouring samples
+ needed by a kernel at a map corner or at a joined file boundary.
+ """
+ values=source['source'];height,width=values.shape
+ edges=rasterio.transform.array_bounds(*shape,destination_transform)
+ left,bottom,right,top=transform_bounds('EPSG:3857',source['crs'],*edges,densify_pts=41)
+ inverse=~source['transform']
+ corners=[inverse*(x,y) for x in (left,right) for y in (bottom,top)]
+ c0=max(0,math.floor(min(p[0] for p in corners))-halo);c1=min(width,math.ceil(max(p[0] for p in corners))+halo)
+ r0=max(0,math.floor(min(p[1] for p in corners))-halo);r1=min(height,math.ceil(max(p[1] for p in corners))+halo)
+ return (c0,r0,c1-c0,r1-r0) if c1>c0 and r1>r0 else None
+
+
+def disk_backed_array(source,destination_transform,shape,stack,job):
+ """Keep many HGT inputs from accumulating full decoded arrays in RAM."""
+ window=source_window(source,destination_transform,shape)
+ if window is None:
+  return {**source,'source':np.full((1,1),np.nan),'nodata':np.nan,'empty':True}
+ c0,r0,width,height=window;values=source['source'];job.check()
+ directory=stack.enter_context(tempfile.TemporaryDirectory(prefix='tf3-hgt-aoi-'))
+ path=Path(directory)/'source.tif';affine=source['transform']*Affine.translation(c0,r0)
+ with rasterio.open(path,'w',driver='GTiff',width=width,height=height,count=1,dtype=values.dtype,
+                    crs=source['crs'],transform=affine,nodata=source['nodata'],compress='deflate') as out:
+  for row in range(0,height,128):
+   job.check();count=min(128,height-row)
+   out.write(values[r0+row:r0+row+count,c0:c0+width],1,window=Window(0,row,width,count))
+ dataset=stack.enter_context(rasterio.open(path))
+ return {**source,'source':rasterio.band(dataset,1),'dataset':dataset,'band':1,'transform':affine}
+
+
+def compatible_grid(first,other):
+ """Only neighbours on the same calibrated native lattice may share a kernel."""
+ a,b=first['transform'],other['transform']
+ if a.b or a.d or b.b or b.d or a.a<=0 or a.e>=0:return False
+ if not (math.isclose(a.a,b.a,rel_tol=1e-12,abs_tol=1e-12) and math.isclose(a.e,b.e,rel_tol=1e-12,abs_tol=1e-12)):return False
+ if any(abs(v-round(v))>1e-7 for v in ((b.c-a.c)/a.a,(b.f-a.f)/a.e)):return False
+ if CRS.from_user_input(first['crs'])!=CRS.from_user_input(other['crs']):return False
+ return (first['scale'],first['offset'],first['factor'],first['metadata']['verticalDatum'])==(
+         other['scale'],other['offset'],other['factor'],other['metadata']['verticalDatum'])
+
+
+def source_mosaic(sources,destination_transform,shape,stack,job):
+ """A virtual, first-valid native grid, joined *before* interpolation.
+
+ VRT source rectangles are clipped to this map plus a native-cell halo. The
+ resulting grid is virtual, so a fine DEM or hundreds of tiles do not create
+ a full-size in-memory mosaic. Authoritative masks were applied beforehand.
+ GDAL VRT sources compose last-first, hence reverse our first-valid priority.
+ """
+ origin=sources[0]['transform'];entries=[]
+ for source in sources:
+  job.check()
+  if source.get('empty'):continue
+  window=source_window(source,destination_transform,shape)
+  if window is None:continue
+  c0,r0,width,height=window
+  transform=source['transform']*Affine.translation(c0,r0)
+  col=round((transform.c-origin.c)/origin.a);row=round((transform.f-origin.f)/origin.e)
+  entries.append((source,window,col,row))
+ if len(entries)<2:return None
+ mincol=min(e[2] for e in entries);minrow=min(e[3] for e in entries)
+ width=max(e[2]+e[1][2] for e in entries)-mincol
+ height=max(e[3]+e[1][3] for e in entries)-minrow
+ if max(width,height)>2147483647:return None
+ affine=origin*Affine.translation(mincol,minrow)
+ vrt=ET.Element('VRTDataset',rasterXSize=str(width),rasterYSize=str(height))
+ ET.SubElement(vrt,'SRS').text=CRS.from_user_input(sources[0]['crs']).to_wkt()
+ ET.SubElement(vrt,'GeoTransform').text=','.join(format(v,'.17g') for v in affine.to_gdal())
+ band=ET.SubElement(vrt,'VRTRasterBand',dataType='Float64',band='1')
+ ET.SubElement(band,'NoDataValue').text='nan'
+ for source,window,col,row in reversed(entries):
+  values=source['source'];c0,r0,w,h=window
+  entry=ET.SubElement(band,'ComplexSource')
+  ET.SubElement(entry,'SourceFilename',relativeToVRT='0').text=str(Path(values.ds.name).resolve())
+  ET.SubElement(entry,'SourceBand').text=str(values.bidx)
+  ET.SubElement(entry,'SrcRect',xOff=str(c0),yOff=str(r0),xSize=str(w),ySize=str(h))
+  ET.SubElement(entry,'DstRect',xOff=str(col-mincol),yOff=str(row-minrow),xSize=str(w),ySize=str(h))
+  nodata=source['nodata']
+  if nodata is not None:ET.SubElement(entry,'NODATA').text=str(nodata)
+ directory=stack.enter_context(tempfile.TemporaryDirectory(prefix='tf3-dem-mosaic-'))
+ path=Path(directory)/'joined.vrt';ET.ElementTree(vrt).write(path,encoding='utf-8',xml_declaration=True)
+ joined=stack.enter_context(rasterio.open(path))
+ return {'source':rasterio.band(joined,1),'transform':affine,'crs':sources[0]['crs'],'nodata':np.nan}
+
+
+def warp_chunk(source,destination_transform,row,count,nx,resampling):
+ chunk=np.full((count,nx),np.nan,dtype=np.float64)
+ if source.get('empty'):return chunk
+ # Point-sampled vertices must not acquire GDAL's widened downsample kernel.
+ reproject(source['source'],chunk,src_transform=source['transform'],src_crs=source['crs'],src_nodata=source['nodata'],
+           dst_transform=destination_transform*Affine.translation(0,row),dst_crs='EPSG:3857',dst_nodata=np.nan,
+           resampling=resampling,num_threads=2,warp_mem_limit=128,tolerance=0.0,XSCALE=1.0,YSCALE=1.0)
+ return chunk
+
+
 def sample_sources(paths,bounds,shape,options,job=None):
  job=job or Job();ny,nx=shape;minx,miny,maxx,maxy=mercator_bounds(bounds)
  dx=(maxx-minx)/(nx-1);dy=(maxy-miny)/(ny-1)
@@ -186,30 +285,54 @@ def sample_sources(paths,bounds,shape,options,job=None):
  result=np.full((ny,nx),np.nan,dtype=np.float64);metadata=[]
  if not paths:raise ValueError('Add an elevation file, or choose public-data download.')
  with ExitStack() as stack, rasterio.Env(GDAL_CACHEMAX=128*1024*1024):
-  sources=[load_source(path,options,stack) for path in paths]
-  for index,source in enumerate(sources):
+  sources=[]
+  for index,path in enumerate(paths):
+   job.check();source=load_source(path,options,stack)
    source['metadata']['fileListPosition']=index+1
    source['metadata']['sourceResolutionMetres']=map_resolution(source,bounds)
+   source['factor']=unit_multiplier(source['units'],options['source_units'])
+   if len(paths)>1 and isinstance(source['source'],np.ndarray):source=disk_backed_array(source,destination_transform,shape,stack,job)
+   sources.append(source)
   if options['source_priority']=='Finest elevation first':
    sources.sort(key=lambda s:round(max(s['metadata']['sourceResolutionMetres']),6))
+  prepared=[]
   for i,source in enumerate(sources):
    source=masked_source(source,destination_transform,shape,stack,job)
    job.check();meta=dict(source['metadata']);metadata.append(meta)
-   factor=unit_multiplier(source['units'],options['source_units'])
-   meta['heightUnitMultiplier']=factor
+   meta['heightUnitMultiplier']=source['factor']
    meta.update(priority=i+1,availableSamples=0,contributedSamples=0,resampling=options['resampling'],resolutionMeasuredAt='Near OSM area; nearest source cell if outside its footprint')
+   prepared.append((source,meta))
+  groups=[]
+  for pair in prepared:
+   if not groups or not compatible_grid(groups[-1][0][0],pair[0]):groups.append([])
+   groups[-1].append(pair)
+  resampling={'Bilinear':Resampling.bilinear,'Cubic':Resampling.cubic,'Nearest':Resampling.nearest}[options['resampling']]
+  completed=0
+  for group_index,group in enumerate(groups):
+   members=[s for s,_ in group]
+   joined=source_mosaic(members,destination_transform,shape,stack,job) if len(group)>1 else None
+   if joined:
+    for _,meta in group:
+     meta.update(mosaicGroup=group_index+1,mosaicSourceCount=len(group),interpolationAcrossTiles=True,
+                 sampleAttribution='First valid original source at each output vertex; interpolation also uses neighbouring aligned source cells')
    for row in range(0,ny,128):
-    job.update(35+30*(i+row/ny)/len(sources),'Sampling elevation',f'{Path(source["path"]).name}; row {row+1}/{ny}')
-    count=min(128,ny-row);chunk=np.full((count,nx),np.nan,dtype=np.float64)
-    # Vertex samples must retain their point interpolation kernel, including
-    # when shrinking a source raster. GDAL's default downsampling widens it.
-    reproject(source['source'],chunk,src_transform=source['transform'],src_crs=source['crs'],src_nodata=source['nodata'],
-              dst_transform=destination_transform*Affine.translation(0,row),dst_crs='EPSG:3857',dst_nodata=np.nan,
-              resampling={'Bilinear':Resampling.bilinear,'Cubic':Resampling.cubic,'Nearest':Resampling.nearest}[options['resampling']],
-              num_threads=2,warp_mem_limit=128,tolerance=0.0,XSCALE=1.0,YSCALE=1.0)
-    chunk=(chunk*source['scale']+source['offset'])*factor
-    part=result[row:row+count];valid=np.isfinite(chunk);fill=~np.isfinite(part)&valid;part[fill]=chunk[fill]
-    meta['availableSamples']+=int(np.count_nonzero(valid));meta['contributedSamples']+=int(np.count_nonzero(fill))
-   meta['coveragePercent']=100*meta['contributedSamples']/(nx*ny)
+    job.update(35+30*(completed+len(group)*row/ny)/len(sources),'Sampling elevation',f'{len(group)} aligned source(s); row {row+1}/{ny}')
+    count=min(128,ny-row);part=result[row:row+count]
+    mosaic=warp_chunk(joined,destination_transform,row,count,nx,resampling) if joined else None
+    if mosaic is not None:
+     with np.errstate(over='ignore',invalid='ignore'):
+      mosaic=(mosaic*members[0]['scale']+members[0]['offset'])*members[0]['factor']
+    for source,meta in group:
+     job.check();chunk=warp_chunk(source,destination_transform,row,count,nx,resampling)
+     with np.errstate(over='ignore',invalid='ignore'):
+      chunk=(chunk*source['scale']+source['offset'])*source['factor']
+     valid=np.isfinite(chunk);fill=~np.isfinite(part)&valid
+     # Preserve original coverage, gap policy and per-file priority accounting.
+     # Only replace already-covered heights with the continuous mosaic kernel.
+     if mosaic is not None:chunk=np.where(np.isfinite(mosaic),mosaic,chunk)
+     part[fill]=chunk[fill]
+     meta['availableSamples']+=int(np.count_nonzero(valid));meta['contributedSamples']+=int(np.count_nonzero(fill))
+   for _,meta in group:meta['coveragePercent']=100*meta['contributedSamples']/(nx*ny)
+   completed+=len(group)
  job.update(65,'Elevation sampled')
  return result,destination_transform,metadata

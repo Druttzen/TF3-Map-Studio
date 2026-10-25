@@ -1,5 +1,17 @@
 TF3 HEIGHTMAP STUDIO - STEP 2
-Preview 0.11 | GPL-3.0 | 25 October 2026
+Preview 0.12 | GPL-3.0 | 25 October 2026
+
+CONTINUOUS TERRAIN
+Compatible neighbouring elevation files are joined before interpolation, so
+matching tile edges do not introduce artificial flat strips. Export produces
+one continuous 16-bit PNG. New projects default to Cubic sampling on TF3's 4 m
+grid. Saved explicit interpolation choices remain. Use smooth terrain settings
+in Elevation selects Cubic, the native grid and finest-source priority.
+The preview and report show actual source cell spacing. Interpolating 30 m
+data to a 4 m PNG does not add surveyed detail; use finer ground DEM/LiDAR for
+that. LiDAR search includes Lantmateriet 1 m data with personal approved access.
+Different source grids or vertical references can still disagree; this update
+does not invent a datum correction or blur the whole terrain to hide one.
 
 AUTOMATIC GAME FOLDERS
 The app reads the installed TF3 and Steam Windows registry paths, checks the

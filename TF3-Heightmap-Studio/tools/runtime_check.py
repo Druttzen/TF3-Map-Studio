@@ -37,6 +37,17 @@ def check(output):
    assert enhanced[4,4]==49 and enhanced[5,5]==10 and enhanced[0,0]==10
    assert metadata[0]['file']==str(files[1].resolve())
    assert np.allclose(affine@(.5,.5),(x0,y1))
+   # Shared endpoint tiles must interpolate as one continuous raster in the
+   # frozen executable too, not only in source-mode tests.
+   affine=Affine((x1-x0)/8,0,x0-(x1-x0)/16,0,-(y1-y0)/8,y1+(y1-y0)/16)
+   plane=np.arange(81,dtype='float64').reshape(9,9);seam_files=[]
+   for label,start,width in [('whole',0,9),('left',0,5),('right',4,5)]:
+    file=folder/f'seam-{label}.tif';seam_files.append(file)
+    with rasterio.open(file,'w',driver='GTiff',width=width,height=9,count=1,dtype='float64',crs='EPSG:3857',transform=affine@Affine.translation(start,0)) as dst:
+     dst.write(plane[:,start:start+width],1)
+   whole,_,_=sample_sources(seam_files[:1],bounds,(17,17),normalize())
+   joined,_,_=sample_sources(seam_files[1:],bounds,(17,17),normalize())
+   assert np.allclose(whole,joined,atol=1e-9), 'Frozen tile interpolation has a seam'
    from local_sources import discover_local
    from data_access import GUIDE
    found=discover_local(folder,bounds,folder/'discovery-cache')
@@ -55,6 +66,7 @@ def check(output):
    installed=detect()
    result={'ok':True,'certificateBundle':'packaged CA roots loaded for HTTPS verification','laspy':laspy.__version__,'lazCompression':'round-trip passed','projection':'EPSG:3857 verified','groundFiltering':'building excluded','geotiff':'written and read','geotiffDetail':'priority, nodata fallback and OSM bounds passed',
            'nativeExportRouting':'heightmap, biomes and companions separated; fictional temporary folders only',
+           'seamlessElevation':'split and whole source interpolation matched; one continuous 16-bit heightmap',
            'streamingConverterReport':'ijson parser and report contract passed',
            'localDiscovery':'header matching and repeat-search cache passed; no credentials used',
            'tf3RegistryDiscovery':{'installationFound':installed.installation is not None,'userFolderSelected':installed.local is not None}}

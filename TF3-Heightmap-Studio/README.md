@@ -1,9 +1,23 @@
 # TF3 Heightmap Studio
 
-Preview 0.11 is the terrain companion to OSM-TF3-Vanilla-Converter. It uses the
+Preview 0.12 is the terrain companion to OSM-TF3-Vanilla-Converter. It uses the
 converter's JSON report, exported Lua and original OSM file to align measured
 elevation with a Transport Fever 3 map. It supports local and public elevation
 sources, terrain editing, and optional vanilla biome exports.
+
+Preview 0.12 joins compatible neighbouring elevation files before interpolation,
+so their file boundaries do not create artificial flat strips or height steps.
+The default export is one continuous 16-bit heightmap PNG on the native 4 m grid.
+**Cubic** is the default for new projects; saved explicit Bilinear or Nearest
+settings are retained. In **Elevation**, **Use smooth terrain settings** selects
+the native grid, Cubic interpolation and finest-source priority, then requires a
+terrain rebuild. It does not apply a blanket blur or change source files.
+
+The preview and export report show actual contributing source cell spacing and
+how much of the map comes from data coarser than the native grid. A source with
+roughly 16.5 × 30.9 m cells remains that coarse when exported at 4 m; interpolation
+can soften facets but cannot add measured detail. Use the **LiDAR** search for
+finer ground DEMs, including Lantmäteriet 1 m data with approved personal access.
 
 Preview 0.7 added map-coordinate data discovery, direct ground DEM downloads and
 classified local LAS/LAZ/COPC import. Open the **LiDAR** tab to find data for the
@@ -18,8 +32,9 @@ older saved projects keep that policy when reopened. Reports show each file's
 actual map contribution and approximate source spacing near the selected area.
 
 Load the matching OSM/report/Lua, choose a background download if needed, then
-use **Elevation → Add files** for your detailed `.tif`/`.tiff` DEMs. Keep the
-default interpolation and zero smoothing to retain the measured height profile.
+use **Elevation → Add files** for your detailed `.tif`/`.tiff` DEMs. Use Cubic
+for continuous interpolation and keep global smoothing at zero unless you
+intend to soften measured features.
 Choose ground DEM/DTM data: an orthophoto or coloured GeoTIFF is not elevation.
 Projects retain local detail files when combined with downloads. Exact float64
 heights and the 16-bit PNG are exported; finer source data improves the sampled
@@ -48,7 +63,7 @@ import still require verification in a game session.
 
 ## Set up and run
 
-In Preview 0.11, open **LiDAR** after choosing the map. **Automatic for map**
+In Preview 0.12, open **LiDAR** after choosing the map. **Automatic for map**
 selects the regional catalog. Choose a local folder to find matching elevation
 and LAS/LAZ files from their geographic headers, including subfolders. Local
 results appear before the online search finishes. **Search local only** avoids

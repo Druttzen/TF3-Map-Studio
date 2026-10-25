@@ -11,6 +11,7 @@ from rasterio.features import rasterize
 from alignment import load_context, geographic, osm, alignment_summary
 from elevation import download_tiles, sample_sources, resolution_metres, PUBLIC_DOC, PUBLIC_LICENSE
 from height_settings import normalize, dimensions, validate_stroke
+from terrain_quality import summarize as summarize_quality
 from providers import acquire
 from game_paths import export_destination
 from job import Job, Cancelled
@@ -137,6 +138,7 @@ def prepare(report_path,osm_path,source_files,options=None,strokes=None,cache=No
                 'outputGridCellGroundMetres':resolution_metres(geo_transform,'EPSG:3857',nx,ny),
                 'totalSamples':nx*ny,'sourceCoveredSamples':sum(s['contributedSamples'] for s in source_meta),
                 'geotiffSamples':sum(s['contributedSamples'] for s in source_meta if s['format']=='GTiff')}
+ quality=summarize_quality((ny,nx),size,source_meta,options,output_cell_ground_metres=source_detail['outputGridCellGroundMetres'])
  coverage=fill_gaps(terrain,size,options,job);base_min=float(terrain.min());base_max=float(terrain.max())
  terrain*=options['vertical_scale'];terrain+=options['height_offset']
  dx=size[0]/(nx-1);dy=size[1]/(ny-1)
@@ -158,6 +160,7 @@ def prepare(report_path,osm_path,source_files,options=None,strokes=None,cache=No
  for i,stroke in enumerate(strokes or []):
   job.update(87+7*i/max(1,len(strokes)),'Applying saved terrain edits',f'{i+1}/{len(strokes)}');apply_stroke(terrain,size,stroke)
  warnings=list(context['warnings'])
+ warnings.extend(quality['warnings'])
  if public:warnings.append('Public terrain tiles have regional source-dependent resolution and accuracy. A finer grid does not add measured detail. Use a local surveyed/LiDAR DEM for finer source data.')
  if any(s['synthetic'] for s in source_meta):warnings.append('SYNTHETIC DEM: this source is a demonstration, not measured real-world terrain.')
  for s in source_meta:
@@ -180,7 +183,7 @@ def prepare(report_path,osm_path,source_files,options=None,strokes=None,cache=No
          'geoTransform':geo_transform,'sources':source_meta,'sourceFiles':[str(p.resolve()) for p in input_paths],
          'selectedSourceFiles':[str(p) for p in selected_paths],
          'sampledSourceFiles':[str(p.resolve()) for p in paths],
-         'sourceDetail':source_detail,'coverage':coverage,'sourceRange':[base_min,base_max],'maximumRefinementMetres':max_diff,'warnings':warnings,'public':public}
+         'sourceDetail':source_detail,'terrainQuality':quality,'coverage':coverage,'sourceRange':[base_min,base_max],'maximumRefinementMetres':max_diff,'warnings':warnings,'public':public}
  if options['biomes']:
   job.update(94,'Building vanilla biome regions');biomes.ensure(result,job)
   result['warnings'].append('Biome regions are authored from height, slope, OSM land cover or a selected PNG. They are not measured ecological classifications. Choose the same vanilla climate in TF3; its import generator determines textures and vegetation.')
@@ -202,7 +205,8 @@ def encoding_range(terrain,options):
 def preview_image(result,max_size=(1000,800),overlay=True):
  terrain=result['terrain'];ny,nx=terrain.shape
  size=result['context']['size'];scale=min(max_size[0]/size[0],max_size[1]/size[1]);w=max(2,round(size[0]*scale));h=max(2,round(size[1]*scale))
- z=terrain[np.ix_(np.linspace(0,ny-1,h).astype(int),np.linspace(0,nx-1,w).astype(int))]
+ rows,cols=np.meshgrid(np.linspace(0,ny-1,h),np.linspace(0,nx-1,w),indexing='ij')
+ z=map_coordinates(terrain,[rows,cols],order=1,mode='nearest',prefilter=False)
  low=float(terrain.min());high=float(terrain.max());t=np.clip((z-low)/max(1,high-low),0,1)
  stops=np.array([0,.2,.45,.7,1]);colors=np.array([[90,143,92],[130,169,94],[175,164,111],[165,140,123],[241,239,229]],dtype=float)
  rgb=np.stack([np.interp(t,stops,colors[:,i]) for i in range(3)],axis=-1)
@@ -336,7 +340,7 @@ def export(result,output,progress=None,cancel=None,game_paths=None):
           'convertedLua':context.get('convertedLua'),'biomes':biome_report,'roadRailGeometrySource':'converted Lua' if context.get('convertedLua') else 'original OSM fallback',
           'coordinateMatch':result.get('alignment'),'downloadPlan':result.get('providerPlan'),'providerCredits':result.get('providerCredits',[]),
           'pixels':[nx,ny],'northUp':True,'alignment':'Same scaled Web Mercator rectangle as OSM converter; corner vertices at exact map bounds',
-          'gridSpacingGameMetres':[context['size'][0]/(nx-1),context['size'][1]/(ny-1)],'sources':result['sources'],'sourceDetail':result.get('sourceDetail'),
+          'gridSpacingGameMetres':[context['size'][0]/(nx-1),context['size'][1]/(ny-1)],'sources':result['sources'],'sourceDetail':result.get('sourceDetail'),'terrainQuality':result.get('terrainQuality'),
           'sourceElevationRangeMetres':result['sourceRange'],'finalElevationRangeMetres':[float(terrain.min()),float(terrain.max())],
           'pngBitDepth':16,'pngColorType':'grayscale','importMinimumMetres':lo,'importMaximumMetres':hi,'waterLevelMetres':options['water_level'],
           'pngEncodingStepMetres':(hi-lo)/65535,'nativeMapCreationSpacingMetres':4,'nativeMapCreationHeightStepMetres':.05,

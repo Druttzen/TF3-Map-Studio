@@ -1,6 +1,6 @@
 # GeoTIFF detail within the OSM area
 
-Preview 0.8 uses measured GeoTIFF DEM/DTM elevation as detail sources for the
+Preview 0.12 uses measured GeoTIFF DEM/DTM elevation as detail sources for the
 final TF3 heightmap. Local detail files can be combined with a selected public
 background download. They also work together with local HGT, ASCII-grid, LiDAR
 ground rasters or other GeoTIFF sources. The converter report's selected bounds
@@ -21,14 +21,29 @@ background files follow the selected local files in manual mode. Saved projects
 retain original local detail paths; downloads are recreated from the saved
 provider settings/cache. Source files are never replaced by heightmap export.
 
+Compatible neighbouring files are joined on their native source grid before
+interpolation. The interpolation kernel can use heights on both sides of a file
+boundary, avoiding the artificial flat strips caused by sampling files separately.
+Matching georeferencing, cell spacing and height calibration are required; masks,
+nodata and source priority are preserved. A virtual mosaic and bounded reads avoid
+assembling every full tile in memory. The game export is one continuous PNG.
+
 All sources are transformed onto the same north-up corner-vertex grid as the
 OSM map, with exact coordinate transformation and the selected interpolation.
 The existing point interpolation kernel is retained when reducing a finer DEM;
-source heights are not automatically averaged over wider areas. Bilinear is the
-default, cubic and nearest are available. No artificial height detail or automatic
-smoothing is added. The report records each file's available samples, selected
+source heights are not automatically averaged over wider areas. Cubic is the
+default for new projects; saved explicit Bilinear or Nearest choices are retained.
+**Use smooth terrain settings** selects Cubic, the native 4 m grid and finest-source
+priority before rebuilding. It does not enable a global smoothing filter. Nearest
+sampling can retain rectangular height steps. The report records each file's available samples, selected
 samples, percentage of the map, source priority and approximate cell spacing.
 An outside or wholly invalid file contributes zero and is identified in notes.
+
+The quality summary distinguishes actual source spacing from exported pixel
+spacing, including mixed-resolution fallback and unknown metadata. Upsampling
+roughly 16.5 × 30.9 m source cells to a 4 m grid does not create 4 m measurements.
+Use finer ground DEM or LiDAR sources for real detail; Lantmäteriet 1 m discovery
+is available through the LiDAR tab and requires approved personal provider access.
 
 Image colour, palette and alpha bands are rejected as height sources. Other
 scalar DEM bands need a known CRS and valid elevation semantics. A GeoTIFF file
@@ -43,7 +58,9 @@ the user's limited gap-fill option.
 Only XY is reprojected. Compound CRS height references are recorded, and Z is
 not automatically shifted between geoids/datums. Multiple contributing files
 with different declared vertical references are identified; the user must align
-these references before import. The final float64 `.dem.tif` preserves the
+these references before import. Different source grids or inconsistent measured
+boundary heights can still disagree; joining files does not establish a common
+vertical reference or remove real source offsets. The final float64 `.dem.tif` preserves the
 prepared heights; the grayscale 16-bit PNG records its numeric encoding step and
 exact import range. TF3's base heightmap has 4 m grid spacing. A finer export can
 help editing but does not prove a finer native game grid or measurement accuracy.

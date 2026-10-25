@@ -14,12 +14,14 @@ Four Transport Fever 3 tools in one project. Each folder includes its source, te
 Download and extract the package for the tool you need, then open its `.exe`. The packages include the runtime, so a separate Python installation is not required.
 
 - [OSM-TF3-Vanilla-Converter — Preview 0.16.3](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-10-25-fix4/OSM-TF3-Vanilla-Converter-0.16.3-Windows.zip)
-- [TF3-Heightmap-Studio — Preview 0.11](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-10-25-fix2/TF3-Heightmap-Studio-0.11-Windows.zip)
+- [TF3-Heightmap-Studio — Preview 0.12](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-10-25-fix5/TF3-Heightmap-Studio-0.12-Windows.zip)
 - [TRF3-Mod-Converter — 0.15.0](https://github.com/Druttzen/TF3-Map-Studio/releases/download/converter-v0.15.0/TRF3-Mod-Converter-0.15.0-Windows.zip)
 
-The [reviewed 25 October release](https://github.com/Druttzen/TF3-Map-Studio/releases/tag/map-studio-review-2026-10-25-fix4) includes the complete Windows bundle, standalone importer revision 11, source and checksums. Use the `main` branch for current source; older version tags retain their historical code.
+The [reviewed 25 October release](https://github.com/Druttzen/TF3-Map-Studio/releases/tag/map-studio-review-2026-10-25-fix5) includes the complete Windows bundle, standalone importer revision 11, source and checksums. Use the `main` branch for current source; older version tags retain their historical code.
 
-Heightmap Studio 0.11 reads large converter reports without the former 64 MB rejection. Select the converter JSON or use **Mod folder…** to select the folder containing `import-report.json`; the app discovers its matching Lua. A `.download.json` is a download log, and `.heightmap-report.json` describes an exported terrain: neither replaces the OSM conversion report.
+Heightmap Studio 0.12 joins compatible neighbouring elevation files before interpolation and defaults to one continuous 16-bit PNG on the native 4 m grid. New projects use Cubic interpolation; saved explicit choices remain. **Use smooth terrain settings** selects continuous interpolation without a blanket blur. The quality summary reports actual contributing source spacing: enlarging coarse data does not create measured detail. Finer ground DEMs, including Lantmäteriet 1 m data, can be found through LiDAR search with the provider's required personal access.
+
+Heightmap Studio reads large converter reports without the former 64 MB rejection. Select the converter JSON or use **Mod folder…** to select the folder containing `import-report.json`; the app discovers its matching Lua. A `.download.json` is a download log, and `.heightmap-report.json` describes an exported terrain: neither replaces the OSM conversion report.
 
 TRF3-Mod-Converter source and Windows runtime are **0.15.0**, focusing on vehicles and appearance patches, supported TF2 data retention and recorded class-average noise/pollution. Exported drafts still require game tests. See [the converter instructions and limitations](TRF3-Mod-Converter/EXPORT_PROFILES.md).
 
@@ -52,7 +54,7 @@ Licenses apply per tool. OSM-TF3-Vanilla-Converter, TF3-Heightmap-Studio, and TF
 
 TRF3-Mod-Converter originated in [Druttzen/TRF3-mod-converter](https://github.com/Druttzen/TRF3-mod-converter). This combined project includes the local desktop edition and keeps the original repository available separately.
 
-Current Heightmap Studio source is Preview 0.11, with AOI-based LiDAR/ground-model discovery, classified LAS/LAZ import, detailed GeoTIFF enhancement and registry-based automatic TF3 export folders. See [LiDAR sources and access](TF3-Heightmap-Studio/LIDAR-SOURCES.md), [GeoTIFF detail](TF3-Heightmap-Studio/GEOTIFF-DETAIL.md) and [game folders](TF3-Heightmap-Studio/GAME-FOLDERS.md). The downloads above identify the current reviewed packages; local generated packages remain in `outputs/`. All four tools now run through root GitHub Actions workflows.
+Current Heightmap Studio source is Preview 0.12, with continuous sampling across compatible tile boundaries, source-quality reporting, AOI-based LiDAR/ground-model discovery, classified LAS/LAZ import, detailed GeoTIFF enhancement and registry-based automatic TF3 export folders. See [LiDAR sources and access](TF3-Heightmap-Studio/LIDAR-SOURCES.md), [GeoTIFF detail](TF3-Heightmap-Studio/GEOTIFF-DETAIL.md) and [game folders](TF3-Heightmap-Studio/GAME-FOLDERS.md). The downloads above identify the current reviewed packages; local generated packages remain in `outputs/`. All four tools now run through root GitHub Actions workflows.
 
 OSM Preview 0.16.1 corrects garbled desktop text and places the executable
 directly in its standalone portable folder with START-HERE.txt. Its Windows

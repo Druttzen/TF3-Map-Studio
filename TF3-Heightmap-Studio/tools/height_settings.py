@@ -5,7 +5,7 @@ from biomes import BIOME_CHOICES, CLIMATES, MODES
 
 DEFAULTS={
  'source_mode':'Local elevation files','grid':'Match TF3 (4 m)','pixels_x':1025,'pixels_y':1025,
- 'resampling':'Bilinear','source_priority':'Finest elevation first','band':1,'source_units':'Auto / metres','crs_override':'',
+ 'resampling':'Cubic','source_priority':'Finest elevation first','band':1,'source_units':'Auto / metres','crs_override':'',
  'missing_data':'Stop at gaps','max_gap_m':100.0,'vertical_scale':1.0,'height_offset':0.0,
  'smoothing_m':0.0,'water_level':0.0,
  'lakes':False,'lake_depth':5.0,'lake_feather':8.0,
