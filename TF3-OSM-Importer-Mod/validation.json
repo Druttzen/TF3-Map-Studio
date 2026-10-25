@@ -15,7 +15,7 @@
     "fictionalSampleGeometryUnchanged": true
   },
   "automatedTests": {
-    "passed": 158,
+    "passed": 159,
     "failed": 0,
     "luaAndStateMachine": 55,
     "panelAndResourceEntrypoints": 21,
@@ -254,5 +254,9 @@
       "Native initial town generation and simulated buildings",
       "Initial streets, automatic growth and save/reload"
     ]
+  },
+  "review20261025": {
+    "nativeGameTestPerformed": false,
+    "scope": "Cross-tool reports, saved project identity, polygon holes, clipped structure heights, paused-import object matches and release consistency"
   }
 }

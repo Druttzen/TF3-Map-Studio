@@ -5,7 +5,9 @@ from pathlib import Path
 def check(output):
  result={'ok':False}
  try:
-  import laspy,numpy as np,rasterio
+  import certifi,ssl,laspy,numpy as np,rasterio
+  context=ssl.create_default_context(cafile=certifi.where())
+  assert context.cert_store_stats()['x509_ca']>0
   from pyproj import CRS
   from lidar import ground_dem
   from height_settings import normalize
@@ -37,13 +39,16 @@ def check(output):
    assert np.allclose(affine@(.5,.5),(x0,y1))
    xml=folder/'fictional.osm';xml.write_text('<osm version="0.6"><bounds minlat="0" minlon="0" maxlat=".0001" maxlon=".0001"/><node id="1" lat=".00005" lon=".00005"/></osm>',encoding='utf-8')
    context=folder/'fictional.report.json';context.write_text(json.dumps({'dataset':'fictional-runtime','input':xml.name,'bounds':bounds,'mapSize':[128,128],'sourceSha256':hashlib.sha256(xml.read_bytes()).hexdigest(),'settings':{}}),encoding='utf-8')
+   from alignment import read_report
+   assert read_report(context)['dataset']=='fictional-runtime'
    terrain=prepare(context,xml,files,{'biomes':True});local=folder/'fictional-game-local'
    exported=export(terrain,local/'heightmaps/fictional.png',game_paths=GamePaths(local=local))
    assert len(list((local/'heightmaps').iterdir()))==1 and len(list((local/'biomes').iterdir()))==1
    assert Path(exported['files']['project']).parent==local/'heightmap_studio/fictional'
    installed=detect()
-   result={'ok':True,'laspy':laspy.__version__,'lazCompression':'round-trip passed','projection':'EPSG:3857 verified','groundFiltering':'building excluded','geotiff':'written and read','geotiffDetail':'priority, nodata fallback and OSM bounds passed',
+   result={'ok':True,'certificateBundle':'packaged CA roots loaded for HTTPS verification','laspy':laspy.__version__,'lazCompression':'round-trip passed','projection':'EPSG:3857 verified','groundFiltering':'building excluded','geotiff':'written and read','geotiffDetail':'priority, nodata fallback and OSM bounds passed',
            'nativeExportRouting':'heightmap, biomes and companions separated; fictional temporary folders only',
+           'streamingConverterReport':'ijson parser and report contract passed',
            'tf3RegistryDiscovery':{'installationFound':installed.installation is not None,'userFolderSelected':installed.local is not None}}
  except Exception as exc:result['error']=str(exc)
  finally:

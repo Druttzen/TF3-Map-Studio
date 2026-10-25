@@ -1,9 +1,10 @@
 """Exact alignment with OSM converter bounds; no Lua is executed. GPL-3.0."""
-import json, math, re, sys
+import math, re, sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'vendor'))
 import osm_converter as osm
 from job import Job
+from report_json import read_fields
 
 R=6378137.0
 
@@ -20,9 +21,14 @@ def geographic(x,y,bounds,size):
 
 def read_report(path):
  p=Path(path)
- if p.stat().st_size>64*1024*1024:raise ValueError('Converter report is too large (maximum 64 MB).')
- value=json.loads(p.read_text(encoding='utf-8-sig'))
- if not isinstance(value,dict) or not isinstance(value.get('dataset'),str):raise ValueError('Select an OSM converter .report.json or import-report.json file.')
+ if p.is_dir():p=p/'import-report.json'
+ value=read_fields(p)
+ if not isinstance(value.get('dataset'),str) or not value['dataset']:
+  if value.get('format')=='Druttzen-OSM-download':raise ValueError('This is an OSM download log, not a conversion report. Convert the .osm file first, then select its .report.json or the mod folder containing import-report.json.')
+  if value.get('format')=='TF3-Heightmap-Studio-report' or 'converterDataset' in value:raise ValueError('This is a Heightmap export report. Select the original OSM converter .report.json or the mod folder containing import-report.json.')
+  raise ValueError('Select an OSM converter .report.json or import-report.json file, or the importer mod folder containing it.')
+ for field in ('input','output','report'):
+  if field in value and not isinstance(value[field],str):raise ValueError('Converter report file paths must be text.')
  bounds=value.get('bounds'); size=value.get('mapSize')
  if not isinstance(bounds,list) or not isinstance(size,list) or any(type(v) not in {float,int} for v in bounds+size):raise ValueError('Converter bounds and map size must be numbers.')
  osm.validate_bounds(bounds,size)
@@ -109,7 +115,7 @@ def load_context(report_path,osm_path,job=None,lua_path=None,lua_sha=None):
  from lua_map import read_map,find_map
  from biomes import land_areas
  biome_areas=land_areas(ways,relations,positions,osm,job,warnings)
- lua_path=lua_path or find_map(report_path,report);converted=None
+ lua_path=lua_path or find_map(report['reportPath'],report);converted=None
  if lua_path:
   converted_lines,converted=read_map(lua_path,report,job,lua_sha)
   lines=[line for line in lines if line['kind']=='river']+converted_lines

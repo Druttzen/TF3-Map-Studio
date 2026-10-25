@@ -48,7 +48,10 @@ def land_areas(ways,relations,positions,osm,job,warnings):
    role=('inner' if role=='outer' else 'outer') if invert else role
    if member['type']=='way':
     if member['ref'] not in ways:raise ValueError('Missing land-cover boundary.')
-    parts[role].append(ways[member['ref']][0]);used.add(member['ref'])
+    parts[role].append(ways[member['ref']][0])
+    # Only outer outlines duplicate this feature. An independently tagged
+    # inner way remains its own land-cover area inside the polygon hole.
+    if role=='outer':used.add(member['ref'])
    elif member['type']=='relation':
     nested=members(member['ref'],active,role=='inner',used)
     for key in parts:parts[key].extend(nested[key])

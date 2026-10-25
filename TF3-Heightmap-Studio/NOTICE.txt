@@ -20,6 +20,9 @@ Rasterio (BSD, includes bundled GDAL/PROJ notices), affine (BSD), attrs (MIT),
 click (BSD), pyparsing (MIT), certifi (MPL). Bundled licence files are retained
 in third-party/. PyInstaller has its own licence and bootloader exception.
 
+Streaming report parsing uses ijson (BSD-3-Clause) and its bundled YAJL parser
+(ISC). Their licence notices are retained in third-party/ijson-LICENSE.txt.
+
 Additional provider support: Copernicus GLO-30/GLO-90 public AWS bucket
 (licence linked in source credits; GLO-30 licence bundled in third-party),
 OpenTopography APIs (user-supplied session key), and user-provided public

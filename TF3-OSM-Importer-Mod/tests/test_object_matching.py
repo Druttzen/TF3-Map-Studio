@@ -95,6 +95,22 @@ class MatchedImportTests(unittest.TestCase):
         self.assertEqual(len(self.lua.globals().commands),1)
         self.assertEqual(self.state.value.builtScenery,1)
 
+    def test_foreign_dataset_check_cannot_replace_saved_matches_after_restore(self):
+        original_id=self.lua.globals().dataset.id
+        self.event('start'); self.event('pause')
+        original=self.state.value.matches[1].model
+        self.lua.execute('dataset.id="foreign"; dataset.scenery[1].match.kind="water_tower"')
+        self.event('validate')
+        self.assertIn('restore the original dataset',self.state.value.notice)
+        self.assertEqual(self.state.value.matches[1].model,original)
+        self.assertEqual(self.state.value.phase,'paused')
+        self.lua.globals().dataset.id=original_id
+        self.lua.execute('dataset.scenery[1].match.kind="bench"')
+        self.event('resume'); self.finish()
+        built=self.lua.globals().commands[1].constructionsToAdd[1].params['items'][1]
+        self.assertEqual(built.model,original)
+        self.assertEqual(self.state.value.builtScenery,1)
+
     def test_no_match_is_counted_and_never_submitted(self):
         self.lua.execute('dataset.scenery[1].match.kind="bicycle_parking"')
         self.event('start'); self.finish()

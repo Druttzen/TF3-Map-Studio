@@ -1,20 +1,13 @@
 {
-  "version": "0.6-preview",
+  "version": "0.10-preview",
   "automatedTerrainTests": {
-    "passed": 132,
-    "failed": 0
+    "passed": 211,
+    "failed": 0,
+    "skipped": 1
   },
   "converterModTests": {
     "passed": 73,
     "failed": 0
-  },
-  "windowsExecutable": {
-    "build": "passed",
-    "nativeLocalDemBuildExport": "passed on 0.4 with a 140 MB Lua; float64 export and transform match engine exactly",
-    "brushStampAndUndo": "passed; exported float64 values match the original terrain exactly",
-    "publicTerrainCacheBuildExport": "passed; exported float64 values match engine output exactly",
-    "highDpiLayout": "passed at 150% scaling",
-    "sha256": "661b495bbcc19aa524406ef1a7fad6f745de7343c87eea73f71b2543a2477bca"
   },
   "publicDownload": {
     "provider": "Mapzen Skadi / AWS",
@@ -239,5 +232,40 @@
   },
   "nativeTF3ImportVerified": false,
   "gameAssetsRedistributed": false,
-  "externalGameModDependencies": []
+  "externalGameModDependencies": [],
+  "review20261025": {
+    "nativeGameTestPerformed": false,
+    "scope": "Cross-tool reports, saved project identity, polygon holes, clipped structure heights, paused-import object matches and release consistency"
+  },
+  "windowsExecutable": {
+    "version": "0.10-preview",
+    "build": "passed",
+    "sha256": "e31844966b0d030e1a7adb62a46728df6052ec55770c3993c5bba72b42dbee52",
+    "nativeUIThisVersionVerified": false,
+    "historicalEvidence": {
+      "build": "passed",
+      "nativeLocalDemBuildExport": "passed on 0.4 with a 140 MB Lua; float64 export and transform match engine exactly",
+      "brushStampAndUndo": "passed; exported float64 values match the original terrain exactly",
+      "publicTerrainCacheBuildExport": "passed; exported float64 values match engine output exactly",
+      "highDpiLayout": "passed at 150% scaling",
+      "sha256": "661b495bbcc19aa524406ef1a7fad6f745de7343c87eea73f71b2543a2477bca"
+    }
+  },
+  "validationDate": "2026-10-25",
+  "packagedRuntimeCheck": {
+    "ok": true,
+    "certificateBundle": "packaged CA roots loaded for HTTPS verification",
+    "laspy": "2.7.0",
+    "lazCompression": "round-trip passed",
+    "projection": "EPSG:3857 verified",
+    "groundFiltering": "building excluded",
+    "geotiff": "written and read",
+    "geotiffDetail": "priority, nodata fallback and OSM bounds passed",
+    "nativeExportRouting": "heightmap, biomes and companions separated; fictional temporary folders only",
+    "streamingConverterReport": "ijson parser and report contract passed",
+    "tf3RegistryDiscovery": {
+      "installationFound": true,
+      "userFolderSelected": true
+    }
+  }
 }

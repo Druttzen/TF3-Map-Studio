@@ -259,6 +259,13 @@ def load_project(path):
   if data.get(key):data[key]=str((path.resolve().parent/Path(data[key])).resolve())
  data['elevationFiles']=[str((path.resolve().parent/Path(p)).resolve()) for p in data['elevationFiles']]
  read_project_report(data)
+ if data.get('osmSha256'):
+  expected=data['osmSha256']
+  if not isinstance(expected,str) or len(expected)!=64 or any(c not in '0123456789abcdef' for c in expected):raise ValueError('Invalid saved OSM checksum.')
+  digest=hashlib.sha256()
+  with Path(data['osmFile']).open('rb') as source:
+   while chunk:=source.read(1024*1024):digest.update(chunk)
+  if digest.hexdigest()!=expected:raise ValueError('OSM checksum differs from the saved project. Restore its original OSM file or create a new project for the changed map.')
  if data.get('luaSha256'):
   if not isinstance(data['luaSha256'],str) or len(data['luaSha256'])!=64 or any(c not in '0123456789abcdef' for c in data['luaSha256']):raise ValueError('Invalid saved Lua checksum.')
   if not data.get('convertedLua'):raise ValueError('The saved converted Lua path is missing.')

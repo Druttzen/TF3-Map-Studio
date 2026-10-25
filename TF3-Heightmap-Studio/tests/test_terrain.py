@@ -15,6 +15,31 @@ from height_settings import normalize,dimensions,validate_stroke
 from job import Job,Cancelled
 import osm_converter as osm
 
+
+def test_legacy_report_project_checks_saved_osm_bytes(source,tmp_path):
+ report=json.loads(source['report'].read_text());report.pop('sourceSha256')
+ source['report'].write_text(json.dumps(report))
+ result=prepare(source['report'],source['xml'],[source['dem']])
+ project=tmp_path/'saved.heightmap-project.json'
+ project.write_text(json.dumps(project_dict(result)))
+ loaded=load_project(project)
+ assert loaded['osmSha256']==result['context']['osmSha256']
+ # The filename, report dataset, bounds and dimensions stay unchanged.
+ source['xml'].write_text(source['xml'].read_text().replace('0.002','0.003'))
+ with pytest.raises(ValueError,match='OSM checksum differs from the saved project'):
+  load_project(project)
+
+
+def test_saved_project_rejects_invalid_osm_checksum(source,tmp_path):
+ result=prepare(source['report'],source['xml'],[source['dem']])
+ value=project_dict(result);value['osmSha256']='not-a-checksum'
+ # Isolate validation of the saved field from the converter-report checksum.
+ report=json.loads(source['report'].read_text());report.pop('sourceSha256')
+ source['report'].write_text(json.dumps(report))
+ project=tmp_path/'saved.heightmap-project.json';project.write_text(json.dumps(value))
+ with pytest.raises(ValueError,match='Invalid saved OSM checksum'):
+  load_project(project)
+
 @pytest.fixture
 def source(tmp_path):
  bounds=[0,0,.01,.01];size=[256,256];nx=ny=65

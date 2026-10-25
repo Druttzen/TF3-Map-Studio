@@ -1,5 +1,5 @@
 TF3-OSM-Importer-Mod
-Companion Preview 0.14 | Mod revision 8 | GPL-3.0 | 4 October 2026
+Companion Preview 0.16 | Mod revision 9 | GPL-3.0 | 25 October 2026
 
 INSTALL
 Copy this tf3_osm_importer_mod folder into:
@@ -196,3 +196,9 @@ Reconvert original OSM/XML for new categories on a fresh import. Preserve
 the dataset of an import that has already started. Upgrade runtime files
 while preserving content/osm/dataset.lua and import-report.json.
 See TOWNS-OBJECTS-RESEARCH.md in the repository for API evidence and limits.
+
+REVISION 9
+Map checking refuses a different dataset before replacing saved object matches
+in a paused import. Border-crossing bridge/tunnel heights are corrected in
+new converter exports; preserve the dataset of an already-started import.
+No new physical TF3 gameplay validation is claimed.

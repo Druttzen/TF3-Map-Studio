@@ -108,6 +108,29 @@ def test_osm_land_cover_multipolygons_keep_holes_and_skip_cycles():
  assert len(areas)==1;assert areas[0]['kind']=='forest';assert len(areas[0]['inner'])==1
  assert any('Cyclic' in w for w in warnings)
 
+
+@pytest.mark.parametrize('landuse',['meadow','farmland'])
+@pytest.mark.parametrize('nested',[False,True])
+def test_independent_inner_land_cover_survives_forest_hole(landuse,nested):
+ from alignment import osm
+ positions={'1':[-100,-100],'2':[100,-100],'3':[100,100],'4':[-100,100],
+            '5':[-20,-20],'6':[20,-20],'7':[20,20],'8':[-20,20]}
+ ways={'outer':(['1','2','3','4','1'],{}),
+       'inner':(['5','6','7','8','5'],{'landuse':landuse})}
+ members=[{'type':'way','ref':'outer','role':'outer'},
+          {'type':'relation' if nested else 'way','ref':'hole' if nested else 'inner','role':'inner'}]
+ relations={'forest':(members,{'type':'multipolygon','landuse':'forest'})}
+ if nested:relations['hole']=([{'type':'way','ref':'inner','role':'outer'}],{'type':'multipolygon'})
+ warnings=[];areas=biomes.land_areas(ways,relations,positions,osm,Job(),warnings)
+ assert not warnings
+ assert [a['kind'] for a in areas]==['forest','grass']
+ assert len(areas[0]['inner'])==1
+ options=normalize({'biomes':True,'biome_base':biomes.BIOME_CHOICES[4]})
+ context={'size':[256,256],'lines':[],'biomeAreas':areas}
+ grid,_=biomes.generate(np.full((65,65),100.),context,options)
+ assert grid[32,32]==biomes.biome_id(options['biome_grass'])
+ assert grid[32,42]==biomes.biome_id(options['biome_forest'])
+
 def test_disabled_biomes_preserve_old_project_and_seven_file_exports(source,tmp_path):
  r=prepare(source['report'],source['xml'],[source['dem']]);rep=export(r,tmp_path/'map.png')
  assert rep['biomes'] is None;assert len(rep['files'])==7

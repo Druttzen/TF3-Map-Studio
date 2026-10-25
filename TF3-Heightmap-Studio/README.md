@@ -1,6 +1,6 @@
 # TF3 Heightmap Studio
 
-Preview 0.9 is the terrain companion to OSM-TF3-Vanilla-Converter. It uses the
+Preview 0.10 is the terrain companion to OSM-TF3-Vanilla-Converter. It uses the
 converter's JSON report, exported Lua and original OSM file to align measured
 elevation with a Transport Fever 3 map. It supports local and public elevation
 sources, terrain editing, and optional vanilla biome exports.
@@ -80,6 +80,12 @@ them into a running game or change an existing game save.
 
 The build creates `dist\TF3-Heightmap-Studio.exe`. The Windows executable includes
 its Python runtime and does not require a separate Python installation.
+The build prefers this folder's `.venv` when no `-Python` argument is supplied.
+It checks dependencies before packaging, includes the HTTPS certificate bundle,
+and runs the executable's headless terrain/LiDAR/certificate check afterwards.
+Missing dependencies stop the build with an installation command instead of
+producing a successful-looking executable. `dist\runtime-check.json` records
+the packaged check result.
 
 See [README.txt](README.txt) for elevation providers, alignment, editing, export
 instructions and limitations. [validation.json](validation.json) preserves the
@@ -90,3 +96,19 @@ Application and vendored converter code are distributed under [GPL-3.0](LICENSE)
 See [NOTICE.txt](NOTICE.txt) and [third-party](third-party) for attribution and
 dependency licences. No Transport Fever game assets or downloaded DEM datasets
 are included.
+
+## Report compatibility in Preview 0.10
+
+Use **Mod folder…** to select the importer folder containing `import-report.json`,
+or select the converter `.report.json` directly. The matching Lua is found from
+the actual report location. Download logs and Heightmap export reports have
+distinct error messages. Large converter reports are validated as a stream;
+their full water/object source graphs no longer trigger a 64 MB rejection or
+need to be retained in memory. Bounds, settings, dataset and checksums remain
+mandatory where present. Invalid or truncated JSON is rejected.
+
+Saved projects now verify their recorded OSM checksum even with older reports.
+Independently tagged meadow/farmland boundaries within forest holes retain
+their own biome classification. The packaged runtime check exercises report
+parsing, HTTPS certificates, elevation, compressed LiDAR and native export
+folder routing with fictional temporary data. No new game import is claimed.

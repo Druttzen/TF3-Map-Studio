@@ -150,6 +150,32 @@ def clip_segment(p0,p1,width,height):
     return (x+low*dx,y+low*dy),(x+high*dx,y+high*dy),low,high
 
 
+def structure_height_guides(refs, positions, size):
+    """Parameterize each continuous clipped chain against its own endpoints."""
+    chains=[]
+    chain=[]
+    for index,(a,b) in enumerate(zip(refs,refs[1:])):
+        clipped=clip_segment(positions[a],positions[b],*size) if a in positions and b in positions else None
+        if not clipped or math.dist(clipped[0],clipped[1])<1e-5:
+            if chain:chains.append(chain);chain=[]
+            continue
+        start,finish=clipped[:2]
+        if chain and (chain[-1][0]!=index-1 or math.dist(chain[-1][2],start)>1e-5):
+            chains.append(chain);chain=[]
+        chain.append((index,start,finish))
+    if chain:chains.append(chain)
+    guides={}
+    for chain in chains:
+        span=sum(math.dist(start,finish) for _,start,finish in chain)
+        offset=0
+        for index,start,finish in chain:
+            length=math.dist(start,finish)
+            guides[index]={'start':list(chain[0][1]),'finish':list(chain[-1][2]),
+                           'offset':offset,'length':length,'span':span}
+            offset+=length
+    return guides
+
+
 def clip_polygon(points,width,height):
     for axis,limit,positive in [(0,-width/2,True),(0,width/2,False),(1,-height/2,True),(1,height/2,False)]:
         output = []
@@ -288,6 +314,8 @@ def convert(path,bounds,size,spacing=18,max_trees=100000,*,options=None,progress
         refs_valid=[r for r in refs if r in positions]
         first,last=(positions[refs_valid[0]],positions[refs_valid[-1]]) if refs_valid else ((0,0),(0,0))
         total=sum(math.dist(positions[a],positions[b]) for a,b in zip(refs,refs[1:]) if a in positions and b in positions)
+        clipped_guides=structure_height_guides(refs,positions,size) if (bridge or tunnel) and (not on_map(first) or not on_map(last)) else {}
+        if clipped_guides:warn(f'Way {id}: structure endpoints outside map; height estimated from each continuous clipped chain.')
         traversed=0
         for j,(a,b) in enumerate(zip(refs,refs[1:])):
             job.check()
@@ -312,13 +340,17 @@ def convert(path,bounds,size,spacing=18,max_trees=100000,*,options=None,progress
                       'oneway':one!=0,'lanes':tags.get('lanes'),'gauge':tags.get('gauge'),
                       'bridge':bridge,'tunnel':tunnel}
                 if bridge or tunnel:
-                    if not on_map(first) or not on_map(last):
-                        warn(f'Way {id}: structure endpoints outside map; height estimated from clipped segment.')
-                        first,last=q0,q1
-                    edge['heightGuide']={'start':list(first),'finish':list(last),
-                        't0':(traversed+length*(low+(high-low)*k/n))/(total or 1),
-                        't1':(traversed+length*(low+(high-low)*(k+1)/n))/(total or 1),
-                        'depth':options['tunnel_depth']}
+                    guide=clipped_guides.get(j)
+                    if guide:
+                        edge['heightGuide']={'start':guide['start'],'finish':guide['finish'],
+                            't0':(guide['offset']+guide['length']*k/n)/guide['span'],
+                            't1':(guide['offset']+guide['length']*(k+1)/n)/guide['span'],
+                            'depth':options['tunnel_depth']}
+                    else:
+                        edge['heightGuide']={'start':list(first),'finish':list(last),
+                            't0':(traversed+length*(low+(high-low)*k/n))/(total or 1),
+                            't1':(traversed+length*(low+(high-low)*(k+1)/n))/(total or 1),
+                            'depth':options['tunnel_depth']}
                 signal_node=nodes.get(b)
                 if rail and k==n-1 and high==1 and signal_node and signal_node[2].get('railway')=='signal':
                     signal_tags=signal_node[2]

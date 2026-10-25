@@ -214,4 +214,71 @@ class ConverterTests(unittest.TestCase):
         self.assertIn('\\010',text); self.assertIn('\\"',text)
         self.assertNotIn('\n',text)
 
+class ClippedStructureTests(unittest.TestCase):
+    def converters(self):
+        yield c
+        vendor=ROOT.parent/'TF3-Heightmap-Studio/vendor/osm_converter.py'
+        if not vendor.is_file():return
+        spec=importlib.util.spec_from_file_location('heightmap_vendor_structure_review',vendor)
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        yield module
+
+    def fixture(self,kind='bridge',middle=''):
+        return f'''<osm version="0.6"><bounds minlat="0" minlon="0" maxlat="1" maxlon="1"/>
+        <node id="1" lat="0.5" lon="-0.5"/><node id="2" lat="0.5" lon="0.25"/>
+        <node id="3" lat="0.5" lon="0.75"/><node id="4" lat="0.5" lon="1.5"/>
+        <way id="10"><nd ref="1"/>{middle}<nd ref="4"/>
+        <tag k="highway" v="residential"/><tag k="{kind}" v="yes"/></way></osm>'''
+
+    def convert(self,module,text):
+        with tempfile.TemporaryDirectory() as folder:
+            source=Path(folder)/'structure.osm';source.write_text(text,encoding='utf-8')
+            return module.convert(source,None,(1000,1000))
+
+    def test_crossing_structures_parameterize_the_whole_visible_chain(self):
+        for module in self.converters():
+            for kind in ('bridge','tunnel'):
+                for middle in ('','<nd ref="2"/><nd ref="3"/>'):
+                    with self.subTest(module=module.__name__,kind=kind,middle=middle):
+                        data=self.convert(module,self.fixture(kind,middle))
+                        guides=[e['heightGuide'] for e in data['edges']]
+                        self.assertEqual(guides[0]['t0'],0)
+                        self.assertEqual(guides[-1]['t1'],1)
+                        for edge in data['edges']:
+                            guide=edge['heightGuide']
+                            self.assertAlmostEqual(guide['start'][0],-500)
+                            self.assertAlmostEqual(guide['finish'][0],500)
+                            for key,node_key in (('t0','node0'),('t1','node1')):
+                                self.assertAlmostEqual(guide[key],(data['nodes'][edge[node_key]]['pos'][0]+500)/1000,places=8)
+
+    def test_visible_chains_do_not_interpolate_across_an_off_map_gap(self):
+        refs=['a','b','c','d','e','f']
+        positions={'a':(-1000,0),'b':(-250,0),'c':(-250,1000),
+                   'd':(250,1000),'e':(250,0),'f':(1000,0)}
+        for module in self.converters():
+            guides=module.structure_height_guides(refs,positions,(1000,1000))
+            self.assertEqual(set(guides),{0,1,3,4})
+            self.assertEqual(guides[0]['start'],[-500,0])
+            self.assertEqual(guides[0]['finish'],[-250,500])
+            self.assertEqual(guides[3]['start'],[250,500])
+            self.assertEqual(guides[4]['finish'],[500,0])
+            self.assertEqual(guides[0]['offset'],0)
+            self.assertEqual(guides[3]['offset'],0)
+
+    def test_actual_lua_builder_joins_clipped_bridge_to_sloping_terrain(self):
+        import test_game_scripts as game
+        data=self.convert(c,self.fixture('bridge','<nd ref="2"/><nd ref="3"/>'))
+        harness=game.GameScriptTests();harness.setUp()
+        harness.lua.globals().dataset=harness.lua.execute('return '+c.lua(data))
+        harness.lua.globals().modules['druttzen_osm_vanilla::/osm/dataset.lua']=harness.lua.globals().dataset
+        harness.script=game.load_script(harness.lua,game.CONTENT/'importer.script.lua')
+        harness.lua.execute('api.engine.terrain.getBaseHeightAt=function(p) return p.x/10 end; api.engine.terrain.getHeightAt=api.engine.terrain.getBaseHeightAt')
+        harness.event('start');harness.finish()
+        proposals=harness.edge_proposals()
+        for proposal in proposals:
+            comp=proposal.streetProposal.edgesToAdd[1].comp
+            for point in (comp.position0,comp.position1):
+                self.assertAlmostEqual(point.z,point.x/10,delta=.001)
+
+
 if __name__=='__main__': unittest.main()

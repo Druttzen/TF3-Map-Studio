@@ -1,5 +1,20 @@
 # Validation scope
 
+## Version 0.15.0 — review 2026-10-25
+
+The current vehicle-source suite passed **1585 tests**, with **3 environment skips**
+and 14 duplicate-archive fixture warnings. All 32 embedded converter modules in the
+published Windows executable match current runtime source. Its portable ZIP contains
+the same executable. Development dependencies now include Lupa so CI runs the authored
+Lua execution regressions as well as parser tests.
+
+Vehicle and appearance exports can proceed without a confirmed original model.
+External mod requirements are recorded as warnings; verified TF2 resources are retained
+where needed. Class-average noise and pollution choices retain their source evidence.
+Legacy material parameters, inactive editor mesh backups, optional node references and
+cargo metadata have dedicated regression coverage. These checks establish conversion
+and package behavior; they do not establish native driving, rendering or audio.
+
 ## Version 0.14.0 — 2026-10-08
 
 The final source suite passed **1482 tests**, with **5 environment

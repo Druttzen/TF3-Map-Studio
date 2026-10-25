@@ -39,7 +39,7 @@ LABELS={
 
 class App(tk.Tk):
  def __init__(self):
-  super().__init__();self.title('TF3 Heightmap Studio · Step 2');self.geometry('1100x670');self.minsize(980,620);self.configure(bg='#edf2f4')
+  super().__init__();self.title('TF3 Heightmap Studio · 0.10-preview · Step 2');self.geometry('1100x670');self.minsize(980,620);self.configure(bg='#edf2f4')
   self.busy=False;self.loading=True;self.dirty=False;self.result=None;self.report=None;self.undo=[];self.strokes=[]
   self.biome_strokes=[];self.biome_undo=[]
   self.events=queue.Queue();self.cancel_event=threading.Event();self.started=0;self.close_when_done=False;self.sources=[];self.image_bounds=None;self.render_pending=False;self.last_stamp=None
@@ -115,12 +115,15 @@ class App(tk.Tk):
   control=ttk.Combobox(f,textvariable=var,values=choices or CHOICES.get(key),state='readonly',width=20) if choices or key in CHOICES else ttk.Entry(f,textvariable=var,width=15)
   control.grid(row=row,column=1,columnspan=2,sticky='ew',pady=6);return control
 
- def path(self,f,row,label,var,fn):
+ def path(self,f,row,label,var,fn,folder=None):
   ttk.Label(f,text=label).grid(row=row,column=0,columnspan=3,sticky='w',pady=(9,4))
-  ttk.Entry(f,textvariable=var).grid(row=row+1,column=0,columnspan=2,sticky='ew');ttk.Button(f,text='Browse…',command=fn).grid(row=row+1,column=2,padx=(7,0));f.columnconfigure(0,weight=1)
+  ttk.Entry(f,textvariable=var).grid(row=row+1,column=0,columnspan=2,sticky='ew')
+  buttons=ttk.Frame(f);buttons.grid(row=row+1,column=2,padx=(7,0));ttk.Button(buttons,text='Browse…',command=fn).pack(side='left')
+  if folder:ttk.Button(buttons,text='Mod folder…',command=folder).pack(side='left',padx=(4,0))
+  f.columnconfigure(0,weight=1)
 
  def build_project(self):
-  f=self.pages['Project'];self.path(f,0,'Converter JSON report (.report.json / import-report.json)',self.report_path,self.choose_report)
+  f=self.pages['Project'];self.path(f,0,'Converter JSON report or importer mod folder',self.report_path,self.choose_report,self.choose_report_folder)
   self.path(f,2,'Converted map Lua (.lua / content/osm/dataset.lua)',self.lua_path,self.choose_lua)
   self.path(f,4,'Original OSM XML file (.osm)',self.osm_path,self.choose_osm)
   ttk.Label(f,textvariable=self.map_info,wraplength=480,font=('Segoe UI',10,'bold')).grid(row=6,column=0,columnspan=3,sticky='w',pady=12)
@@ -244,7 +247,12 @@ class App(tk.Tk):
  def refresh_alignment(self):
   self.alignment_pending=False
   try:
-   r=read_report(self.report_path.get());a=alignment_summary(r,self.options());x,y=a['gridSpacingGameMetres']
+   path=Path(self.report_path.get())
+   if path.is_dir():path=path/'import-report.json'
+   stat=path.stat();stamp=(str(path.resolve()),stat.st_size,stat.st_mtime_ns,stat.st_ctime_ns)
+   if getattr(self,'preview_report_stamp',None)!=stamp:
+    self.preview_report=read_report(path);self.preview_report_stamp=stamp
+   r=self.preview_report;a=alignment_summary(r,self.options());x,y=a['gridSpacingGameMetres']
    self.map_info.set(f"TF3 map: {a['gameWidthMetres']:g} × {a['gameHeightMetres']:g} m · locked to OSM\nWGS84: S {a['south']:.6f}, W {a['west']:.6f}\nN {a['north']:.6f}, E {a['east']:.6f}\nOutput: {a['pixels'][0]:,} × {a['pixels'][1]:,} pixels · {x:.2f} × {y:.2f} m")
   except (ValueError,OSError):self.map_info.set('Select a valid converter report and grid settings to inspect alignment.')
 
@@ -308,15 +316,24 @@ class App(tk.Tk):
  def choose_report(self):
   path=filedialog.askopenfilename(parent=self,title='Choose OSM converter report',filetypes=[('Converter report','*.json')])
   if not path:return
+  self.use_report(path)
+
+ def choose_report_folder(self):
+  path=filedialog.askdirectory(parent=self,title='Choose importer mod folder containing import-report.json')
+  if path:self.use_report(path)
+
+ def use_report(self,path):
   try:
-   candidate_report=read_report(path);self.check_brush_alignment(candidate_report);self.report=candidate_report;self.report_path.set(path);r=self.report;a,b,c,d=r['bounds'];w,h=r['mapSize']
-   self.lua_path.set(find_map(path,r))
+   candidate_report=read_report(path);self.check_brush_alignment(candidate_report);r=candidate_report;path=r['reportPath']
+   candidate_lua=find_map(path,r);candidate=Path(path).parent/r.get('input','')
+   stat=Path(path).stat();self.preview_report=r;self.preview_report_stamp=(str(Path(path).resolve()),stat.st_size,stat.st_mtime_ns,stat.st_ctime_ns)
+   self.report=r;self.report_path.set(path);a,b,c,d=r['bounds'];w,h=r['mapSize']
+   self.lua_path.set(candidate_lua)
    self.map_info.set(f'Map: {w:g} × {h:g} metres\nBounds: {a:.7f}, {b:.7f} → {c:.7f}, {d:.7f}')
-   candidate=Path(path).parent/r.get('input','')
    if candidate.is_file() and candidate.suffix.lower()=='.osm':self.osm_path.set(str(candidate))
    self.apply_game_paths()
    if not self.output_path.get():self.output_path.set(str(Path(path).parent/'heightmap.png'))
-  except (ValueError,OSError) as exc:messagebox.showerror('Invalid converter report',str(exc),parent=self)
+  except (ValueError,OSError) as exc:messagebox.showerror('Could not select converter report',str(exc),parent=self)
 
  def choose_lua(self):
   path=filedialog.askopenfilename(parent=self,title='Choose converted map Lua',filetypes=[('Converted map','*.lua')])
@@ -603,4 +620,6 @@ if __name__=='__main__':
  if len(sys.argv)==3 and sys.argv[1]=='--self-check':
   from runtime_check import check
   raise SystemExit(check(sys.argv[2]))
- App().mainloop()
+ app=App()
+ if len(sys.argv)==3 and sys.argv[1]=='--report':app.after_idle(lambda:app.use_report(sys.argv[2]))
+ app.mainloop()

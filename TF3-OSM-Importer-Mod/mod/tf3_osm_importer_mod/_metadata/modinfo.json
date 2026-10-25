@@ -1,7 +1,7 @@
 {
   "name": "TF3-OSM-Importer-Mod",
   "summary": "OSM category selections, vanilla-first loaded-model matching and optional functioning towns.",
-  "description": "Preview OSM importer revision 8. Choose available dataset categories before starting. Preview static-model matches from vanilla first, then active mods. Building substitutes are decorative. Named city/town/village/hamlet tags can create native functioning towns. Disabling future town roads freezes all automatic town growth; initial streets can still be generated. New object matching and towns await physical TF3 validation. Existing network-height priority and experimental small-water logic are retained. No game assets are bundled. See README.txt.",
+  "description": "Preview OSM importer revision 9. Choose available dataset categories before starting. Preview static-model matches from vanilla first, then active mods. Building substitutes are decorative. Named city/town/village/hamlet tags can create native functioning towns. Disabling future town roads freezes all automatic town growth; initial streets can still be generated. New object matching and towns await physical TF3 validation. Existing network-height priority and experimental small-water logic are retained. No game assets are bundled. See README.txt.",
   "authors": [
     {
       "name": "VacuumTube",

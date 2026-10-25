@@ -52,6 +52,7 @@ end
 local checkBudget=1000
 
 local function newCheck(value,starting)
+  assert(not value.datasetId or value.datasetId==dataset.id,"Dataset changed; restore the original dataset before checking an existing import.")
   assert(dataset.schema==1 and type(dataset.id)=="string" and dataset.id~="", "Prepare an OSM dataset with the converter first.")
   assert(#dataset.edges+#dataset.scenery+#dataset.labels>0, "Dataset has no supported roads, tracks or scenery.")
   local totals=controls.totals(dataset,value.options)
