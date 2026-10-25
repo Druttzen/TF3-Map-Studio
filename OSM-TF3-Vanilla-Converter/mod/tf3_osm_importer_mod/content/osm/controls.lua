@@ -194,14 +194,34 @@ end
 -- Ground fill uses native float coordinates. Thin clipped polygons can have
 -- positive double-precision area but collapse at Huge-map world coordinates.
 -- Retain source coordinates/heights, removing only native duplicate vertices.
+function controls.float32(value)
+  if value==0 or not controls.finiteHeight(value) then return value end
+  local negative=value<0
+  local magnitude=math.abs(value)
+  local exponent=math.floor(math.log(magnitude)/math.log(2))
+  local power=2^exponent
+  -- Correct logarithm rounding at exact powers of two.
+  if magnitude<power then exponent=exponent-1
+  elseif magnitude>=power*2 then exponent=exponent+1 end
+  if exponent>127 then return negative and -math.huge or math.huge end
+  local step=2^math.max(exponent-23,-149)
+  local scaled=magnitude/step
+  local rounded=math.floor(scaled)
+  local fraction=scaled-rounded
+  if fraction>0.5 or fraction==0.5 and rounded%2==1 then rounded=rounded+1 end
+  local result=rounded*step
+  if result>(2-2^-23)*2^127 then result=math.huge end
+  return negative and -result or result
+end
+
 function controls.groundFace(source,box)
   assert(type(source)=="table","Invalid ground polygon")
   local face,xy={},{}
   for _,point in ipairs(source) do
     assert(type(point)=="table" and controls.finiteHeight(point[1]) and controls.finiteHeight(point[2]),"Invalid ground coordinate")
     local p=box and controls.position(point,box) or point
-    local x=string.unpack("f",string.pack("f",p[1]))
-    local y=string.unpack("f",string.pack("f",p[2]))
+    -- TF3's Lua runtime does not provide string.pack/unpack.
+    local x,y=controls.float32(p[1]),controls.float32(p[2])
     assert(controls.finiteHeight(x) and controls.finiteHeight(y),"Unrepresentable ground coordinate")
     local previous=xy[#xy]
     if not previous or x~=previous[1] or y~=previous[2] then
