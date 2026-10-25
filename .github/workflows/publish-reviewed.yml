@@ -1,0 +1,41 @@
+name: Publish reviewed Windows packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful main CI run containing the reviewed Windows artifact
+        required: true
+        type: string
+      release_tag:
+        description: Existing draft tag (map-studio-review-YYYY-MM-DD)
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    concurrency:
+      group: publish-reviewed-${{ inputs.release_tag }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - run: python -m pip install 'pyinstaller>=6.22,<7'
+      - name: Verify, package and publish the reviewed artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEW_RUN_ID: ${{ inputs.run_id }}
+          REVIEW_RELEASE_TAG: ${{ inputs.release_tag }}
+          REVIEW_REPOSITORY: ${{ github.repository }}
+        run: python scripts/publish_reviewed.py --publish
