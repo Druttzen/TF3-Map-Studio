@@ -15,10 +15,10 @@ from job import Cancelled
 from map_sizes import CUSTOM, SIZES, FORMATS, dimensions, experimental, matching_preset, validate_preset
 
 MODES=['Save Lua map file','Update installed mod','Create standalone mod folder']
-APP_VERSION='0.16-preview'
+APP_VERSION='0.16.1-preview'
 LABELS={
     'forest_spacing':'Forest spacing (m)', 'shrub_spacing':'Shrub spacing (m)',
-    'max_generated_trees':'Maximum generated trees / shrubs', 'tree_jitter':'Position variation (0â€“0.49)',
+    'max_generated_trees':'Maximum generated trees / shrubs', 'tree_jitter':'Position variation (0–0.49)',
     'seed':'Random seed (blank = map seed)', 'road_style':'Road style', 'rail_profile':'Track profile',
     'electrification':'Rail electrification', 'high_speed_threshold':'High-speed threshold (km/h)',
     'road_segment_length':'Maximum road segment (m)', 'rail_segment_length':'Maximum rail segment (m)',
@@ -49,7 +49,7 @@ def validate_profile(profile):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title(f'OSM â†’ Lua Map Â· Transport Fever 3 Â· {APP_VERSION}')
+        self.title(f'OSM → Lua Map · Transport Fever 3 · {APP_VERSION}')
         self.geometry('1080x670'); self.minsize(960,600)
         self.configure(bg='#edf2f4')
         self.events=queue.Queue(); self.busy=False; self.cancel_event=threading.Event()
@@ -65,8 +65,8 @@ class App(tk.Tk):
         style.map('Accent.TButton',background=[('active','#08666d'),('disabled','#b5c6cb')])
         style.configure('Horizontal.TProgressbar',background='#087c83',troughcolor='#d6e3e7')
         header=tk.Frame(self,bg='#163b46',padx=22,pady=13); header.pack(fill='x')
-        tk.Label(header,text='OSM â†’ LUA MAP',bg='#163b46',fg='white',font=('Segoe UI',21,'bold')).pack(side='left')
-        tk.Label(header,text='TRANSPORT FEVER 3 Â· PREVIEW 0.16\nMapped objects Â· standalone converter',bg='#163b46',fg='#b9dce1',font=('Segoe UI',10),justify='right').pack(side='right')
+        tk.Label(header,text='OSM → LUA MAP',bg='#163b46',fg='white',font=('Segoe UI',21,'bold')).pack(side='left')
+        tk.Label(header,text=f'TRANSPORT FEVER 3 · {APP_VERSION}\nMapped objects · standalone converter',bg='#163b46',fg='#b9dce1',font=('Segoe UI',10),justify='right').pack(side='right')
         body=ttk.Frame(self,padding=(16,12)); body.pack(fill='both',expand=True)
         body.columnconfigure(0,weight=3); body.columnconfigure(1,weight=2); body.rowconfigure(0,weight=1)
         self.book=ttk.Notebook(body); self.book.grid(row=0,column=0,sticky='nsew',padx=(0,12))
@@ -107,7 +107,7 @@ class App(tk.Tk):
         self.cancel_button=ttk.Button(buttons,text='Cancel',command=self.cancel,state='disabled'); self.cancel_button.pack(side='left',padx=8)
         self.open_button=ttk.Button(buttons,text='Open output folder',command=self.open_output,state='disabled'); self.open_button.pack(side='left')
         self.profile_buttons=[]
-        for text,action in [('Reset settings',self.reset),('Load settingsâ€¦',self.load_profile),('Save settingsâ€¦',self.save_profile)]:
+        for text,action in [('Reset settings',self.reset),('Load settings…',self.load_profile),('Save settings…',self.save_profile)]:
             b=ttk.Button(buttons,text=text,command=action); b.pack(side='right',padx=(8,0)); self.profile_buttons.append(b)
         self.after(80,self.poll)
 
@@ -138,9 +138,9 @@ class App(tk.Tk):
 
     def path(self,frame,row,label,var,action,extra=None):
         ttk.Label(frame,text=label).grid(row=row,column=0,columnspan=2 if extra else 3,sticky='w',pady=(12,4))
-        if extra:ttk.Button(frame,text='Download OSMâ€¦',command=extra).grid(row=row,column=2,padx=(8,0),pady=(8,4))
+        if extra:ttk.Button(frame,text='Download OSM…',command=extra).grid(row=row,column=2,padx=(8,0),pady=(8,4))
         ttk.Entry(frame,textvariable=var).grid(row=row+1,column=0,columnspan=2,sticky='ew')
-        ttk.Button(frame,text='Browseâ€¦',command=action).grid(row=row+1,column=2,padx=(8,0))
+        ttk.Button(frame,text='Browse…',command=action).grid(row=row+1,column=2,padx=(8,0))
         frame.columnconfigure(0,weight=1)
 
     def build_project(self):
@@ -177,8 +177,8 @@ class App(tk.Tk):
     def update_map_hint(self):
         custom=self.map_size.get()==CUSTOM
         self.format_combo.configure(state='disabled' if custom else 'readonly')
-        text=('Enter exact dimensions for an existing map. The demonstration uses 1000 Ã— 1000 metres.' if custom else
-              f'{self.map_size.get()} Â· {self.map_format.get()}: {self.width.get()} Ã— {self.height.get()} metres, width Ã— height.')
+        text=('Enter exact dimensions for an existing map. The demonstration uses 1000 × 1000 metres.' if custom else
+              f'{self.map_size.get()} · {self.map_format.get()}: {self.width.get()} × {self.height.get()} metres, width × height.')
         if not custom and experimental(self.map_size.get(),self.map_format.get()):
             text+=' Enable experimentalMapFeatures in TF3 to select this size or format in the game.'
         self.map_hint.set(text+' Bounds fill this rectangle. Dimensions also go into the Lua and report for Heightmap Studio. Editing width or height selects Custom dimensions.')
@@ -215,7 +215,7 @@ class App(tk.Tk):
     def build_game(self):
         f=self.pages['In game']; self.note(f,'These defaults travel with the dataset and appear in the in-game OSM Import panel. The panel lets you change batch size and pace during an import.',0)
         for row,key in enumerate(['import_batch_size','import_delay','waterway_width'],1): self.field(f,row,LABELS[key],self.values[key])
-        self.note(f,'After conversion: enable the standalone mod on a separate test map, then click OSM Import. Check map and resources works in small steps on large datasets; Pause cancels a check without building. OSM and heightmap dimensions must match the game map.\n\nLarge datasets start with automatic pause after 100 successful build steps. One step is one road/rail segment, one scenery batch or one marker. Select a smaller limit for a first trial. Inspect and save each run; Resume starts the next run. You can change the limit in the game panel.\n\nVerify built objects reads completed import records without building. Show place names displays recorded marker names and coordinates. Ground appearance and actual vehicle routes require a map check.\n\nSave Lua exports a dataset, not a heightmap or game save. Copy it to content/osm/dataset.lua, or use Update installed mod. Install the revision 8 runtime separately before updating an older modâ€™s dataset.',3)
+        self.note(f,'After conversion: enable the standalone mod on a separate test map, then click OSM Import. Check map and resources works in small steps on large datasets; Pause cancels a check without building. OSM and heightmap dimensions must match the game map.\n\nLarge datasets start with automatic pause after 100 successful build steps. One step is one road/rail segment, one scenery batch or one marker. Select a smaller limit for a first trial. Inspect and save each run; Resume starts the next run. You can change the limit in the game panel.\n\nVerify built objects reads completed import records without building. Show place names displays recorded marker names and coordinates. Ground appearance and actual vehicle routes require a map check.\n\nSave Lua exports a dataset, not a heightmap or game save. Copy it to content/osm/dataset.lua, or use Update installed mod. Install the revision 8 runtime separately before updating an older mod’s dataset.',3)
 
     @staticmethod
     def default_target():
@@ -254,9 +254,9 @@ class App(tk.Tk):
         self.source.set(result['output'])
         if self.mode.get()==MODES[0] and not self.target.get():self.target.set(str(Path(result['output']).with_suffix('.lua')))
         self.result=None;self.draw_preview();self.open_button.configure(state='disabled')
-        self.status.set('OSM downloaded Â· exact yellow-frame bounds selected Â· ready to convert')
+        self.status.set('OSM downloaded · exact yellow-frame bounds selected · ready to convert')
         counts=result['counts']
-        self.show(f"Downloaded OSM XML:\n{result['output']}\n\nMap overview PNG:\n{result.get('overview', 'Unavailable')}\n\nDownload log:\n{result['log']}\n\n{counts['nodes']:,} nodes Â· {counts['ways']:,} ways Â· {counts['relations']:,} relations\n\nThe locked yellow-frame bounds and chosen TF3 size are selected for conversion. Heightmap Studio receives the same bounds and size through the converted Lua and JSON report.\n\nÂ© OpenStreetMap contributors Â· ODbL\nhttps://www.openstreetmap.org/copyright\n\nComplete referenced geometry can extend outside the frame; conversion clips it to the selection.")
+        self.show(f"Downloaded OSM XML:\n{result['output']}\n\nMap overview PNG:\n{result.get('overview', 'Unavailable')}\n\nDownload log:\n{result['log']}\n\n{counts['nodes']:,} nodes · {counts['ways']:,} ways · {counts['relations']:,} relations\n\nThe locked yellow-frame bounds and chosen TF3 size are selected for conversion. Heightmap Studio receives the same bounds and size through the converted Lua and JSON report.\n\n© OpenStreetMap contributors · ODbL\nhttps://www.openstreetmap.org/copyright\n\nComplete referenced geometry can extend outside the frame; conversion clips it to the selection.")
 
     def choose_target(self):
         if self.mode.get()==MODES[0]: path=filedialog.asksaveasfilename(parent=self,title='Save Lua map',defaultextension='.lua',filetypes=[('Lua map','*.lua')])
@@ -348,8 +348,8 @@ class App(tk.Tk):
             action={MODES[0]:export_file,MODES[1]:export,MODES[2]:export_new_mod}[p['mode']]
         except ValueError as exc: messagebox.showerror('Check settings',str(exc),parent=self); return
         self.busy=True; self.close_when_done=False; self.cancel_event.clear(); self.started=time.monotonic(); self.result=None
-        self.freeze(True); self.progress['value']=0; self.percent.set('0%'); self.status.set('Starting conversionâ€¦')
-        self.show('Preparing the selected mapâ€¦'); self.draw_preview()
+        self.freeze(True); self.progress['value']=0; self.percent.set('0%'); self.status.set('Starting conversion…')
+        self.show('Preparing the selected map…'); self.draw_preview()
         def progress(percent,stage,detail): self.events.put(('progress',(percent,stage,detail)))
         def worker():
             try: self.events.put(('ok',action(p['source'],p['target'],p['bounds'],p['size'],options=p['options'],progress=progress,cancel=self.cancel_event)))
@@ -358,7 +358,7 @@ class App(tk.Tk):
         threading.Thread(target=worker,daemon=True).start()
 
     def cancel(self):
-        self.cancel_event.set(); self.cancel_button.configure(state='disabled'); self.status.set('Cancellingâ€¦ keeping existing output files')
+        self.cancel_event.set(); self.cancel_button.configure(state='disabled'); self.status.set('Cancelling… keeping existing output files')
 
     def poll(self):
         if self.busy:
@@ -368,7 +368,7 @@ class App(tk.Tk):
             except queue.Empty: break
             if kind=='progress':
                 percent,stage,detail=result; self.progress['value']=percent; self.percent.set(f'{percent:.0f}%')
-                if not self.cancel_event.is_set(): self.status.set(stage+(' Â· '+detail if detail else ''))
+                if not self.cancel_event.is_set(): self.status.set(stage+(' · '+detail if detail else ''))
                 if percent>=98: self.cancel_button.configure(state='disabled')
                 continue
             self.busy=False
@@ -377,7 +377,7 @@ class App(tk.Tk):
                 self.show(f"{result['edges']:,} road / rail segments\n{result['sceneryItems']:,} scenery items\n{result['placeLabels']:,} named places\n{result['waterFeatures']:,} mapped water records with source metadata\n\nSaved Lua:\n{result['output']}\n\nSaved report:\n{result['report']}\n\nDataset: {result['dataset']}\n\n"+('Notes:\n'+'\n\n'.join(result['warnings']) if result['warnings'] else 'No conversion warnings.'))
                 self.draw_preview()
             else:
-                self.status.set('Conversion cancelled' if kind=='cancelled' else 'Conversion failed â€” check the report')
+                self.status.set('Conversion cancelled' if kind=='cancelled' else 'Conversion failed — check the report')
                 self.show(result); self.results.select(1)
             self.freeze(False)
             if self.close_when_done: self.destroy(); return
@@ -414,4 +414,9 @@ class App(tk.Tk):
         else: self.destroy()
 
 
-if __name__=='__main__': App().mainloop()
+if __name__=='__main__':
+    import sys
+    if len(sys.argv)==3 and sys.argv[1]=='--self-check':
+        from runtime_check import check
+        raise SystemExit(check(sys.argv[2]))
+    App().mainloop()

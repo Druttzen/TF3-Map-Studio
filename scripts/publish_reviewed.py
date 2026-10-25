@@ -4,6 +4,7 @@ Only --publish mutates GitHub. Source comes from the reviewed run SHA, not the
 newer checkout containing this helper. No local work/output directories enter ZIPs.
 """
 import argparse
+import ast
 import hashlib
 import json
 import marshal
@@ -18,6 +19,7 @@ import zipfile
 ARTIFACT = 'TF3-Map-Studio-Windows'
 TOOLS = ('TF3-Heightmap-Studio', 'OSM-TF3-Vanilla-Converter',
          'TRF3-Mod-Converter', 'TF3-OSM-Importer-Mod')
+RELEASE_TAG_PATTERN = r'map-studio-review-[0-9]{4}-[0-9]{2}-[0-9]{2}(?:-fix[1-9][0-9]*)?'
 
 
 def command(*args):
@@ -58,6 +60,8 @@ def verify_executable(executable, source, tool):
     reader = CArchiveReader(str(executable))
     pyz = reader.open_embedded_archive(next(name for name in reader.toc if name.endswith('.pyz')))
     checked = []
+    osm_self_check = (tool == 'OSM-TF3-Vanilla-Converter'
+                      and (source/'tools/runtime_check.py').is_file())
     if tool == 'TRF3-Mod-Converter':
         files = [(('trf3_mod_converter' + ('' if p.stem == '__init__' else '.' + p.stem)), p)
                  for p in (source/'src/trf3_mod_converter').glob('*.py')]
@@ -70,7 +74,7 @@ def verify_executable(executable, source, tool):
             files += [(p.stem, p) for p in (source/'vendor').glob('*.py')]
         launcher = source/'tools/gui.py'
         entry = 'gui'
-        expected_count = 16 if tool == 'TF3-Heightmap-Studio' else 10
+        expected_count = 16 if tool == 'TF3-Heightmap-Studio' else 11 if osm_self_check else 10
     for name, path in files:
         if name in pyz.toc:
             code = pyz.extract(name)
@@ -85,6 +89,8 @@ def verify_executable(executable, source, tool):
     assert code == compile(launcher.read_text(encoding='utf-8-sig'), code.co_filename,
                            'exec', dont_inherit=True), f'Launcher differs: {tool}'
     assert len(checked) == expected_count, f'Unexpected module coverage: {tool}: {checked}'
+    if osm_self_check:
+        assert 'runtime_check' in checked, 'OSM packaged startup check is missing'
     if tool == 'OSM-TF3-Vanilla-Converter':
         names = {name.replace('\\', '/'): name for name in reader.toc}
         for path in (source/'mod/tf3_osm_importer_mod').rglob('*'):
@@ -118,6 +124,35 @@ def docs(source):
     return result
 
 
+def osm_version(source):
+    """Read the literal app version without importing or starting its GUI."""
+    tree = ast.parse((source/'tools/gui.py').read_text(encoding='utf-8-sig'))
+    values = [ast.literal_eval(node.value) for node in tree.body
+              if isinstance(node, ast.Assign)
+              and any(isinstance(target, ast.Name) and target.id == 'APP_VERSION'
+                      for target in node.targets)]
+    assert len(values) == 1 and isinstance(values[0], str), 'Expected one literal OSM APP_VERSION'
+    match = re.fullmatch(r'([0-9]+\.[0-9]+(?:\.[0-9]+)?)(?:-preview)?', values[0])
+    assert match, 'Unexpected OSM application version'
+    return match.group(1)
+
+
+def start_here(work, tool, date, portable):
+    executable = f'{tool}.exe' if portable else f'dist/{tool}.exe'
+    destination = work/f'{tool}-start-{"portable" if portable else "suite"}.txt'
+    destination.write_text(
+        f'{tool} — START HERE\n\n'
+        '1. Extract all ZIP contents to a normal folder first.\n'
+        '2. Open the extracted application folder.\n'
+        f'3. Run {executable}.\n\n'
+        'Do not run the app from inside the ZIP. The Windows runtime is included;\n'
+        'you do not need to install Python. Keep the other extracted files together.\n\n'
+        'This is the ready-to-run Windows package. Source code and development\n'
+        f'instructions are in the separate TF3-Map-Studio-source-{date}.zip archive.\n',
+        encoding='utf-8')
+    return destination
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--publish', action='store_true')
@@ -127,7 +162,7 @@ def main():
     tag = os.environ['REVIEW_RELEASE_TAG']
     assert re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repository)
     assert re.fullmatch(r'[1-9][0-9]*', run_id), 'Invalid run ID'
-    assert re.fullmatch(r'map-studio-review-[0-9]{4}-[0-9]{2}-[0-9]{2}', tag), 'Unexpected release tag'
+    assert re.fullmatch(RELEASE_TAG_PATTERN, tag), 'Unexpected release tag'
     date = tag.removeprefix('map-studio-review-')
     run = api(repository, f'actions/runs/{run_id}')
     releases = api(repository, 'releases?per_page=100')
@@ -190,15 +225,21 @@ def main():
         all_entries = {'TF3-Map-Studio/README.md': source/'README.md',
                        'TF3-Map-Studio/CODE-REVIEW-2026-10-25.md': source/'CODE-REVIEW-2026-10-25.md',
                        'TF3-Map-Studio/build-manifest.json': manifest}
-        versions = {'TF3-Heightmap-Studio': '0.10', 'OSM-TF3-Vanilla-Converter': '0.16'}
+        versions = {'TF3-Heightmap-Studio': '0.10',
+                    'OSM-TF3-Vanilla-Converter': osm_version(source/'OSM-TF3-Vanilla-Converter')}
         for tool, exe in (('TF3-Heightmap-Studio', heightmap), ('OSM-TF3-Vanilla-Converter', osm), ('TRF3-Mod-Converter', vehicle)):
             entries = docs(source/tool)
             entries[f'dist/{tool}.exe'] = exe
             entries['build-manifest.json'] = manifest
+            entries['START-HERE.txt'] = start_here(work, tool, date, portable=False)
             all_entries.update({f'TF3-Map-Studio/{tool}/{name}': path for name, path in entries.items()})
             if tool in versions:
                 asset = work/f'{tool}-{versions[tool]}-Windows.zip'
-                zip_files(asset, {f'{tool}/{name}': path for name, path in entries.items()})
+                portable = dict(entries)
+                del portable[f'dist/{tool}.exe']
+                portable[f'{tool}.exe'] = exe
+                portable['START-HERE.txt'] = start_here(work, tool, date, portable=True)
+                zip_files(asset, {f'{tool}/{name}': path for name, path in portable.items()})
                 assets.append(asset)
         mod = source/'TF3-OSM-Importer-Mod/mod/tf3_osm_importer_mod'
         mod_entries = {f'tf3_osm_importer_mod/{path.relative_to(mod).as_posix()}': path

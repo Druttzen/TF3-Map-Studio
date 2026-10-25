@@ -1,6 +1,6 @@
 # OSM-TF3-Vanilla-Converter
 
-Preview 0.16 converts OpenStreetMap XML to a Transport Fever 3 importer dataset using vanilla resource references. The desktop app can download a selected OSM area, save its overview PNG, export a Lua map, update an installed importer mod, or create a standalone mod folder.
+Preview 0.16.1 converts OpenStreetMap XML to a Transport Fever 3 importer dataset using vanilla resource references. The desktop app can download a selected OSM area, save its overview PNG, export a Lua map, update an installed importer mod, or create a standalone mod folder.
 
 Large OSM downloads are fetched sequentially in smaller areas rather than one large server request. HTTP 504 and server XML resource-limit errors subdivide the affected area further. HTTP 429/502/503 receive one delayed retry, respecting a supported Retry-After value; cancellation remains available while waiting. Complete ways, nested relations and referenced nodes outside the selection are retained, shared objects are deduplicated on disk, and the saved bounds remain the exact selected frame. Conflicting objects or an incomplete part stop the download without replacing previous outputs. Limits of 64 completed areas and 128 requests prevent unbounded retries; a server that remains overloaded may still require a later retry or a regional .osm extract. The download log records successful area bounds and request count.
 
@@ -21,6 +21,19 @@ Closed canal, river and stream centrelines remain width-based water corridors, i
 Exports stage both the Lua dataset and report before replacing existing files. If saving the report fails, the previous dataset is restored. If restoration also fails, the error gives the retained backup path so the previous dataset can be recovered; it is never deleted by temporary-file cleanup.
 
 In Lua, `waterFeatures` contains the feature records and projected rings/centrelines. `waterMetadata` is a versioned source graph with `nodes`, `ways`, `relations`, `missingRefs` and coordinate conventions. Nodes retain named WGS84 `lat`/`lon` fields, their tags and projected `mapPos`; ways retain ordered `nodeRefs`; relations retain the original `members`. Each feature's `source` identifies its graph entry. The report retains the numeric `waterFeatures` count and includes the graph and feature records in `waterMetadata.features`. Shared members are stored once in the graph. Reconvert the original OSM/XML to obtain these fields in an older export; keep the dataset of an already-started game import unchanged.
+
+## Windows portable package
+
+Extract all ZIP contents first. Open `OSM-TF3-Vanilla-Converter` and run
+`OSM-TF3-Vanilla-Converter.exe` directly in that folder. No Python installation
+is needed. Read `START-HERE.txt`; source code and build instructions below
+refer to the separate source archive or a repository checkout. The complete
+four-tool bundle keeps executables under each tool's `dist` folder.
+
+Preview 0.16.1 corrects garbled punctuation in labels, buttons and status text.
+Windows builds now run an offline packaged check of Tcl, TLS roots, SQLite
+part merging, PNG support and all three export modes using fictional data.
+This does not claim that a large live Overpass download or game import works.
 
 ## Run from source
 

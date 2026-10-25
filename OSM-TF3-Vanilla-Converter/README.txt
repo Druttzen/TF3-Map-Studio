@@ -1,5 +1,5 @@
 OSM IMPORTER - TRANSPORT FEVER 3 VANILLA
-Preview 0.16 | GPL-3.0 | 25 October 2026
+Preview 0.16.1 | GPL-3.0 | 25 October 2026
 
 DOWNLOAD OPENSTREETMAP (0.15)
 Project > Download OSM opens an interactive OpenStreetMap view. No OSM account
@@ -383,3 +383,10 @@ New exports correct bridge/tunnel heights where the structure crosses the
 map boundary. The runtime guards paused imports against checking a different
 dataset and changing saved model matches. Previously started imports keep
 their original dataset. These fixes do not claim new physical game tests.
+
+WINDOWS PORTABLE PACKAGE 0.16.1
+Extract the entire ZIP, open OSM-TF3-Vanilla-Converter, then run the EXE
+directly in that folder. No Python is needed. START-HERE.txt identifies the
+ready-to-run program; development instructions use the separate source ZIP.
+Text encoding is corrected. An offline packaged runtime check exercises all
+three export modes, mod templates, SQLite part merging, TLS and PNG support.
