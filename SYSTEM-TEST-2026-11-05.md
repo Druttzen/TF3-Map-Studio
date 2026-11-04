@@ -10,17 +10,20 @@ The frozen-app desktop check additionally found action buttons below the
 taskbar at 150% display scaling. All three app windows and the OSM/provider
 dialogs now reserve screen space for window decorations and the taskbar,
 and constrain their minimum size to the available screen.
+The frozen OSM self-check also exposed a transient Windows lock during a new
+mod-folder commit. That commit now retries only Windows sharing/access locks,
+remains cancellable and refuses a competing destination on every attempt.
 
 ## Automated suites on Windows
 
-- OSM converter: 349 passed, plus 616 subtests.
+- OSM converter: 353 passed, plus 616 subtests.
 - Heightmap Studio: 301 passed; 2 symbolic-link tests skipped because the account
   cannot create those links. Includes GUI save/reload and rebuild regressions.
 - Mod converter: 1,586 passed; 3 symbolic-link tests skipped for the same reason.
 - In-game importer: 225 passed, plus 487 subtests.
 - Repository release/runtime guards: 7 passed.
 
-The suite total is 2,468 passed, excluding the separately reported subtests.
+The suite total is 2,472 passed, excluding the separately reported subtests.
 Affine deprecation warnings and deliberately duplicated archive-fixture entries
 remain warnings, not application failures. Linux CI covers link behavior where
 supported; no Windows security setting was changed to bypass the skips.

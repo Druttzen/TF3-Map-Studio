@@ -15,6 +15,7 @@ import shutil
 import struct
 import sys
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 from settings import normalize_options, SPECIES, MODELS, MATERIALS
 from job import Job, Cancelled
@@ -642,6 +643,18 @@ def template_folder():
     return Path(sys._MEIPASS)/'mod_template' if getattr(sys,'frozen',False) else Path(__file__).resolve().parents[1]/'mod'/MOD_FOLDER
 
 
+def _rename_new_mod(staging,target,cancel=None):
+    """Keep new-folder commits responsive to transient Windows scanner locks."""
+    job=Job(cancel=cancel);delays=(0,.05,.10,.20,.40,.80)
+    for attempt,delay in enumerate(delays):
+        job.check()
+        if delay:time.sleep(delay);job.check()
+        if target.exists() or target.is_symlink():raise ValueError('The mod folder was created by another process; nothing was replaced.')
+        try:staging.rename(target);return
+        except PermissionError as error:
+            if getattr(error,'winerror',None) not in {5,32,33} or attempt==len(delays)-1:raise
+
+
 def export_new_mod(path,mod_folder,bounds,size,spacing=18,max_trees=100000,*,options=None,progress=None,cancel=None):
     target=Path(mod_folder).resolve()
     if target.name!=MOD_FOLDER: raise ValueError('The new mod folder must be named '+MOD_FOLDER+'.')
@@ -657,7 +670,7 @@ def export_new_mod(path,mod_folder,bounds,size,spacing=18,max_trees=100000,*,opt
         atomic_write(staging/'import-report.json',json.dumps({k:v for k,v in result.items() if k!='_preview'},indent=2,ensure_ascii=False)+'\n')
         Job(cancel=cancel).check()
         if target.exists(): raise ValueError('The mod folder was created by another process; nothing was replaced.')
-        staging.rename(target)
+        _rename_new_mod(staging,target,cancel)
         if progress: progress(100,'Conversion complete','Standalone mod created')
         return result
     finally:
