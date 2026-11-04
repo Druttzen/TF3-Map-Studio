@@ -27,8 +27,9 @@ class ConverterApp:
         self.root = root
         self.vehicle_mode = vehicle_mode
         root.title('TRF3 Mod Converter')
-        root.geometry(f'{min(1080, root.winfo_screenwidth()-60)}x{min(820, root.winfo_screenheight()-60)}')
-        root.minsize(840, 620)
+        width=min(1080,max(1,root.winfo_screenwidth()-60));height=min(820,max(1,root.winfo_screenheight()-100))
+        root.geometry(f'{width}x{height}')
+        root.minsize(min(840,width),min(620,height))
         root.configure(bg='#edf0f4')
         self.events = queue.Queue()
         self.busy, self.operation, self.loading = False, '', False

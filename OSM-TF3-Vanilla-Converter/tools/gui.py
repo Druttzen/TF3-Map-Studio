@@ -50,7 +50,8 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(f'OSM → Lua Map · Transport Fever 3 · {APP_VERSION}')
-        self.geometry('1080x670'); self.minsize(960,600)
+        width=min(1080,max(1,self.winfo_screenwidth()-60));height=min(670,max(1,self.winfo_screenheight()-100))
+        self.geometry(f'{width}x{height}'); self.minsize(min(960,width),min(600,height))
         self.configure(bg='#edf2f4')
         self.events=queue.Queue(); self.busy=False; self.cancel_event=threading.Event()
         self.started=0; self.result=None; self.saved_states=[]; self.close_when_done=False

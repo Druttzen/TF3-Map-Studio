@@ -6,6 +6,10 @@ and validate actual OSM hashes, Windows builds require complete app-owned
 interpreters, and root agent/runtime policy files are version controlled.
 The Windows test fixture's transient directory rename now uses the existing
 bounded Windows-lock retry helper.
+The frozen-app desktop check additionally found action buttons below the
+taskbar at 150% display scaling. All three app windows and the OSM/provider
+dialogs now reserve screen space for window decorations and the taskbar,
+and constrain their minimum size to the available screen.
 
 ## Automated suites on Windows
 
@@ -14,9 +18,9 @@ bounded Windows-lock retry helper.
   cannot create those links. Includes GUI save/reload and rebuild regressions.
 - Mod converter: 1,586 passed; 3 symbolic-link tests skipped for the same reason.
 - In-game importer: 225 passed, plus 487 subtests.
-- Repository release/runtime guards: 6 passed.
+- Repository release/runtime guards: 7 passed.
 
-The suite total is 2,467 passed, excluding the separately reported subtests.
+The suite total is 2,468 passed, excluding the separately reported subtests.
 Affine deprecation warnings and deliberately duplicated archive-fixture entries
 remain warnings, not application failures. Linux CI covers link behavior where
 supported; no Windows security setting was changed to bypass the skips.
@@ -43,6 +47,9 @@ App-owned Windows interpreters run without global Python, user-site packages,
 inherited PYTHONPATH/PYTHONHOME, external Conda or ambient tool PATH. Local OSM
 uses Python 3.10.11; the other tool copies use Python 3.14.4. Windows CI provisions
 independent complete copies from its explicitly selected CPython distribution.
+Private Tcl/Tk script directories are discovered from their actual library
+files, rather than assuming version 8.6; missing or ambiguous private libraries
+stop provisioning/building instead of falling back to another installation.
 
 `scripts/test_runtime_coexistence.py` installed two independent fixture apps with
 Python 3.10.11 and 3.14.4, rejected a deliberately damaged interpreter, repaired
@@ -62,6 +69,8 @@ jobs. The live-world audit passed: nodes 12/12, roads 8/8, rails 2/2, vehicle la
 edges 10/10, models 115/115, ground items 2/2, markers 1/1 and connected groups 2/2.
 The result was saved under a new filename containing `SystemTest-20261105`;
 the earlier test save and the user's large dataset were not replaced.
+A full game restart in a new process restored the selected native Lua resource
+and all progress. A fresh live-world audit then passed the same counts again.
 
 ## Limits
 

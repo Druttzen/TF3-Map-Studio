@@ -36,6 +36,11 @@ def file_sha(path):
 def child_environment(root, runtime=None):
     root = tool_root(root)
     runtime = Path(runtime or root / '.runtime').resolve()
+    tcl = list(runtime.glob('tcl/tcl*/init.tcl'))
+    tk = list(runtime.glob('tcl/tk*/tk.tcl'))
+    if len(tcl) != 1 or len(tk) != 1:
+        available = sorted(p.name for p in (runtime/'tcl').iterdir()) if (runtime/'tcl').is_dir() else []
+        raise ValueError(f'Private Tcl/Tk libraries are missing or ambiguous: {runtime}; available: {available}')
     env = {k: v for k, v in os.environ.items()
            if not k.upper().startswith(('PYTHON', 'PIP_', 'CONDA', 'VIRTUAL_ENV'))
            and k.upper() not in {'TCL_LIBRARY', 'TK_LIBRARY'}}
@@ -47,8 +52,7 @@ def child_environment(root, runtime=None):
                PYINSTALLER_CONFIG_DIR=str(state / 'pyinstaller'),
                TEMP=str(state / 'tmp'), TMP=str(state / 'tmp'),
                LOCALAPPDATA=str(state / 'cache'), APPDATA=str(state / 'config'),
-               TCL_LIBRARY=str(runtime / 'tcl/tcl8.6'),
-               TK_LIBRARY=str(runtime / 'tcl/tk8.6'))
+               TCL_LIBRARY=str(tcl[0].parent), TK_LIBRARY=str(tk[0].parent))
     env['PATH'] = os.pathsep.join(map(str, [runtime, runtime / 'Scripts', runtime / 'DLLs',
                                           Path(env.get('SystemRoot', 'C:/Windows')) / 'System32']))
     return env

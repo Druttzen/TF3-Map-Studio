@@ -51,7 +51,9 @@ LABELS={
 
 class App(tk.Tk):
  def __init__(self):
-  super().__init__();self.title(f'TF3 Heightmap Studio · {APP_VERSION} · Step 2');self.geometry('1180x740');self.minsize(980,620);self.configure(bg='#edf2f4')
+  super().__init__();self.title(f'TF3 Heightmap Studio · {APP_VERSION} · Step 2')
+  width=min(1180,max(1,self.winfo_screenwidth()-60));height=min(740,max(1,self.winfo_screenheight()-100))
+  self.geometry(f'{width}x{height}');self.minsize(min(980,width),min(620,height));self.configure(bg='#edf2f4')
   self.busy=False;self.loading=True;self.dirty=False;self.result=None;self.report=None;self.undo=[];self.strokes=[]
   self.biome_strokes=[];self.biome_undo=[]
   self.events=queue.Queue();self.cancel_event=threading.Event();self.started=0;self.close_when_done=False;self.sources=[];self.image_bounds=None;self.render_pending=False;self.last_stamp=None
@@ -366,7 +368,8 @@ class App(tk.Tk):
   from data_access import GUIDE,GEOTORGET,LM_PRODUCT,LM_LASER,LM_API_PORTAL,OT_KEYS
   existing=getattr(self,'access_window',None)
   if existing is not None and existing.winfo_exists():existing.lift();return
-  window=tk.Toplevel(self);self.access_window=window;window.title('Data provider access · this session only');window.geometry('760x720')
+  window=tk.Toplevel(self);self.access_window=window;window.title('Data provider access · this session only')
+  window.geometry(f'{min(760,max(1,window.winfo_screenwidth()-60))}x{min(720,max(1,window.winfo_screenheight()-100))}')
   form=ttk.Frame(window,padding=14);form.pack(fill='both',expand=True);form.columnconfigure(1,weight=1)
   for row,label,var,masked in [(0,'Lantmäteriet API username',self.lidar_user,False),(1,'Lantmäteriet API password',self.lidar_password,True),(2,'OpenTopography API key',self.api_key,True)]:
    ttk.Label(form,text=label).grid(row=row,column=0,sticky='w',padx=(0,8),pady=5);ttk.Entry(form,textvariable=var,show='•' if masked else '').grid(row=row,column=1,sticky='ew')

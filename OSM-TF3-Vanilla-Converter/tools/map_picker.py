@@ -17,7 +17,9 @@ from osm_download import Selection,TileCache,TILES,OVERPASS,download,pixel,pixel
 class MapPicker(tk.Toplevel):
     def __init__(self,parent,size,bounds,on_done,preset=None):
         super().__init__(parent)
-        self.title('Download OpenStreetMap · TF3 area');self.geometry('1000x650');self.minsize(900,600)
+        self.title('Download OpenStreetMap · TF3 area')
+        width=min(1000,max(1,self.winfo_screenwidth()-60));height=min(650,max(1,self.winfo_screenheight()-100))
+        self.geometry(f'{width}x{height}');self.minsize(min(900,width),min(600,height))
         self.transient(parent);self.protocol('WM_DELETE_WINDOW',self.close)
         self.on_done=on_done;self.busy=False;self.pending_download=None;self.close_when_done=False;self.cancel_event=threading.Event()
         self.stop=threading.Event();self.events=queue.Queue();self.tile_jobs=queue.Queue(maxsize=1);self.generation=0
