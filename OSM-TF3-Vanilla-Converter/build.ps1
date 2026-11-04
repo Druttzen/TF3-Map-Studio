@@ -1,19 +1,22 @@
-param([string]$Python = 'python', [string]$DistPath = "$PSScriptRoot/dist")
+param([string]$Python = '', [string]$DistPath = "$PSScriptRoot/dist")
 $ErrorActionPreference = 'Stop'
+$PrivatePython = Join-Path $PSScriptRoot '.runtime/python.exe'
+if (-not (Test-Path -LiteralPath $PrivatePython)) { throw 'Private Python is missing. Provision this tool with scripts/private_runtime.py; global Python is not used.' }
+if ($Python -and [IO.Path]::GetFullPath($Python) -ne [IO.Path]::GetFullPath($PrivatePython)) { throw 'Use this app-owned .runtime/python.exe; external interpreters are not accepted.' }
+$Python = $PrivatePython
+$Runner = Join-Path $PSScriptRoot '../scripts/private_runtime.py'
 $DistPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DistPath)
-& $Python -m PyInstaller --noconfirm --clean --onefile --windowed --name OSM-TF3-Vanilla-Converter --distpath $DistPath --workpath "$PSScriptRoot/build" --specpath "$PSScriptRoot" --paths "$PSScriptRoot/tools" --add-data "$PSScriptRoot/mod/tf3_osm_importer_mod;mod_template" --add-data "$PSScriptRoot/third-party;third-party" "$PSScriptRoot/tools/gui.py"
+& $Python -I $Runner run --tool $PSScriptRoot -- -m PyInstaller --noconfirm --clean --onefile --windowed --name OSM-TF3-Vanilla-Converter --distpath $DistPath --workpath "$PSScriptRoot/build" --specpath "$PSScriptRoot" --paths "$PSScriptRoot/tools" --add-data "$PSScriptRoot/mod/tf3_osm_importer_mod;mod_template" --add-data "$PSScriptRoot/third-party;third-party" "$PSScriptRoot/tools/gui.py"
 if ($LASTEXITCODE -ne 0) { throw 'Executable build failed' }
 $RuntimeReport = Join-Path $DistPath 'runtime-check.json'
-if (Test-Path -LiteralPath $RuntimeReport) { Remove-Item -LiteralPath $RuntimeReport }
 $Executable = Join-Path $DistPath 'OSM-TF3-Vanilla-Converter.exe'
-$CheckProcess = Start-Process -FilePath $Executable -ArgumentList @('--self-check', ('"{0}"' -f $RuntimeReport)) -PassThru -WindowStyle Hidden
-if (-not $CheckProcess.WaitForExit(60000)) {
-    & "$env:SystemRoot/System32/taskkill.exe" /PID $CheckProcess.Id /T /F | Out-Null
-    throw 'Packaged OSM runtime check timed out; this executable is not ready for release.'
-}
+& $Python -I $Runner manifest --tool $PSScriptRoot --executable $Executable --report (Join-Path $DistPath 'dependency-manifest.json')
+if ($LASTEXITCODE -ne 0) { throw 'Packaged dependency manifest failed.' }
+& $Python -I $Runner check-executable --tool $PSScriptRoot --executable $Executable --report $RuntimeReport
+if ($LASTEXITCODE -ne 0) { throw 'Packaged OSM runtime check failed.' }
 if (-not (Test-Path -LiteralPath $RuntimeReport)) { throw 'Packaged OSM runtime check did not produce a report.' }
 $RuntimeResult = Get-Content -LiteralPath $RuntimeReport -Raw | ConvertFrom-Json
-if ($CheckProcess.ExitCode -ne 0 -or $RuntimeResult.ok -ne $true) {
+if ($RuntimeResult.ok -ne $true) {
     throw "Packaged OSM runtime check failed: $($RuntimeResult.error)"
 }
 Write-Host "Packaged OSM runtime check passed: $RuntimeReport"

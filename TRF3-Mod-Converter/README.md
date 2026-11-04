@@ -166,12 +166,11 @@ The final output folder name must use letters, digits, underscores, or spaces.
 Requires Python 3.10+ with Tkinter (included with the standard Windows Python installer; often python3-tk on Linux).
 
 ~~~console
-python -m venv .venv
-.venv\Scripts\python -m pip install -e .
-.venv\Scripts\python -m trf3_mod_converter gui
+# First provision and install this tool's complete .runtime using ../PRIVATE-RUNTIMES.md.
+.runtime\python.exe -I ..\scripts\private_runtime.py run --tool . -- -m trf3_mod_converter gui
 ~~~
 
-On Linux/macOS, use .venv/bin/python instead.
+The Windows build requires this tool's own complete interpreter and verifies its ownership. A venv backed by global Python is insufficient.
 
 ## CLI
 
@@ -294,10 +293,10 @@ Format references: [Mod definition](https://wiki.transportfever3.com/doku.php?id
 ## Development
 
 ~~~console
-python -m pip install -e ".[dev]"
-python -m pytest -q
-python -m build
-python scripts/build_windows.py
+.runtime/python.exe -I ../scripts/private_runtime.py install --tool .
+.runtime/python.exe -I ../scripts/private_runtime.py run --tool . -- -m pytest -q
+.runtime/python.exe -I ../scripts/private_runtime.py run --tool . -- -m build
+.runtime/python.exe -I ../scripts/private_runtime.py run --tool . -- scripts/build_windows.py
 ~~~
 
 The last command requires Windows and creates the executable and ZIP under dist/. The build command creates a Python wheel and source archive.

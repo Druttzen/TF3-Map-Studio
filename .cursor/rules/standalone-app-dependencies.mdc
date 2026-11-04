@@ -1,0 +1,14 @@
+---
+description: Mandatory per-app ownership and isolation of runtimes, tools, plugins and add-ons
+alwaysApply: true
+---
+
+# Standalone app dependencies
+
+Follow the Mandatory standalone app dependencies section in the root AGENTS.md.
+- Provision private Python/Conda/FFmpeg and other required runtimes for each installed app.
+- Support parallel copies and versions; use explicit app-owned executable paths and child environments.
+- Keep writable caches, settings, services and runtime state scoped to the owning app.
+- Do not change global PATH/environments or another app during install, update, repair or uninstall.
+- Validate coexistence with another app when dependency provisioning or installers change.
+- Keep the full policy in version-controlled AGENTS.md so it travels with local and GitHub projects.

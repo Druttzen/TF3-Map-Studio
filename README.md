@@ -13,11 +13,11 @@ Four Transport Fever 3 tools in one project. Each folder includes its source, te
 
 Download and extract the package for the tool you need, then open its `.exe`. The packages include the runtime, so a separate Python installation is not required.
 
-- [OSM-TF3-Vanilla-Converter — Preview 0.16.3](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-10-25-fix4/OSM-TF3-Vanilla-Converter-0.16.3-Windows.zip)
-- [TF3-Heightmap-Studio — Preview 0.12](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-10-25-fix5/TF3-Heightmap-Studio-0.12-Windows.zip)
-- [TRF3-Mod-Converter — 0.15.0](https://github.com/Druttzen/TF3-Map-Studio/releases/download/converter-v0.15.0/TRF3-Mod-Converter-0.15.0-Windows.zip)
+- [OSM-TF3-Vanilla-Converter — Preview 0.16.3](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-11-05/OSM-TF3-Vanilla-Converter-0.16.3-Windows.zip)
+- [TF3-Heightmap-Studio — Preview 0.12](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-11-05/TF3-Heightmap-Studio-0.12-Windows.zip)
+- [TRF3-Mod-Converter — 0.15.0](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-11-05/TRF3-Mod-Converter-0.15.0-Windows.zip)
 
-The [reviewed 25 October release](https://github.com/Druttzen/TF3-Map-Studio/releases/tag/map-studio-review-2026-10-25-fix5) includes the complete Windows bundle, standalone importer revision 11, source and checksums. Use the `main` branch for current source; older version tags retain their historical code.
+The [5 November system-test release](https://github.com/Druttzen/TF3-Map-Studio/releases/tag/map-studio-review-2026-11-05) includes all three standalone Windows apps, importer revision 11, source, dependency manifests and checksums. See [the system-test scope](SYSTEM-TEST-2026-11-05.md). Use the `main` branch for current source; older version tags retain their historical code.
 
 Heightmap Studio 0.12 joins compatible neighbouring elevation files before interpolation and defaults to one continuous 16-bit PNG on the native 4 m grid. New projects use Cubic interpolation; saved explicit choices remain. **Use smooth terrain settings** selects continuous interpolation without a blanket blur. The quality summary reports actual contributing source spacing: enlarging coarse data does not create measured detail. Finer ground DEMs, including Lantmäteriet 1 m data, can be found through LiDAR search with the provider's required personal access.
 
@@ -29,7 +29,7 @@ TRF3-Mod-Converter source and Windows runtime are **0.15.0**, focusing on vehicl
 
 Current source is **revision 11**, bundled with converter Preview 0.16.3. Ground faces that collapse at TF3 coordinate precision are omitted and explicitly counted, fixing the identified Huge-map stop after 172,300 scenery items. Existing datasets and saved source positions are retained. Retry preserves accepted objects; a legacy uncertain-outcome failure requires a live construction inventory before recovery. Put converted `.lua` maps in the installed importer’s `content/osm/maps` folder before starting TF3, then choose a file in the in-game panel. The engine loads and restores the selected resource directly. Retain the original file of a started import. The GUI reads compact metadata, category totals use cached aggregates, and idle updates do not rewrite saved script state.
 
-[Download TF3-OSM-Importer-Mod revision 11](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-10-25-fix4/TF3-OSM-Importer-Mod-Revision-11.zip). Extract `tf3_osm_importer_mod` into TF3's local mods folder and keep one installed copy. Preserve custom datasets and saved progress when updating; do not replace them with the fictional sample. The internal mod ID remains `druttzen_osm_vanilla` for existing saves. See [the importer instructions](TF3-OSM-Importer-Mod/README.md).
+[Download TF3-OSM-Importer-Mod revision 11](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-11-05/TF3-OSM-Importer-Mod-Revision-11.zip). Extract `tf3_osm_importer_mod` into TF3's local mods folder and keep one installed copy. Preserve custom datasets and saved progress when updating; do not replace them with the fictional sample. The internal mod ID remains `druttzen_osm_vanilla` for existing saves. See [the importer instructions](TF3-OSM-Importer-Mod/README.md).
 
 Experimental shallow-water excavation, model matching and functioning towns retain the documented testing limits. Read [the water investigation](TF3-OSM-Importer-Mod/WATER-RESEARCH.md) and [the review findings and fixes](CODE-REVIEW-2026-10-25.md).
 
@@ -37,14 +37,14 @@ These are preview tools. The fictional OSM sample imports in TF3 Windows build 4
 
 ## Development
 
-Clone this repository and follow the README in each tool folder. Use a separate Python environment for each tool to keep its dependencies independent. Run the tests from the tool's own folder.
+Clone this repository and follow [the private-runtime instructions](PRIVATE-RUNTIMES.md) to provision a complete private Python copy for each tool. A venv backed by global Python does not satisfy the standalone requirement. Run the tests from the tool's own folder.
 
 | Tool | Tests | Build/package |
 | --- | --- | --- |
-| OSM-TF3-Vanilla-Converter | `python -m unittest discover -s tests` | `build.ps1` |
-| TF3-Heightmap-Studio | `python -m pytest tests` | `build.ps1` |
-| TRF3-Mod-Converter | `python -m pytest -q` | `python scripts/build_windows.py` |
-| TF3-OSM-Importer-Mod | `python -m unittest discover -s tests` | `python scripts/package_mod.py` |
+| OSM-TF3-Vanilla-Converter | Private runner: `-m unittest discover -s tests` | `build.ps1` |
+| TF3-Heightmap-Studio | Private runner: `-m pytest tests` | `build.ps1` |
+| TRF3-Mod-Converter | Private runner: `-m pytest -q` | Private runner: `scripts/build_windows.py` |
+| TF3-OSM-Importer-Mod | Private runner: `-m unittest discover -s tests` | Private runner: `scripts/package_mod.py` |
 
 The local `work/`, `outputs/`, and `.relocation-recovery/` folders contain working environments, generated packages, and recovery files. Git ignores them; source is maintained in the four named tool folders and packages are distributed through Releases.
 

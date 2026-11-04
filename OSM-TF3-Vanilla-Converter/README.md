@@ -42,14 +42,14 @@ This does not claim that a large live Overpass download or game import works.
 Use Python 3.10 or later with Tk. Run these commands from this tool's folder:
 
 ```powershell
-python -m pip install -r requirements.txt
-python tools/gui.py
+# First provision this tool's complete .runtime following ../PRIVATE-RUNTIMES.md.
+.\.runtime\python.exe -I ..\scripts\private_runtime.py run --tool . -- tools/gui.py
 ```
 
 For command-line conversion:
 
 ```powershell
-python tools/converter.py examples/sample.osm --output map.lua --size 1000 1000
+.\.runtime\python.exe -I ..\scripts\private_runtime.py run --tool . -- tools/converter.py examples/sample.osm --output map.lua --size 1000 1000
 ```
 
 The conversion core uses Python's standard library. Pillow supports the desktop map picker, downloaded tiles and overview PNGs. The Windows executable includes its dependencies.
@@ -57,12 +57,11 @@ The conversion core uses Python's standard library. Pillow supports the desktop 
 ## Test and build
 
 ```powershell
-python -m pip install -r requirements-dev.txt
-python -m unittest discover -s tests -v
+.\.runtime\python.exe -I ..\scripts\private_runtime.py run --tool . -- -m unittest discover -s tests -v
 powershell -File build.ps1
 ```
 
-`build.ps1` creates `dist/OSM-TF3-Vanilla-Converter.exe` and bundles the mod template and third-party notices. To use another Python interpreter, pass `-Python` to the build script. Tests use Lupa to simulate Lua and TF3 callbacks; they do not replace an actual in-game import test.
+`build.ps1` creates `dist/OSM-TF3-Vanilla-Converter.exe` and bundles the mod template and third-party notices. It requires this tool's complete private `.runtime` and rejects external interpreters. Tests use Lupa to simulate Lua and TF3 callbacks; they do not replace an actual in-game import test.
 
 The source is GPL-3.0. See [LICENSE](LICENSE), [NOTICE.txt](NOTICE.txt) and [Pillow's notices](third-party/Pillow-LICENSE.txt).
 

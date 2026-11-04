@@ -115,9 +115,11 @@ def apply_stroke(terrain,size,stroke):
  return (r0,r1,c0,c1,previous)
 
 
-def prepare(report_path,osm_path,source_files,options=None,strokes=None,cache=None,progress=None,cancel=None,api_key=None,lua_path=None,lua_sha=None,biome_strokes=None):
+def prepare(report_path,osm_path,source_files,options=None,strokes=None,cache=None,progress=None,cancel=None,api_key=None,lua_path=None,lua_sha=None,biome_strokes=None,osm_sha=None):
  options=normalize(options);job=Job(progress,cancel)
- context=load_context(report_path,osm_path,job,lua_path,lua_sha);size=context['size'];nx,ny=dimensions(size,options)
+ context=load_context(report_path,osm_path,job,lua_path,lua_sha)
+ if osm_sha and context['osmSha256']!=osm_sha:raise ValueError('OSM checksum differs from the saved project. Restore its original OSM file or create a new project for the changed map.')
+ size=context['size'];nx,ny=dimensions(size,options)
  if strokes is not None and (not isinstance(strokes,list) or len(strokes)>10000):raise ValueError('At most 10,000 brush stamps are supported.')
  strokes=[validate_stroke(v,size) for v in (strokes or [])]
  paths=[Path(p) for p in source_files];public=options['source_mode'].startswith('Download');provider_plan=None;provider_credits=[]
@@ -229,6 +231,19 @@ def project_dict(result,output=''):
          'converterDataset':context['report']['dataset'],'osmSha256':context['osmSha256'],'bounds':context['bounds'],'mapSize':context['size'],
          'elevationFiles':result['selectedSourceFiles'],'options':result['options'],'brushStrokes':result['strokes'],
          'biomeStrokes':result.get('biomeStrokes',[]),'biomeSourceSha256':(result.get('biomeSource') or {}).get('sha256'),'output':output}
+
+
+def project_osm_checksum(path,report,result=None,expected=None):
+ """Bind GUI-saved projects to actual bytes, including legacy converter reports."""
+ digest=hashlib.sha256()
+ with Path(path).open('rb') as source:
+  while chunk:=source.read(1024*1024):digest.update(chunk)
+ actual=digest.hexdigest();checks=[expected,report.get('sourceSha256')]
+ context=(result or {}).get('context',{})
+ if context.get('osmPath') and Path(context['osmPath']).resolve()==Path(path).resolve() and context.get('report',{}).get('dataset')==report['dataset']:
+  checks.append(context.get('osmSha256'))
+ if any(value and value!=actual for value in checks):raise ValueError('OSM checksum differs from the saved project. Restore its original OSM file or create a new project for the changed map.')
+ return actual
 
 
 def load_project(path):

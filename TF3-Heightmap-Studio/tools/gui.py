@@ -10,7 +10,7 @@ from alignment import read_report, geographic, alignment_summary
 from providers import download_plan
 from lua_map import find_map
 from height_settings import DEFAULTS, CHOICES, RANGES, INTEGERS, normalize
-from terrain import prepare, export, preview_image, apply_stroke, load_project
+from terrain import prepare, export, preview_image, apply_stroke, load_project, project_osm_checksum
 from job import Cancelled
 from game_paths import detect, suggested_output, select_user_folder
 import biomes
@@ -67,7 +67,8 @@ class App(tk.Tk):
   body=ttk.Frame(self,padding=(16,10));body.pack(fill='both',expand=True);body.columnconfigure(0,weight=1);body.columnconfigure(1,weight=1);body.rowconfigure(0,weight=1)
   self.book=ttk.Notebook(body);self.book.grid(row=0,column=0,sticky='nsew',padx=(0,12));self.pages={name:self.page(name) for name in ['Project','Elevation','LiDAR','Terrain','OSM terrain','Biomes','Brush']}
   self.report_path=tk.StringVar();self.osm_path=tk.StringVar();self.output_path=tk.StringVar();self.lua_path=tk.StringVar();self.lua_sha=None
-  self.game_paths=detect();self.game_info=tk.StringVar();self.auto_output=''
+  self.game_paths=detect();self.game_info=tk.StringVar();self.auto_output='';self.osm_sha=None
+  self.osm_path.trace_add('write',lambda *args:setattr(self,'osm_sha',None))
   self.lua_path.trace_add('write',lambda *args:setattr(self,'lua_sha',None))
   self.values={key:tk.BooleanVar(value=value) if type(value) is bool else tk.StringVar(value=str(value)) for key,value in DEFAULTS.items()}
   self.map_info=tk.StringVar(value='Choose the converter report to lock the map alignment.')
@@ -527,9 +528,11 @@ class App(tk.Tk):
   return normalize(values)
 
  def form_project(self):
-  r=read_report(self.report_path.get());self.check_brush_alignment(r);return {'format':'TF3-Heightmap-Studio','version':1,'converterReport':self.report_path.get(),'osmFile':self.osm_path.get(),
+  r=read_report(self.report_path.get());self.check_brush_alignment(r)
+  osm_sha=project_osm_checksum(self.osm_path.get(),r,self.result,getattr(self,'osm_sha',None))
+  return {'format':'TF3-Heightmap-Studio','version':1,'converterReport':self.report_path.get(),'osmFile':self.osm_path.get(),
    'convertedLua':self.lua_path.get(),'luaSha256':self.lua_sha,
-   'converterDataset':r['dataset'],'osmSha256':r.get('sourceSha256'),'bounds':r['bounds'],'mapSize':r['mapSize'],
+   'converterDataset':r['dataset'],'osmSha256':osm_sha,'bounds':r['bounds'],'mapSize':r['mapSize'],
    'elevationFiles':list(self.sources),'options':self.options(),'brushStrokes':list(self.strokes),
    'biomeStrokes':list(self.biome_strokes),'biomeSourceSha256':(self.result.get('biomeSource') or {}).get('sha256') if self.result and not self.dirty else None,'output':self.output_path.get(),
    'discovery':{'localFolder':self.local_folder.get(),'autoSearch':self.auto_lidar.get(),'provider':self.lidar_provider.get()}}
@@ -559,7 +562,7 @@ class App(tk.Tk):
     try:self.game_paths=select_user_folder(saved_output.parent.parent,self.game_paths)
     except ValueError:pass
    self.apply_game_paths()
-   self.lua_path.set(p.get('convertedLua') or find_map(p['converterReport'],r));self.lua_sha=p.get('luaSha256')
+   self.lua_path.set(p.get('convertedLua') or find_map(p['converterReport'],r));self.lua_sha=p.get('luaSha256');self.osm_sha=p.get('osmSha256')
    self.map_info.set(f"Map: {r['mapSize'][0]:g} × {r['mapSize'][1]:g} metres\nBounds: "+', '.join(f'{v:.7f}' for v in r['bounds']))
    self.biome_strokes=p['biomeStrokes'];self.biome_undo=[];self.biome_undo_button.configure(state='disabled')
    self.result=None;self.dirty=True;self.export_button.configure(state='disabled');self.undo_button.configure(state='disabled');self.status.set('Project loaded · Build terrain to recreate its preview');self.quality.set('Build terrain to inspect this project’s elevation sources.');self.show('Project loaded. Build terrain to recreate its preview and source report.');self.percent.set('0%');self.progress['value']=0;self.render()
@@ -596,7 +599,7 @@ class App(tk.Tk):
  def build(self):
   if self.busy:return
   try:
-   options=self.options();report=self.report_path.get().strip();osm=self.osm_path.get().strip();paths=list(self.sources);lua=self.lua_path.get().strip();lua_sha=self.lua_sha
+   options=self.options();report=self.report_path.get().strip();osm=self.osm_path.get().strip();paths=list(self.sources);lua=self.lua_path.get().strip();lua_sha=self.lua_sha;osm_sha=getattr(self,'osm_sha',None)
    if not report or not osm:raise ValueError('Choose the converter report and original OSM file first.')
    current=read_report(report);self.check_brush_alignment(current)
    if not Path(osm).is_file():raise ValueError('The original OSM file does not exist.')
@@ -605,7 +608,7 @@ class App(tk.Tk):
    if options['source_mode'].startswith('Download'):download_plan(current['bounds'],options)
    api_key=self.api_key.get().strip();strokes=deepcopy(self.strokes);biome_strokes=deepcopy(self.biome_strokes)
   except (ValueError,OSError) as exc:messagebox.showerror('Check heightmap settings',str(exc),parent=self);return
-  self.start_worker(lambda progress:prepare(report,osm,paths,options,strokes,progress=progress,cancel=self.cancel_event,api_key=api_key,lua_path=lua,lua_sha=lua_sha,biome_strokes=biome_strokes),'build')
+  self.start_worker(lambda progress:prepare(report,osm,paths,options,strokes,progress=progress,cancel=self.cancel_event,api_key=api_key,lua_path=lua,lua_sha=lua_sha,biome_strokes=biome_strokes,osm_sha=osm_sha),'build')
 
  def check_brush_alignment(self,current):
   original=self.result['context']['report'] if self.result else self.report
@@ -639,6 +642,7 @@ class App(tk.Tk):
    self.busy=False
    if kind=='build':
     self.lua_sha=value['context']['convertedLua']['sha256'] if value['context'].get('convertedLua') else None
+    self.osm_sha=value['context']['osmSha256']
     self.result=value;self.strokes=value['strokes'];self.undo=[];self.dirty=False;self.progress['value']=100;self.percent.set('100%');self.status.set('Terrain ready · inspect, edit or export')
     self.biome_strokes=value['biomeStrokes'];self.biome_undo=[]
     ny,nx=value['terrain'].shape;size=value['context']['size'];used=[s for s in value['sources'] if s['contributedSamples']]

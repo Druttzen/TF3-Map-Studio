@@ -87,9 +87,8 @@ download. Incomplete catalog results remain blocked.
 Use Python 3.14 with Tkinter. In PowerShell, from this folder:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe tools\gui.py
+# First provision this tool's complete .runtime following ../PRIVATE-RUNTIMES.md.
+.\.runtime\python.exe -I ..\scripts\private_runtime.py run --tool . -- tools/gui.py
 ```
 
 In the app, load `examples\Synthetic-demo.heightmap-project.json` and select
@@ -100,7 +99,7 @@ and a synthetic elevation surface; their file paths are relative to the project.
 To export the example without the GUI:
 
 ```powershell
-.\.venv\Scripts\python.exe tools\cli.py examples\Synthetic-demo.heightmap-project.json --output outputs\synthetic-heightmap.png
+.\.runtime\python.exe -I ..\scripts\private_runtime.py run --tool . -- tools/cli.py examples\Synthetic-demo.heightmap-project.json --output outputs\synthetic-heightmap.png
 ```
 
 Add `--to-tf3` instead of `--output` to export into the automatically selected
@@ -110,13 +109,13 @@ them into a running game or change an existing game save.
 ## Test and build
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests
-.\build.ps1 -Python .\.venv\Scripts\python.exe
+.\.runtime\python.exe -I ..\scripts\private_runtime.py run --tool . -- -m pytest tests
+.\build.ps1
 ```
 
 The build creates `dist\TF3-Heightmap-Studio.exe`. The Windows executable includes
 its Python runtime and does not require a separate Python installation.
-The build prefers this folder's `.venv` when no `-Python` argument is supplied.
+The build requires this folder's complete `.runtime` and verifies its ownership.
 It checks dependencies before packaging, includes the HTTPS certificate bundle,
 and runs the executable's headless terrain/LiDAR/certificate check afterwards.
 Missing dependencies stop the build with an installation command instead of

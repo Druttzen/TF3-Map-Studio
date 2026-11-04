@@ -1,27 +1,26 @@
 param([string]$Python = '', [string]$DistPath = "$PSScriptRoot/dist")
 $ErrorActionPreference = 'Stop'
 $DistPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($DistPath)
-if (-not $Python) {
-    $ProjectPython = Join-Path $PSScriptRoot '.venv/Scripts/python.exe'
-    $Python = if (Test-Path -LiteralPath $ProjectPython) { $ProjectPython } else { 'python' }
-}
-& $Python "$PSScriptRoot/tools/build_check.py"
+$PrivatePython = Join-Path $PSScriptRoot '.runtime/python.exe'
+if (-not (Test-Path -LiteralPath $PrivatePython)) { throw 'Private Python is missing. Provision this tool with scripts/private_runtime.py; global Python is not used.' }
+if ($Python -and [IO.Path]::GetFullPath($Python) -ne [IO.Path]::GetFullPath($PrivatePython)) { throw 'Use this app-owned .runtime/python.exe; external interpreters are not accepted.' }
+$Python = $PrivatePython
+$Runner = Join-Path $PSScriptRoot '../scripts/private_runtime.py'
+& $Python -I $Runner run --tool $PSScriptRoot -- "$PSScriptRoot/tools/build_check.py"
 if ($LASTEXITCODE -ne 0) {
     throw "Build dependencies are incomplete. Run: & '$Python' -m pip install -r '$PSScriptRoot/requirements-dev.txt'"
 }
-& $Python -m PyInstaller --noconfirm --clean --onefile --windowed --name TF3-Heightmap-Studio --distpath $DistPath --workpath "$PSScriptRoot/build" --specpath "$PSScriptRoot" --paths "$PSScriptRoot/tools" --paths "$PSScriptRoot/vendor" --collect-all certifi --collect-all rasterio --collect-all pyproj --collect-all ijson --hidden-import lazrs --hidden-import scipy.ndimage --add-data "$PSScriptRoot/third-party;third-party" "$PSScriptRoot/tools/gui.py"
+& $Python -I $Runner run --tool $PSScriptRoot -- -m PyInstaller --noconfirm --clean --onefile --windowed --name TF3-Heightmap-Studio --distpath $DistPath --workpath "$PSScriptRoot/build" --specpath "$PSScriptRoot" --paths "$PSScriptRoot/tools" --paths "$PSScriptRoot/vendor" --collect-all certifi --collect-all rasterio --collect-all pyproj --collect-all ijson --hidden-import lazrs --hidden-import scipy.ndimage --add-data "$PSScriptRoot/third-party;third-party" "$PSScriptRoot/tools/gui.py"
 if ($LASTEXITCODE -ne 0) { throw 'Executable build failed' }
 $RuntimeReport = Join-Path $DistPath 'runtime-check.json'
-if (Test-Path -LiteralPath $RuntimeReport) { Remove-Item -LiteralPath $RuntimeReport }
 $Executable = Join-Path $DistPath 'TF3-Heightmap-Studio.exe'
-$CheckProcess = Start-Process -FilePath $Executable -ArgumentList @('--self-check', ('"{0}"' -f $RuntimeReport)) -PassThru -WindowStyle Hidden
-if (-not $CheckProcess.WaitForExit(60000)) {
-    & "$env:SystemRoot/System32/taskkill.exe" /PID $CheckProcess.Id /T /F | Out-Null
-    throw 'Packaged runtime check timed out; this executable is not ready for release.'
-}
+& $Python -I $Runner manifest --tool $PSScriptRoot --executable $Executable --report (Join-Path $DistPath 'dependency-manifest.json')
+if ($LASTEXITCODE -ne 0) { throw 'Packaged dependency manifest failed.' }
+& $Python -I $Runner check-executable --tool $PSScriptRoot --executable $Executable --report $RuntimeReport
+if ($LASTEXITCODE -ne 0) { throw 'Packaged runtime check failed.' }
 if (-not (Test-Path -LiteralPath $RuntimeReport)) { throw 'Packaged runtime check did not produce a report.' }
 $RuntimeResult = Get-Content -LiteralPath $RuntimeReport -Raw | ConvertFrom-Json
-if ($CheckProcess.ExitCode -ne 0 -or $RuntimeResult.ok -ne $true) {
+if ($RuntimeResult.ok -ne $true) {
     throw "Packaged runtime check failed: $($RuntimeResult.error)"
 }
 Write-Host "Packaged runtime check passed: $RuntimeReport"

@@ -67,31 +67,29 @@ def verify_executable(executable, source, tool):
                  for p in (source/'src/trf3_mod_converter').glob('*.py')]
         launcher = source/'desktop_launcher.py'
         entry = 'desktop_launcher'
-        expected_count = 32
+        # CLI entry points are intentionally absent from the desktop executable.
+        files = [(name, path) for name, path in files if path.stem not in {'cli', '__main__'}]
     else:
         files = [(p.stem, p) for p in (source/'tools').glob('*.py')]
         if tool == 'TF3-Heightmap-Studio':
             files += [(p.stem, p) for p in (source/'vendor').glob('*.py')]
         launcher = source/'tools/gui.py'
         entry = 'gui'
-        heightmap_helpers = [name for name in ('local_sources','data_access') if (source/'tools'/f'{name}.py').is_file()] if tool == 'TF3-Heightmap-Studio' else []
-        expected_count = 16+len(heightmap_helpers) if tool == 'TF3-Heightmap-Studio' else 11 if osm_self_check else 10
+        files = [(name, path) for name, path in files if name not in {'cli', 'build_check'}]
     for name, path in files:
         if name in pyz.toc:
             code = pyz.extract(name)
         elif name == entry:
             code = marshal.loads(reader.extract(entry))
         else:
-            continue
+            raise AssertionError(f'Required runtime module is missing: {tool}/{path.name}')
         assert code == compile(path.read_text(encoding='utf-8-sig'), code.co_filename,
                                'exec', dont_inherit=True), f'Embedded code differs: {tool}/{path.name}'
         checked.append(name)
     code = marshal.loads(reader.extract(entry))
     assert code == compile(launcher.read_text(encoding='utf-8-sig'), code.co_filename,
                            'exec', dont_inherit=True), f'Launcher differs: {tool}'
-    assert len(checked) == expected_count, f'Unexpected module coverage: {tool}: {checked}'
-    if tool == 'TF3-Heightmap-Studio':
-        assert all(name in checked for name in heightmap_helpers), 'Heightmap discovery/access helpers are missing'
+    assert set(checked) == {name for name, _ in files}, f'Incomplete module coverage: {tool}'
     if osm_self_check:
         assert 'runtime_check' in checked, 'OSM packaged startup check is missing'
     if tool == 'OSM-TF3-Vanilla-Converter':
@@ -209,6 +207,15 @@ def main():
         coverage = {tool: verify_executable(exe, source/tool, tool) for tool, exe in (
             ('TF3-Heightmap-Studio', heightmap), ('OSM-TF3-Vanilla-Converter', osm),
             ('TRF3-Mod-Converter', vehicle))}
+        dependency_manifests = {}
+        for tool, exe in (('TF3-Heightmap-Studio', heightmap), ('OSM-TF3-Vanilla-Converter', osm), ('TRF3-Mod-Converter', vehicle)):
+            candidate = incoming/tool/'dist/dependency-manifest.json'
+            if candidate.is_file():
+                record = json.loads(candidate.read_text(encoding='utf-8'))
+                assert record['application'] == tool and record['executableSha256'] == hashlib.sha256(exe.read_bytes()).hexdigest(), 'Dependency manifest does not match the reviewed executable'
+                dependency_manifests[tool] = candidate
+            elif (source/'scripts/private_runtime.py').is_file():
+                raise AssertionError('Missing app-owned dependency manifest: ' + tool)
         for path in (source/'OSM-TF3-Vanilla-Converter/mod/tf3_osm_importer_mod').rglob('*'):
             if path.is_file():
                 relative = path.relative_to(source/'OSM-TF3-Vanilla-Converter/mod/tf3_osm_importer_mod')
@@ -228,13 +235,18 @@ def main():
         all_entries = {'TF3-Map-Studio/README.md': source/'README.md',
                        'TF3-Map-Studio/CODE-REVIEW-2026-10-25.md': source/'CODE-REVIEW-2026-10-25.md',
                        'TF3-Map-Studio/build-manifest.json': manifest}
+        for name in ('SYSTEM-TEST-2026-11-05.md', 'PRIVATE-RUNTIMES.md', 'AGENTS.md'):
+            if (source/name).is_file():all_entries['TF3-Map-Studio/'+name] = source/name
         heightmap_gui=(source/'TF3-Heightmap-Studio/tools/gui.py').read_text(encoding='utf-8')
+        import tomllib
         versions = {'TF3-Heightmap-Studio': osm_version(source/'TF3-Heightmap-Studio') if 'APP_VERSION=' in heightmap_gui else '0.10',
-                    'OSM-TF3-Vanilla-Converter': osm_version(source/'OSM-TF3-Vanilla-Converter')}
+                    'OSM-TF3-Vanilla-Converter': osm_version(source/'OSM-TF3-Vanilla-Converter'),
+                    'TRF3-Mod-Converter': tomllib.loads((source/'TRF3-Mod-Converter/pyproject.toml').read_text(encoding='utf-8'))['project']['version']}
         for tool, exe in (('TF3-Heightmap-Studio', heightmap), ('OSM-TF3-Vanilla-Converter', osm), ('TRF3-Mod-Converter', vehicle)):
             entries = docs(source/tool)
             entries[f'dist/{tool}.exe'] = exe
             entries['build-manifest.json'] = manifest
+            if tool in dependency_manifests:entries['dependency-manifest.json'] = dependency_manifests[tool]
             entries['START-HERE.txt'] = start_here(work, tool, date, portable=False)
             all_entries.update({f'TF3-Map-Studio/{tool}/{name}': path for name, path in entries.items()})
             if tool in versions:

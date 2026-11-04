@@ -59,7 +59,8 @@ def test_add_all_local_omits_unknown_and_review_only_candidates():
 
 def test_project_preferences_do_not_include_api_secrets(tmp_path):
  report=tmp_path/'map.report.json';report.write_text(json.dumps({'dataset':'fixture','bounds':[0,0,1,1],'mapSize':[256,256]}))
- app=SimpleNamespace(report_path=Var(str(report)),check_brush_alignment=Mock(),osm_path=Var('map.osm'),lua_path=Var('map.lua'),lua_sha=None,sources=[],options=lambda:normalize(),strokes=[],biome_strokes=[],result=None,output_path=Var('out.png'),local_folder=Var('data'),auto_lidar=Var(True),lidar_provider=Var('Automatic for map'),api_key=Var('PRIVATE_OT_KEY'),lidar_user=Var('PRIVATE_USERNAME'),lidar_password=Var('PRIVATE_PASSWORD'))
+ osm=tmp_path/'map.osm';osm.write_text('<osm version="0.6"/>')
+ app=SimpleNamespace(report_path=Var(str(report)),check_brush_alignment=Mock(),osm_path=Var(str(osm)),lua_path=Var('map.lua'),lua_sha=None,sources=[],options=lambda:normalize(),strokes=[],biome_strokes=[],result=None,output_path=Var('out.png'),local_folder=Var('data'),auto_lidar=Var(True),lidar_provider=Var('Automatic for map'),api_key=Var('PRIVATE_OT_KEY'),lidar_user=Var('PRIVATE_USERNAME'),lidar_password=Var('PRIVATE_PASSWORD'))
  project=App.form_project(app);serialized=json.dumps(project)
  assert project['discovery']['localFolder']=='data'
  assert all(secret not in serialized for secret in ['PRIVATE_OT_KEY','PRIVATE_USERNAME','PRIVATE_PASSWORD'])

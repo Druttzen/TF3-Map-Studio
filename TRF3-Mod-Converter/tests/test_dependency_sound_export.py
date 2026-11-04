@@ -11,6 +11,7 @@ from trf3_mod_converter.lua_metadata import load_lua_table
 from trf3_mod_converter.tf2_vehicle_port import emit, port_tf2_mod, snapshot
 from trf3_mod_converter.verified_helpers import HELPER_DIGESTS
 from trf3_mod_converter.workshop_resources import verify_workshop_dependencies
+from trf3_mod_converter.filesystem import rename_with_retry
 
 
 SOUND = '''local sound = require "bbs2util"
@@ -27,7 +28,7 @@ def authored_sound(fixture_mod, tmp_path, monkeypatch):
     original, game, output = fixture_mod
     source = tmp_path/'1066780/123'
     source.parent.mkdir()
-    original.rename(source)
+    rename_with_retry(original, source)
     provider = source.parent/'456'
     provider.mkdir()
     (provider/'mod.lua').write_text(emit({'info':{'name':'Sound author','modid':'sound_author','steamId':456}}))
