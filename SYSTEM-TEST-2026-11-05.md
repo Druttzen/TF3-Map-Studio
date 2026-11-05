@@ -198,6 +198,36 @@ The result was saved as `MapStudio-Partille-Mountains-Rivers-20261105.sav` and
 backed up under the same Partille backup folder. The other vanilla climates
 were checked by automated export tests against their shipped layer selectors.
 
+## Partille Water Dirty and terrain brush test
+
+The water-only scenario uses Bockemossen (OSM way 16953337) and Besebäcken
+(OSM way 326075684) from the original Partille download on the 16,384 ×
+16,384 m map. The stream has no OSM width tag, so this scenario uses a
+12 m width. TF3 build 40425 placed all 628 faces, 276 for the lake and
+352 for the stream, with zero skipped jobs.
+
+Both features visibly rendered with the game's Water Dirty material.
+A comparison using identical two-triangle shapes showed that the fill
+rendered on the construction with a nearby origin. A world-origin
+construction recorded its material but did not show the corresponding
+patch. The importer now groups water faces by 64 m cells and keeps their
+ground-fill geometry local to each construction.
+
+All five lake samples were 47.699997 m after import. The three stream
+samples were 25.099998, 22.800003 and 17.700005 m. Raising and lowering
+the terrain across the shores preserved all eight visible water heights.
+The measured lake bank rose from 51.500000 to 51.600006 m and the measured
+stream bank fell from 21.550003 to 21.500000 m. The construction controls
+the visible surface while it remains in place. Broader brush passes can
+still affect the underlying base terrain.
+
+Both features remained visibly painted after reopening
+`MapStudio-Partille-Water-Dirty-Verified-20261105.sav`. TF3 read back
+all 628 Water Dirty fills. The local
+water-protection evidence includes native height logs and in-game images
+of both features. The final automated suites passed 269 importer tests
+and 397 converter tests, with 501 and 630 subtests respectively.
+
 ## Limits
 
 This is broad regression, integration, packaging, ownership and native importer

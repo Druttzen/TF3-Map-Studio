@@ -32,6 +32,9 @@ local function itemKey(item,box)
     if item.depth~=nil then
       if not controls.finiteHeight(item.depth) then return nil end
       suffix="|depth:"..string.format("%.6f",item.depth)
+    elseif item.waterSurface~=nil then
+      if type(item.osmWater)~="string" or (item.waterSurface~="flat" and item.waterSurface~="follow") then return nil end
+      suffix="|water:"..item.waterSurface..":"..item.osmWater
     end
     return "surface|"..item.texture.."|"..table.concat(points,";")..suffix
   end
@@ -404,11 +407,13 @@ function audit.inspect(dataset,value)
                 if item.model then report.current.models=report.current.models+1
                 elseif item.texture then report.current.surfaces=report.current.surfaces+1 end
                 key=itemKey(item)
-                if item.depth~=nil then
+                if item.depth~=nil or item.waterSurface~=nil then
                   for _,p in ipairs(item.face or {}) do
-                    local reference=value.shallowHeightReference and value.shallowHeightReference[coordinate(p)]
-                    if item.depth~=0.5 or not controls.finiteHeight(reference) or not controls.finiteHeight(p[3]) or math.abs(p[3]-(reference-0.5))>0.01 then
-                      problem("wrongScenery","Saved shallow-water bed differs from its 0.5 m reference; native terrain cells still need visual measurement.")
+                    local key=item.waterSurface=="flat" and item.osmWater or coordinate(p)
+                    local reference=value.shallowHeightReference and value.shallowHeightReference[key]
+                    local offset=item.waterSurface and 0 or 0.5
+                    if not controls.finiteHeight(reference) or not controls.finiteHeight(p[3]) or math.abs(p[3]-(reference-offset))>0.01 then
+                      problem("wrongScenery","Saved water surface differs from its prepared height reference.")
                     end
                   end
                 end

@@ -1,6 +1,10 @@
 # TF3-OSM-Importer-Mod
 
-Tool 4 in TF3 Map Studio: the standalone **in-game OSM importer** for Transport Fever 3, revision 12, also bundled with tool 1 Preview 0.16.4. New imports use base-terrain or explicitly sourced road/rail heights at construction time and save accepted heights for verification. Mapped ponds and small waterways have an experimental 0.5 m bed and Landscaping Water Dirty treatment. A separate elevated-water test builds a decorative surface without terrain alignment. Incremental checks, automatic pause and positive-boundary handling are retained.
+Tool 4 in TF3 Map Studio is the standalone **in-game OSM importer** for
+Transport Fever 3. New imports use base terrain or explicitly sourced
+road and rail heights. Mapped lakes and waterways can use the game's Water
+Dirty material and fixed terrain alignments. A separate elevated-water test
+builds a decorative surface.
 
 The mod imports a prepared Lua dataset using vanilla roads, railways, vegetation, ground surfaces, decorative objects and place marker models. It provides an **OSM Import** button, separate scroll areas for messages and controls, and saved import progress. **Show place names** displays names and coordinates from saved importer records. TF3 can optimize models into unnamed asset groups, so their ordinary game windows may not show those names. Use [OSM-TF3-Vanilla-Converter](../OSM-TF3-Vanilla-Converter/README.md) to download/convert OSM XML and prepare `dataset.lua`.
 
@@ -58,17 +62,31 @@ See the installed mod's [README.txt](mod/tf3_osm_importer_mod/README.txt) for co
 
 For new imports, construction terrain alignments are excluded from the road/rail height reference. Optional sourced elevations must explicitly use the map's game coordinates; raw OSM `ele` is not assumed to be road-deck height. Height references survive rejected proposals and reload. Existing started imports keep their previous height policy. Verify built objects also detects movement from recorded accepted node heights. The game aligns terrain when building a network proposal. Heightmap Studio can optionally prepare dry corridors before importing a map with coastal roads.
 
-OSM XML water ways and multipolygons are prepared by tool 1; the **terrain changes happen only inside this mod**, through Start import. Select **Mapped small waters: 0.5 m bed + Water Dirty**, initially off while native validation is pending. Closed pond/basin polygons and river/stream/ditch/drain/canal lines become small triangles with at most 8 m edges. Multipolygon islands remain unpainted. Crossing, incomplete or excessively complex boundaries are retained for review without partial filling. The mod samples and saves base terrain heights when each batch is built, sets the bed 0.5 m lower with a **LESS** alignment, and paints an original mask referencing the game's exact Landscaping `Water Dirty` material. Rejected proposals and reload reuse the saved heights; terrain is not excavated repeatedly.
+Select **Mapped lakes and waterways: Water Dirty** before starting a new
+import. The converter preserves valid OSM outlines and island holes. The mod
+uses the game's Water Dirty material and holds the visible terrain to a
+fixed surface. Each lake, pond or reservoir shares one sampled base height
+across its triangles and batches. Waterway triangles follow the terrain.
+Older converted maps with the 0.5 m shallow-bed treatment retain their
+previous alignment. Reconvert the OSM source for the new behavior.
 
 OSM `width` or `est_width` is retained for lines. If missing, the converter exposes **Small water width if OSM width is missing**, initially 2 m; a warning identifies this as an approximation. Widths outside 0.1Ã¢â‚¬â€œ20 m require review. Preparation is limited to 30,000 shallow-water triangles per dataset; an oversized feature is omitted whole rather than partially filling it. Water in conservative 20 m corridors around prepared roads/rails is omitted, and native proposals also reject nearby existing networks and other constructions. These checks protect current mapped networks; future manually constructed roads still need inspection.
 
-Lake/reservoir boundaries, names, OSM IDs and raw `ele` tags are preserved in `waterFeatures`. **The requested per-lake sea level is not implemented:** the installed API exposes global water and no supported command for raising sea level inside one polygon was found. No global water change or automatic lake flooding occurs. Raw OSM elevations are not assumed to equal game elevations. Reconvert an older OSM file with Preview 0.16 to include the water geometry; keep the old dataset with any already-started import.
+Lake and reservoir boundaries, names, OSM IDs and raw `ele` tags are preserved
+in `waterFeatures`. Surface elevations come from the game's terrain. Water
+Dirty is a terrain material. The game continues to use its single global
+water level for navigation.
 
 The panel also provides **Read water support**, **Check test water area**, **Build experimental test water** and **Prepare another water patch** for separate rectangular elevated model surfaces. These use a vanilla transparent material at chosen heights; accepted objects are retained without duplication, with at most 100 separate non-overlapping patches. The earlier raised-basin experiment produced large terrain spikes in native TF3, both with and without a sampled perimeter. That terrain-shaping path is now disabled, including console and resource callbacks.
 
-This version's new shallow-water treatment passes automated geometry and state-machine tests but **has not yet been validated in native TF3**. A prior surface-only 20 m elevated model was rendered and saved/reloaded successfully; that result does not validate excavation or ground paint. Water Dirty is ground texture, not flowing or ship-navigable water. Use a separate test map. Read [WATER-RESEARCH.md](WATER-RESEARCH.md) and [validation.json](validation.json) for exact evidence.
+See [the system test report](../SYSTEM-TEST-2026-11-05.md) and
+[WATER-RESEARCH.md](WATER-RESEARCH.md) for the current native and historical
+water tests.
 
-[The fictional water test](../OSM-TF3-Vanilla-Converter/examples/water-test.osm) contains a pond, a 4 m stream and a lake with a raw elevation. Convert it at **1000 Ãƒâ€” 1000 m**, install it only for a separate fresh test map, and explicitly select Mapped small waters. The pond/stream are prepared for shallow treatment; the lake remains pending. Never replace the dataset belonging to an already-started import.
+[The fictional water test](../OSM-TF3-Vanilla-Converter/examples/water-test.osm)
+contains a pond, a 4 m stream and a lake with a raw elevation. Convert it at
+**1000 × 1000 m** and select the water option in a fresh test map. Keep the
+original dataset with any already-started import.
 
 ## Preview status and development checks
 

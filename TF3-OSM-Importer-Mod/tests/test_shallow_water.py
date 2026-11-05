@@ -8,6 +8,8 @@ class ShallowWaterTests(unittest.TestCase):
     def setUp(self):
         self.h=game.GameScriptTests(); self.h.setUp(); self.lua=self.h.lua
         self.lua.execute('''
+          api.type.Vec4f={new=function(x,y,z,w) return {x,y,z,w} end}
+          api.type.Mat4f={new=function(...) return {...} end}
           api.type.Box3={new=function(a,b) return {min=a,max=b} end}
           api.engine.system={octreeSystem={findIntersectingEntities=function(box,callback)
             waterQuery=box; if blockedWater then callback(blockedWater,{}) end end}}
@@ -24,6 +26,7 @@ class ShallowWaterTests(unittest.TestCase):
         sub=load_script(self.lua,CONTENT/'scenery.script.lua').updateFn(None,self.lua.globals().commands[1].constructionsToAdd[1].params).subconstructions[1]
         self.assertEqual(sub.terrainAlignmentLists[2].type,'LESS')
         self.assertEqual(sub.groundFaces[1].modes[1].key,'druttzen_osm_vanilla::/osm/dirty_water.gtex')
+        self.assertEqual(len(sub.groundFaces[1].modes[1].texCoords),3)
         self.assertEqual(len(sub.models),0)
 
     def test_rejected_proposal_and_reload_reuse_original_bed_heights(self):
@@ -57,3 +60,46 @@ class ShallowWaterTests(unittest.TestCase):
         self.h.event('start')
         self.assertIn('No dataset items match',self.h.state.value.notice)
         self.assertEqual(len(self.lua.globals().commands),0)
+
+    def test_lake_height_is_shared_across_batches_and_stream_follows_terrain(self):
+        self.lua.execute('''
+          local lake=dataset.scenery[1]
+          lake.depth=nil; lake.waterSurface="flat"; lake.osmWater="way:123"; lake.waterAnchor={2,2}
+          dataset.scenery[2]={category="waterways",waterSurface="flat",osmWater=lake.osmWater,
+            waterAnchor=lake.waterAnchor,texture=lake.texture,face={{4,0},{4,4},{0,4}}}
+          dataset.scenery[3]={category="waterways",waterSurface="follow",osmWater="way:456",
+            texture=lake.texture,face={{30,0},{34,0},{30,4}}}
+          api.engine.terrain.getBaseHeightAt=function(p) return 10+p.x+p.y end
+        ''')
+        self.h.event('configure',dict(batchSize=1))
+        self.h.event('start')
+        self.h.step()
+        self.lua.execute('api.engine.terrain.getBaseHeightAt=function(p) return 20+p.x+p.y end')
+        self.h.finish()
+        script=load_script(self.lua,CONTENT/'scenery.script.lua')
+        expected=[[14,14,14],[14,14,14],[50,54,54]]
+        for index,heights in enumerate(expected,1):
+            params=self.lua.globals().commands[index].constructionsToAdd[1].params
+            self.assertEqual([p[3] for p in params['items'][1].face.values()],heights)
+            alignment=script.updateFn(None,params).subconstructions[1].terrainAlignmentLists[1]
+            self.assertEqual(alignment.type,'EQUAL')
+            self.assertEqual(len(alignment.faces),1)
+
+    def test_one_batch_places_distant_water_in_local_constructions(self):
+        self.lua.execute('''
+          local a=dataset.scenery[1]
+          a.face={{8,8},{12,8},{8,12}}
+          dataset.scenery[2]={category="waterways",depth=.5,texture=a.texture,
+            face={{-120,80},{-116,80},{-120,84}}}
+        ''')
+        self.h.event('start')
+        self.h.finish()
+        constructions=self.lua.globals().commands[1].constructionsToAdd
+        self.assertEqual(len(constructions),2)
+        self.assertEqual(len(self.h.state.value.sceneryRecords[1].entities),2)
+        script=load_script(self.lua,CONTENT/'scenery.script.lua')
+        for construction, (x,y) in zip(constructions.values(), [(8,8),(-120,80)]):
+            self.assertEqual(list(construction.transf[4].values()),[x,y,0,1])
+            self.assertEqual(list(construction.params['items'][1].face[1].values()),[x,y,9.5])
+            sub=script.updateFn(None,construction.params).subconstructions[1]
+            self.assertEqual(list(sub.groundFaces[1].face[1].values()),[0,0,9.5,1])

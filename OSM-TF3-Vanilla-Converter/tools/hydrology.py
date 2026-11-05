@@ -37,7 +37,7 @@ def validate_rings(rings,outer_count,inside):
 
 def kind(tags):
     if tags.get('water') in {'pond', 'basin'} or tags.get('landuse') == 'basin':
-        return 'shallow'
+        return 'lake'
     if tags.get('waterway') in {'stream', 'river', 'ditch', 'drain', 'canal', 'riverbank'} or tags.get('water') in {'stream', 'river', 'ditch', 'drain', 'canal'}:
         return 'shallow'
     if tags.get('water') in {'lake', 'reservoir'} or tags.get('landuse') == 'reservoir':
@@ -239,11 +239,8 @@ def prepare(data, nodes, ways, relations, positions, members_for, join_rings,
         if category not in {'shallow','lake'}:
             feature.update(status='metadata-only',reason='Water type is unspecified or unsupported; no lake or stream treatment inferred.')
             continue
-        if category=='lake':
-            feature['status']='local-sea-level-unsupported'
-            warn('Mapped lakes retained: TF3 exposes a global sea level; no supported per-lake sea-level command was found. Lakes are not flooded automatically.')
-            continue
         try:
+            surface='flat' if category=='lake' else 'follow'
             width=None
             if line:
                 raw=tags.get('width',tags.get('est_width'))
@@ -275,19 +272,30 @@ def prepare(data, nodes, ways, relations, positions, members_for, join_rings,
                 validate_rings(rings,outer_count,inside)
                 raw_faces=triangulate(rings)
             prepared=[]; omitted=0
+            anchor=None; anchor_area=0
             for tri in raw_faces:
                 clipped=clip_polygon(tri,data['size'][0]-.02,data['size'][1]-.02)
                 if len(clipped)<3: continue
                 for clipped_tri in triangulate([clipped]):
-                    for face in split_triangle(clipped_tri,job):
+                    for face in split_triangle(clipped_tri,job,32 if surface=='flat' else 8):
                         if reserved(face): omitted+=1; continue
-                        if len(prepared)>=remaining: raise ValueError('30,000 shallow-water face budget reached; use a smaller OSM area')
+                        if len(prepared)>=remaining: raise ValueError('30,000 water face budget reached; use a smaller OSM area')
                         if signed_area(face)<0: face.reverse()
+                        area=abs(signed_area(clipped_tri))
+                        if surface=='flat' and area>anchor_area:
+                            # Pick an interior sample of the largest retained
+                            # source triangle, independently of import batches.
+                            anchor=[sum(p[i] for p in clipped_tri)/3 for i in range(2)]
+                            anchor_area=area
                         prepared.append({'texture':DIRTY_GROUND,'face':[list(p) for p in face],
-                                         'category':'waterways','depth':0.5,'osmWater':id})
+                                         'category':'waterways','waterSurface':surface,'osmWater':id})
+            if anchor:
+                for item in prepared:
+                    item['waterAnchor']=anchor
             data['scenery'].extend(prepared); remaining-=len(prepared)
-            feature.update(status='prepared',preparedFaces=len(prepared),reservedFaces=omitted,depth=0.5)
-            if omitted: warn('Shallow water near planned roads/rails is omitted within a conservative 20 m corridor. Network heights are unchanged until construction.')
+            feature.update(status='prepared',preparedFaces=len(prepared),reservedFaces=omitted,surface=surface)
+            if anchor: feature['heightSample']=anchor
+            if omitted: warn('Water near planned roads/rails is omitted within a conservative 20 m corridor. Network heights are unchanged until construction.')
         except (ValueError,OverflowError) as exc:
             feature['status']='needs-review'; feature['reason']=str(exc)
             warn(f'Water {id}: {exc}; no partial feature imported.')

@@ -151,29 +151,26 @@ retry/reload; accepted junction nodes keep their positions. Verify built objects
 checks accepted heights. Older started saves keep their previous height rules.
 Terrain alignment is applied by TF3 when each network segment is constructed.
 
-MAPPED SMALL WATER - EXPERIMENTAL
-Reconvert the original OSM XML with converter Preview 0.14. The converter
-prepares boundaries; this mod performs terrain changes only when built.
-Select Mapped small waters, then Check map and match objects and Start import.
-This selection is initially off while native validation is pending.
-Ponds/basins and small stream/river/ditch/drain/canal zones receive a 0.5 m
-bed below saved base-terrain samples and the exact Landscaping Water Dirty
-ground material. LESS alignment lowers rather than raises terrain. Islands
-remain outside the filled area. Faces are subdivided to at most 8 m edges.
+MAPPED LAKES AND WATERWAYS
+Reconvert the original OSM XML with the updated converter. Select Mapped
+lakes and waterways: Water Dirty, then Check map and match objects and Start
+import. Lakes and ponds share one sampled level per feature. Waterways
+follow the original sampled terrain. TF3's exact alignment holds the
+visible surface when the land around it is edited. The Water Dirty material
+follows the OSM boundary and leaves mapped islands outside the fill.
+Legacy datasets with the 0.5 m shallow bed retain their original alignment.
 OSM widths are used if present. Missing widths use a visible configured
 approximation, initially 2 m. Widths over 20 m need separate review.
 Prepared network corridors have a conservative 20 m water exclusion; existing
 roads/rails and other constructions are also checked before each build.
 Network elevations themselves are applied only when networks are built.
-Native proposal errors are not bypassed. Retry reuses saved bed samples.
-The new shallow bed/ground paint has automated tests but is NOT yet verified
-in native TF3. Use a separate test map before applying it to real terrain.
+Native proposal errors are not bypassed. Retry reuses saved height samples.
 
 LAKES
 Lake/reservoir geometry, names and raw OSM ele remain in waterFeatures.
 No supported per-lake sea-level command was found in the installed API.
-The mod therefore leaves lakes pending rather than changing global water.
-Raw OSM ele must not be assumed to be a game-height value.
+The surfaces are terrain paint. TF3 navigation uses the global water level.
+Game heights are sampled separately from raw OSM elevations.
 
 EXPERIMENTAL ELEVATED WATER SURFACES
 The separate water fields define rectangular model surfaces at chosen heights.

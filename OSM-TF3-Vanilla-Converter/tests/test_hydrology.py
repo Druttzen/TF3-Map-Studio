@@ -26,12 +26,13 @@ class HydrologyTests(unittest.TestCase):
             path=Path(folder)/'water.osm'; path.write_text(text)
             return convert(path,None,(100,100),options=options)
 
-    def test_pond_is_prepared_as_dirty_water_with_exact_half_metre_depth(self):
+    def test_pond_is_prepared_as_one_flat_dirty_water_surface(self):
         d=self.convert(fixture({'1':(-10,-10),'2':(10,-10),'3':(10,10),'4':(-10,10)},[
             ('11',['1','2','3','4','1'],{'natural':'water','water':'pond'})]))
         water=[i for i in d['scenery'] if i['category']=='waterways']
         self.assertTrue(water)
-        self.assertTrue(all(i['depth']==.5 and i['texture'].endswith('/dirty_water.gtex') for i in water))
+        self.assertTrue(all(i['waterSurface']=='flat' and i['texture'].endswith('/dirty_water.gtex') for i in water))
+        self.assertTrue(all(i['waterAnchor']==d['waterFeatures'][0]['heightSample'] for i in water))
         self.assertTrue(all(len(i['face'])==3 for i in water))
         self.assertEqual(d['waterFeatures'][0]['status'],'prepared')
         self.assertIn('waterFeatures',lua(d))
@@ -41,8 +42,8 @@ class HydrologyTests(unittest.TestCase):
         d=self.convert(fixture({'1':(-10,-10),'2':(10,-10),'3':(10,10),'4':(-10,10)},[
             ('11',['1','2','3','4','1'],{'natural':'water','water':'lake','ele':'72.4'})]))
         self.assertEqual(d['waterFeatures'][0]['height'],{'raw':'72.4','datum':'OSM-untransformed'})
-        self.assertEqual(d['waterFeatures'][0]['status'],'local-sea-level-unsupported')
-        self.assertFalse(d['scenery'])
+        self.assertEqual(d['waterFeatures'][0]['status'],'prepared')
+        self.assertTrue(all(item['waterSurface']=='flat' and 'depth' not in item for item in d['scenery']))
 
     def test_stream_missing_width_has_visible_configured_fallback(self):
         d=self.convert(fixture({'1':(-10,0),'2':(0,0),'3':(10,10)},[
@@ -50,6 +51,7 @@ class HydrologyTests(unittest.TestCase):
         f=d['waterFeatures'][0]
         self.assertEqual(f['width'],3)
         self.assertEqual(f['widthSource'],'configured fallback')
+        self.assertTrue(all(item['waterSurface']=='follow' and 'waterAnchor' not in item for item in d['scenery']))
         self.assertIn('waterFeatures',lua(d))
         self.assertTrue(any('approximation' in w for w in d['warnings']))
 
@@ -214,7 +216,8 @@ class HydrologyTests(unittest.TestCase):
         self.assertEqual(m['ways']['12']['tags']['natural'],'island')
         self.assertEqual(len(f['rings']),2)
         self.assertEqual(f['outerRingCount'],1)
-        self.assertFalse(d['scenery'])
+        self.assertTrue(d['scenery'])
+        self.assertFalse(any(inside((0,0),i['face']) for i in d['scenery']))
 
     def test_broken_relation_retains_missing_members_and_never_imports_outer_alone(self):
         relation='<relation id="20"><member type="way" ref="11" role="outer"/><member type="way" ref="missing" role="inner"/><tag k="type" v="multipolygon"/><tag k="water" v="pond"/></relation>'

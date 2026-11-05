@@ -3,6 +3,7 @@ local script = {}
 
 function script.updateFn(_captureParams, params)
   local sub = { tag = 1, models = {}, groundFaces = {}, terrainAlignmentLists = {{type="EQUAL",faces={}}} }
+  local origin=params.origin or {0,0}
   for _, item in ipairs(params.items or {}) do
     if item.model then
       local c, s = math.cos(item.rotation or 0), math.sin(item.rotation or 0)
@@ -13,19 +14,36 @@ function script.updateFn(_captureParams, params)
     elseif item.texture then
       local groundFace,reason=controls.groundFace(item.face)
       assert(groundFace,reason)
-      if item.depth~=nil then
-        assert(item.depth==0.5 and item.texture=="druttzen_osm_vanilla::/osm/dirty_water.gtex","Invalid shallow-water construction")
-        assert(#item.face==3,"Shallow-water bed must be a triangle")
+      local fill={type="FILL",key=item.texture}
+      if item.depth~=nil or item.waterSurface~=nil then
+        assert(item.texture=="druttzen_osm_vanilla::/osm/dirty_water.gtex","Invalid mapped-water construction")
+        local protected=item.waterSurface=="flat" or item.waterSurface=="follow"
+        assert(protected or (item.waterSurface==nil and item.depth==0.5),"Invalid mapped-water alignment")
+        assert(#item.face==3,"Mapped water must be a triangle")
         local face={}
         for _,p in ipairs(item.face) do
           assert(type(p[3])=="number" and p[3]==p[3] and math.abs(p[3])<math.huge,"Invalid saved bed height")
-          face[#face+1]={p[1],p[2],p[3],1}
+          face[#face+1]={p[1]-origin[1],p[2]-origin[2],p[3],1}
         end
-        sub.terrainAlignmentLists[#sub.terrainAlignmentLists+1]={type="LESS",faces={face},slopeLow=0.5,slopeHigh=0.5}
+        -- TF3 needs one UV per point to render a construction ground fill.
+        -- All UVs use the same material in the one-pixel Water Dirty mask.
+        fill.texCoords={{0,0},{1,0},{0,1}}
+        groundFace=face
+        if protected then
+          if item.waterSurface=="flat" then
+            assert(face[1][3]==face[2][3] and face[2][3]==face[3][3],"Lake alignment must be flat")
+          end
+          local alignment=sub.terrainAlignmentLists[1]
+          alignment.slopeLow=0.5
+          alignment.slopeHigh=0.5
+          alignment.faces[#alignment.faces+1]=face
+        else
+          sub.terrainAlignmentLists[#sub.terrainAlignmentLists+1]={type="LESS",faces={face},slopeLow=0.5,slopeHigh=0.5}
+        end
       end
       sub.groundFaces[#sub.groundFaces+1] = {
         face = groundFace,
-        modes = {{type="FILL",key=item.texture}},
+        modes = {fill},
         loop = true,
       }
     end

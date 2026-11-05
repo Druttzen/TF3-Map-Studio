@@ -5,7 +5,7 @@ controls.categories={
   {key="railways",label="Railways"},
   {key="vegetation",label="Trees and shrubs"},
   {key="surfaces",label="Ground surfaces"},
-  {key="waterways",label="Mapped small waters: 0.5 m bed + Water Dirty"},
+  {key="waterways",label="Mapped lakes and waterways: Water Dirty"},
   {key="objects",label="Fountains, bollards and advertising columns"},
   {key="mappedObjects",label="Other mapped objects: match loaded game models"},
   {key="buildings",label="Building footprints: decorative model substitutes"},
@@ -334,7 +334,7 @@ function controls.waterSupport(terrain)
   local level=terrain and terrain.waterLevel
   local prefix=controls.finiteHeight(level) and string.format("Current global water level: %.2f m. ",level) or "Global water level could not be read. "
   return prefix.."The installed TF3 API exposes one navigable water level. No supported command for separate navigable lake/river levels was found. "..
-    "Mapped small waters use Landscaping Water Dirty on a 0.5 m shallow bed. Water Dirty is ground paint, not navigable water. Elevated model surfaces are a separate experiment. Lakes retain their metadata without changing the global sea level. No water or terrain was changed."
+    "Mapped lakes and waterways use Landscaping Water Dirty. Current datasets align lakes to one height and waterways to the sampled terrain. Older datasets can still use a 0.5 m shallow bed. Water Dirty is ground paint, not navigable water. No water or terrain was changed."
 end
 
 function controls.skippable(value)

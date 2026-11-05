@@ -188,8 +188,21 @@ local function advanceCheck(value,job,budget)
       if item.model then checkPosition(item.pos) end
       if item.texture then
         if item.category=="waterways" then
-          assert(item.depth==0.5 and item.texture=="druttzen_osm_vanilla::/osm/dirty_water.gtex","Invalid shallow-water treatment")
-          assert(#item.face==3,"Shallow water requires a prepared triangle")
+          assert(item.texture=="druttzen_osm_vanilla::/osm/dirty_water.gtex","Invalid mapped-water material")
+          if item.waterSurface~=nil then
+            assert(item.depth==nil and (item.waterSurface=="flat" or item.waterSurface=="follow"),"Invalid mapped-water surface")
+            assert(type(item.osmWater)=="string" and item.osmWater:match("^%a+:%d+$"),"Invalid OSM water ID")
+            if item.waterSurface=="flat" then
+              checkPosition(item.waterAnchor)
+              job.waterAnchors=job.waterAnchors or {}
+              local prior=job.waterAnchors[item.osmWater]
+              assert(not prior or (prior[1]==item.waterAnchor[1] and prior[2]==item.waterAnchor[2]),"A lake must use one height sample across all its faces")
+              job.waterAnchors[item.osmWater]=item.waterAnchor
+            end
+          else
+            assert(item.depth==0.5,"Invalid shallow-water treatment")
+          end
+          assert(#item.face==3,"Mapped water requires a prepared triangle")
         end
         resource(api.res.groundTextureRep,item.texture)
         assert(#item.face>=3,"Invalid ground polygon")
@@ -476,8 +489,27 @@ local function labelProposal(value)
   return proposal,value.cursor
 end
 
+local function mappedWaterHeight(value,source,pos,box)
+  value.shallowHeightReference=value.shallowHeightReference or {}
+  local sample=pos
+  local key=string.format("%.6f,%.6f",pos[1],pos[2])
+  if source.waterSurface=="flat" then
+    key=source.osmWater
+    sample=controls.position(source.waterAnchor,box)
+  end
+  local height=value.shallowHeightReference[key]
+  if height==nil then
+    height=api.engine.terrain.getBaseHeightAt(api.type.Vec2f.new(sample[1],sample[2]))
+    value.shallowHeightReference[key]=height
+  end
+  local limits=api.engine.mapgen.getMinMaxValidTerrainHeight()
+  local offset=source.waterSurface and 0 or 0.5
+  assert(controls.finiteHeight(height) and height-offset>=limits[1] and height<=limits[2],"Invalid shallow-water terrain height")
+  return height-offset
+end
+
 local function sceneryProposal(value)
-  local items={}
+  local items,waterTiles,waterTileOrder={},{},{}
   local last=value.cursor-1
   local included=0
   local scanned=0
@@ -499,7 +531,8 @@ local function sceneryProposal(value)
       items[#items+1]={sourceIndex=i,model=source.model,rotation=source.rotation,
         pos={pos[1],pos[2],terrainZ(pos)}}
     elseif source and controls.selectedScenery(source,value.options) and source.texture then
-      local prepared,reason=controls.groundFace(source.face,api.engine.terrain.getBoundingBox())
+      local box=api.engine.terrain.getBoundingBox()
+      local prepared,reason=controls.groundFace(source.face,box)
       if not prepared then
         value.sceneryOmissions=value.sceneryOmissions or {}
         if not value.sceneryOmissions[i] then
@@ -509,36 +542,55 @@ local function sceneryProposal(value)
         end
         included=included-1
       else
-      local face={}
-      local shallow=source.category=="waterways"
-      if shallow then water.checkEmpty(prepared,20) end
-      for _,sourcePos in ipairs(prepared) do
-        local p=controls.position(sourcePos,api.engine.terrain.getBoundingBox())
-        local z=terrainZ(p)
-        if shallow then
-          value.shallowHeightReference=value.shallowHeightReference or {}
-          local key=string.format("%.6f,%.6f",p[1],p[2])
-          local height=value.shallowHeightReference[key]
-          if height==nil then height=api.engine.terrain.getBaseHeightAt(api.type.Vec2f.new(p[1],p[2])); value.shallowHeightReference[key]=height end
-          local limits=api.engine.mapgen.getMinMaxValidTerrainHeight()
-          assert(controls.finiteHeight(height) and height-0.5>=limits[1] and height<=limits[2],"Invalid shallow-water terrain height")
-          z=height-0.5
+        local face={}
+        local mappedWater=source.category=="waterways"
+        if mappedWater then water.checkEmpty(prepared,20) end
+        for _,sourcePos in ipairs(prepared) do
+          local p=controls.position(sourcePos,box)
+          local z=mappedWater and mappedWaterHeight(value,source,p,box) or terrainZ(p)
+          face[#face+1]={p[1],p[2],z}
         end
-        face[#face+1]={p[1],p[2],z}
-      end
-      items[#items+1]={sourceIndex=i,texture=source.texture,face=face,depth=shallow and 0.5 or nil}
+        local item={sourceIndex=i,texture=source.texture,face=face,
+          depth=mappedWater and source.depth or nil,waterSurface=mappedWater and source.waterSurface or nil,
+          osmWater=mappedWater and source.waterSurface and source.osmWater or nil}
+        if mappedWater then
+          -- TF3 draws construction ground fills near the construction origin.
+          local x,y=face[1][1],face[1][2]
+          local key=math.floor(x/64)..","..math.floor(y/64)
+          local tile=waterTiles[key]
+          if not tile then
+            tile={items={},origin={x,y},seed=0}
+            waterTiles[key]=tile
+            waterTileOrder[#waterTileOrder+1]=tile
+          end
+          tile.items[#tile.items+1]=item
+        else
+          items[#items+1]=item
+        end
       end
     end
   end
   if included==0 then return nil,last,0 end
   local proposal=api.type.SimpleProposal.new()
-  local construction=api.type.SimpleProposal.ConstructionEntity.new()
-  construction.fileName=sceneryName
-  construction.params={items=items,seed=0}
-  construction.transf=api.type.Mat4f.new()
-  construction.name="OSM scenery "..dataset.id.." "..tostring(value.cursor)
-  construction.playerEntity=api.engine.util.getPlayer()
-  proposal.constructionsToAdd={construction}
+  local constructions={}
+  local function add(params)
+    local construction=api.type.SimpleProposal.ConstructionEntity.new()
+    construction.fileName=sceneryName
+    construction.params=params
+    if params.origin then
+      local V=api.type.Vec4f.new
+      construction.transf=api.type.Mat4f.new(
+        V(1,0,0,0),V(0,1,0,0),V(0,0,1,0),V(params.origin[1],params.origin[2],0,1))
+    else
+      construction.transf=api.type.Mat4f.new()
+    end
+    construction.name="OSM scenery "..dataset.id.." "..tostring(value.cursor)
+    construction.playerEntity=api.engine.util.getPlayer()
+    constructions[#constructions+1]=construction
+  end
+  if #items>0 then add({items=items,seed=0}) end
+  for _,tile in ipairs(waterTileOrder) do add(tile) end
+  proposal.constructionsToAdd=constructions
   return proposal,last,included
 end
 
@@ -924,8 +976,8 @@ function script.postUpdate(_userParams, state, _dt, _result)
     elseif phase=="labels" then proposal,last=labelProposal(value)
     else proposal,last,included=sceneryProposal(value) end
     if not proposal then value.cursor=last+1; value.failedFirst=nil; value.failedLast=nil; state:set(value); return end
-    -- Preserve the exact world XYZ supplied to our identity-transformed native
-    -- construction. Publish this evidence only after acceptance, before any
+    -- Preserve the exact world XYZ supplied for models. Water constructions
+    -- only contain faces. Publish model evidence only after acceptance, before any
     -- separate ownership/name commands can fail. Older journals stay unchanged.
     local modelPositions=proposedModelPositions(value,phase,last,proposal)
     value.failedLast=last

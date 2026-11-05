@@ -2,6 +2,11 @@
 
 Scope: `druttzen_osm_vanilla`, tool 4, inside Transport Fever 3. Heightmap Studio is unchanged. Inspected on 3 October 2026 against installed TF3 Windows build 40408, Steam build 25533170.
 
+The sections below record the earlier experiments. The current mapped-water
+implementation is described in the [November Partille system test](../SYSTEM-TEST-2026-11-05.md#partille-water-dirty-and-terrain-brush-test),
+which validates visible Water Dirty paint and fixed lake and stream surfaces
+in TF3 build 40425.
+
 ## What the installed game actually exposes
 
 The installed `api/tealdef/api/engine.d.tl` defines a single `Engine.Component.Terrain.waterLevel` (line 1233). Its `UtilTerrain.isOnWater` documentation describes positions below the water level (line 1742). `api/tealdef/api/type.d.tl` defines one `GameMap.waterLevel` (line 305). The map editor reads and writes that global value. This establishes the documented global water model; it does **not** establish that independent navigable lake levels can be created.

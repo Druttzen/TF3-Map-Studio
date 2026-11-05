@@ -185,7 +185,7 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
   rows[#rows+1]=text("New imports use base terrain heights for roads/rails, excluding construction terrain alignments. Explicit sourced heights in game coordinates take priority. Terrain alignment occurs through the road/rail build proposal.")
   rows[#rows+1]=text("Mapped water","font-scale-headline")
   rows[#rows+1]=text(string.format("Prepared water features: %d. Lakes retained without flooding: %d.",snapshot.mappedWaterCount,snapshot.mappedLakeCount))
-  rows[#rows+1]=text("Small mapped waters use the original OSM outlines and Water Dirty. Start import lowers their bed by 0.5 m. Missing stream widths use the configured approximation. Reconvert older OSM datasets with Preview 0.12 to include water metadata. Local sea level is not supported; lakes remain pending. Use a separate test map: this shallow-water version needs native validation.")
+  rows[#rows+1]=text("Mapped lakes and waterways use the game's Water Dirty material. Lakes share one level per water body. Waterways follow the sampled terrain. Missing stream widths use the converter's fallback. Reconvert the OSM source to get these surfaces for a new import.")
   rows[#rows+1]=text("Experimental elevated water surface","font-scale-headline")
   rows[#rows+1]=text("Use a separate test save. Each rectangular patch is decorative water. Equal start/end heights make a flat lake surface; different heights test a sloping stream surface. Coordinates and heights are game metres. Prepare another water patch retains completed objects and unlocks the next settings. Recorded patches cannot overlap. Ship navigation is not established.")
   local editable=controls.enabled("waterBuild",ruleState) and not snapshot.waterBuilt
@@ -203,7 +203,7 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
       onValueChange=function(v) send("waterConfigure",{[key]=v}) end,
     }
   end
-  rows[#rows+1]=text("Mapped ponds and small waterways use a 0.5 m shallow bed and Landscaping Water Dirty through Start import. Existing and planned network corridors are protected. Elevated model water is a separate surface-only test; experimental basin shaping is disabled after native terrain spikes. Lakes retain their OSM metadata; a local sea level is not supported by the installed API.")
+  rows[#rows+1]=text("The mapped-water constructions hold the visible terrain at the prepared surface heights. Existing and planned transport corridors have priority. These are painted surfaces. Elevated model water is a separate experiment.")
   if #snapshot.warnings>0 then
     rows[#rows+1]=text("Conversion notes","font-scale-headline")
     for i,warning in ipairs(snapshot.warnings) do

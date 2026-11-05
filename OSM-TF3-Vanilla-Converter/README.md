@@ -14,7 +14,12 @@ The importer keeps a one-centimetre inward margin at TF3's excluded positive map
 
 No game assets are included. Read [README.txt](README.txt) for installation, settings, limitations, attribution and the Heightmap Studio handoff. [validation.json](validation.json) records the current checks and preserves earlier desktop validation with its original version.
 
-The bundled revision 8 mod also includes road/rail height priority at construction time and an experimental local-water patch. These features run inside TF3; Heightmap Studio is unchanged. Preview 0.14 prepares mapped ponds and small waterways, preserving multipolygon islands, and the mod has an experimental 0.5 m bed plus Landscaping Water Dirty treatment. Missing widths use a configurable approximation. Lake geometry and raw heights are retained, but independent sea levels and lake flooding are unsupported. The shallow-water path has automated tests and awaits native validation; prior elevated model-water tests do not validate excavation. See [the water investigation](../TF3-OSM-Importer-Mod/WATER-RESEARCH.md).
+The bundled mod applies the game's Landscaping **Water Dirty** material to
+mapped lakes, ponds and waterways. Each lake uses one sampled game height.
+Waterways follow the sampled terrain. Multipolygon islands remain unpainted,
+and widths missing from OSM use the converter's configured fallback. Enable
+**Mapped lakes and waterways** in the in-game importer for a new import.
+See [the water investigation](../TF3-OSM-Importer-Mod/WATER-RESEARCH.md).
 
 Water source metadata is exported **even when small mapped waters are deselected**, incomplete or unsupported. Both the Lua dataset and its JSON report retain original OSM tags (including names, water types, width, depth, elevation and any supplied datum/source), geographic coordinates, ordered node references, relation members and their roles, including island boundaries and nested relations. Missing heights stay missing; source elevations are not converted into game heights. Untyped water areas are not assumed to be lakes, and dam/weir or point records are metadata only. Broken multipolygons do not import an outer boundary on its own.
 
