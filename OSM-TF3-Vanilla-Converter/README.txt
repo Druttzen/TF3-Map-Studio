@@ -256,17 +256,16 @@ VANILLA MAPPINGS AND LIMITS
   Existing map nodes are not automatically snapped to imported geometry.
 
 SOURCE AND DEVELOPMENT
-Source is in tools/, tests/ and mod/. Use Python 3.10+ with Tk. The OSM map
-picker, download and overview features require Pillow; install the runtime
-dependency before running the desktop app. The command-line conversion core
-uses only Python's standard library.
+Source is in tools/, tests/ and mod/. Follow PRIVATE-RUNTIMES.md in the
+repository to provision this tool's private Python 3.14 with Tk and install
+its dependencies. The OSM map picker, download and overview features use Pillow.
+The command-line conversion core uses only Python's standard library.
 
-python -m pip install -r requirements.txt
-python tools/gui.py
+.\.runtime\python.exe -I ..\scripts\private_runtime.py run --tool . -- tools/gui.py
 
 Or use the command-line converter:
 
-python tools/converter.py examples/sample.osm --output map.lua --size 1000 1000
+.\.runtime\python.exe -I ..\scripts\private_runtime.py run --tool . -- tools/converter.py examples/sample.osm --output map.lua --size 1000 1000
 
 Or use --mod <installed-folder> or --new-mod <new-tf3_osm_importer_mod-folder>.
 --settings <profile.json> applies saved desktop options; --bounds overrides XML.
