@@ -63,6 +63,11 @@ Saved/manual paths remain available; **Find TF3 folders** restores automatic
 selection. Multiple unidentified profiles require selecting the user folder.
 The registry is read without changes. See [automatic game export](GAME-FOLDERS.md).
 
+Export appends the PNG's import heights to the map name, for example
+`Partille__min-21m__max169m.png`. Enter those values in **Minimum Height**
+and **Maximum Height** in TF3. Biome PNGs and the import instructions use
+the same base name.
+
 In **Biomes**, enable biome export and **Also export Mountains and supported
 Rivers masks** to add the game's independent layer PNGs. Mountains marks high
 or steep land above the configured water level. With a current conversion

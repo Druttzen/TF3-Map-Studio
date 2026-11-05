@@ -189,6 +189,17 @@ def test_manual_range_and_explicit_clip(source,tmp_path):
  result['options']['clip_heights']=True;report=export(result,tmp_path/'map.png');assert report['clippedPngSamples']>0
  with rasterio.open(report['files']['dem']) as ds:assert ds.read(1).min()==100
 
+def test_export_uses_exact_import_range_and_replaces_previous_filename_range(source,tmp_path):
+ result=run(source,{'range_mode':'Manual range','range_min':-21.125,'range_max':169.123456789})
+ report=export(result,tmp_path/'Partille__min-20m__max170m.png')
+ png=Path(report['files']['png'])
+ assert png.name=='Partille__min-21.125m__max169.123456789m.png'
+ assert load_project(report['files']['project'])['output']==str(png)
+ instructions=Path(report['files']['instructions']).read_text(encoding='utf-8')
+ assert 'Minimum height: -21.125 metres' in instructions
+ assert 'Maximum height: 169.123456789 metres' in instructions
+ assert export(result,png)['files']==report['files']
+
 def test_project_relative_paths_and_report_changes(source,tmp_path):
  result=run(source);p=project_dict(result,'out.png');p['converterReport']=source['report'].name;p['osmFile']=source['xml'].name;p['elevationFiles']=[source['dem'].name]
  path=tmp_path/'profile.json';path.write_text(json.dumps(p));loaded=load_project(path);assert Path(loaded['osmFile'])==source['xml'];assert Path(loaded['output'])==tmp_path/'out.png'
@@ -218,9 +229,9 @@ def test_commit_failure_rolls_back(source,tmp_path):
  assert all(Path(p).read_bytes()==b for p,b in before.items());assert not list(tmp_path.glob('.tf3-heightmap-export-*'))
 
 def test_export_protects_source(source):
- result=run(source)
+ result=run(source,{'range_mode':'Manual range','range_min':0,'range_max':200})
  # A .dem.tif sidecar may never replace the input DEM.
- target=source['dem'].parent/'elevation.png';protected=target.with_name('elevation.dem.tif');protected.write_bytes(source['dem'].read_bytes());result['sourceFiles'].append(str(protected))
+ target=source['dem'].parent/'elevation.png';protected=target.with_name('elevation__min0m__max200m.dem.tif');protected.write_bytes(source['dem'].read_bytes());result['sourceFiles'].append(str(protected))
  with pytest.raises(ValueError,match='source'):export(result,target)
 def test_bridge_corridor_is_excluded(source):
  xml=source['xml'].read_text().replace('<tag k="highway" v="residential"/>','<tag k="highway" v="residential"/><tag k="bridge" v="yes"/>');source['xml'].write_text(xml)

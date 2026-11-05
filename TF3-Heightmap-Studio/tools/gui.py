@@ -12,7 +12,7 @@ from lua_map import find_map
 from height_settings import DEFAULTS, CHOICES, RANGES, INTEGERS, normalize
 from terrain import prepare, export, preview_image, apply_stroke, load_project, project_osm_checksum
 from job import Cancelled
-from game_paths import detect, suggested_output, select_user_folder
+from game_paths import detect, height_metres, suggested_output, select_user_folder
 import biomes
 from osm_converter import atomic_write
 APP_VERSION='0.13-preview'
@@ -143,7 +143,7 @@ class App(tk.Tk):
   self.path(f,2,'Converted map Lua (.lua / content/osm/dataset.lua)',self.lua_path,self.choose_lua)
   self.path(f,4,'Original OSM XML file (.osm)',self.osm_path,self.choose_osm)
   ttk.Label(f,textvariable=self.map_info,wraplength=480,font=('Segoe UI',10,'bold')).grid(row=6,column=0,columnspan=3,sticky='w',pady=12)
-  self.path(f,7,'Exported 16-bit heightmap PNG',self.output_path,self.choose_output)
+  self.path(f,7,'Exported 16-bit heightmap PNG (import heights added to name)',self.output_path,self.choose_output)
   self.note(f,9,'Load the converted Lua and its JSON log together. Roads and tracks follow exported nodes and segments; water comes from original OSM. Dataset, coordinates, size, settings and counts must match. Converter 0.5 reports also verify both source checksums.')
   self.field(f,10,'grid');self.field(f,11,'pixels_x');self.field(f,12,'pixels_y')
   self.note(f,13,'Match TF3 samples at 4-metre game spacing. Fine/custom grids retain the same bounds; they do not create finer source measurements or change the game terrain grid.')
@@ -627,7 +627,8 @@ class App(tk.Tk):
   if not self.output_path.get():return
   result=self.result;output=self.output_path.get()
   game_paths=self.game_paths
-  self.start_worker(lambda progress:export(result,output,progress=progress,cancel=self.cancel_event,game_paths=game_paths),'export')
+  auto_name=bool(game_paths.local and output==self.auto_output)
+  self.start_worker(lambda progress:export(result,output,progress=progress,cancel=self.cancel_event,game_paths=game_paths,auto_name=auto_name),'export')
 
  def cancel(self):
   self.cancel_event.set();self.cancel_button.configure(state='disabled');self.status.set('Cancelling… existing exports are kept')
@@ -661,8 +662,10 @@ class App(tk.Tk):
     if value['options']['biomes']:
      summary=biomes.summary(value);self.show(self.text.get('1.0','end').rstrip()+f"\n\nVanilla climate: {summary['climate']}\nBiome regions:\n"+'\n'.join(f"{p['label']}: {p['percent']:.2f}%" for p in summary['palette']))
    elif kind=='export':
+    if self.output_path.get()==self.auto_output:self.auto_output=value['files']['png']
+    self.output_path.set(value['files']['png'])
     self.progress['value']=100;self.percent.set('100%');self.status.set('Exported into TF3 folders · ready for game import' if value.get('gameExport',{}).get('nativeFolders') else 'Heightmap exported · use the supplied TF3 import settings');self.open_button.configure(state='normal')
-    self.show(f"Export complete\n\nPNG: {value['files']['png']}\n"+(f"Biomes: {value['files']['biomes']}\n" if 'biomes' in value['files'] else '')+f"\nProject, GeoTIFF, report, preview and instructions:\n{value['gameExport']['detailsFolder']}\n\nTF3 import values:\nMinimum: {value['importMinimumMetres']:g} m\nMaximum: {value['importMaximumMetres']:g} m\nWater: {value['waterLevelMetres']:g} m\n\n16-bit encoding step: {value['pngEncodingStepMetres']:.6f} m\nThis numeric step does not establish source measurement accuracy.\n\n"+'\n\n'.join(value['warnings']))
+    self.show(f"Export complete\n\nPNG: {value['files']['png']}\n"+(f"Biomes: {value['files']['biomes']}\n" if 'biomes' in value['files'] else '')+f"\nProject, GeoTIFF, report, preview and instructions:\n{value['gameExport']['detailsFolder']}\n\nTF3 import values:\nMinimum: {height_metres(value['importMinimumMetres'])} m\nMaximum: {height_metres(value['importMaximumMetres'])} m\nWater: {value['waterLevelMetres']:g} m\n\n16-bit encoding step: {value['pngEncodingStepMetres']:.6f} m\nThis numeric step does not establish source measurement accuracy.\n\n"+'\n\n'.join(value['warnings']))
     self.view.select(1)
     if value.get('biomes'):self.show(self.text.get('1.0','end').rstrip()+f"\n\nBiome PNG: {value['files']['biomes']}\nChoose {value['biomes']['climate']} in TF3 and follow the Biomes section in the import instructions.")
    elif kind=='lidar_search':

@@ -50,8 +50,9 @@ def test_optional_native_masks_route_by_climate(source,tmp_path,climate,expected
  report=export(result,local/'heightmaps'/'map.png',game_paths=GamePaths(local=local))
  assert set(report['biomes']['layers'])==expected
  instructions=Path(report['files']['instructions']).read_text()
+ stem=Path(report['files']['png']).stem
  for key in expected:
-  mask=local/'biomes'/f'map.{key}.png'
+  mask=local/'biomes'/f'{stem}.{key}.png'
   assert Path(report['files'][key])==mask
   with Image.open(mask) as image:
    assert image.mode=='L' and image.size==(65,65)
@@ -215,8 +216,8 @@ def test_biome_commit_failure_and_cancel_restore_all_outputs(source,tmp_path):
  assert not list(tmp_path.glob('.tf3-heightmap-export-*'))
 
 def test_biome_output_may_not_overwrite_imported_input(source,tmp_path):
- png=tmp_path/'map.biomes.png';Image.new('L',(65,65),63).save(png)
- r=run(source,biome_mode='Import biome PNG',biome_source=str(png))
+ png=tmp_path/'map__min0m__max200m.biomes.png';Image.new('L',(65,65),63).save(png)
+ r=run(source,biome_mode='Import biome PNG',biome_source=str(png),range_mode='Manual range',range_min=0,range_max=200)
  with pytest.raises(ValueError,match='source'):export(r,tmp_path/'map.png')
 
 def test_cancellation_during_biome_generation(source):

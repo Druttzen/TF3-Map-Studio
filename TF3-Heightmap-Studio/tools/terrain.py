@@ -13,7 +13,7 @@ from elevation import download_tiles, sample_sources, resolution_metres, PUBLIC_
 from height_settings import normalize, dimensions, validate_stroke
 from terrain_quality import summarize as summarize_quality
 from providers import acquire
-from game_paths import export_destination
+from game_paths import export_destination, height_metres, heightmap_output_path, suggested_output
 from job import Job, Cancelled
 import biomes
 
@@ -356,11 +356,15 @@ def read_project_report(data):
  return report
 
 
-def export(result,output,progress=None,cancel=None,game_paths=None):
+def export(result,output,progress=None,cancel=None,game_paths=None,auto_name=False):
  output=Path(output).resolve();job=Job(progress,cancel)
  if output.suffix.lower()!='.png':raise ValueError('Heightmap output must end in .png.')
  context=result['context'];options=result['options'];terrain=result['terrain'];ny,nx=terrain.shape
- lo,hi,clipped=encoding_range(terrain,options);base=output.with_suffix('')
+ lo,hi,clipped=encoding_range(terrain,options)
+ if auto_name:
+  output=Path(suggested_output(game_paths,context['osmPath'],height_range=(lo,hi))).resolve()
+ else:
+  output=heightmap_output_path(output,lo,hi)
  targets={'png':output}
  destination=export_destination(output,game_paths)
  layer_keys=biomes.layer_keys(options)
@@ -425,7 +429,7 @@ def export(result,output,progress=None,cancel=None,game_paths=None):
           'warnings':result['warnings'],'nativeTF3ImportVerified':False}
   for key,value in [('report',report),('project',project_dict(result,str(output)))]:
    (staging/targets[key].name).write_text(json.dumps(value,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
-  instructions=f'''TF3 HEIGHTMAP IMPORT\n\nPNG: {output.name}\nPixels: {nx} x {ny} (16-bit grayscale)\nGame map: {context['size'][0]:g} x {context['size'][1]:g} metres\nMinimum height: {lo:g} metres\nMaximum height: {hi:g} metres\nWater level: {options['water_level']:g} metres\n\n1. Copy the PNG into TF3 userdata/<Steam user>/3493540/local/heightmaps.\n2. In the map editor, use the same map dimensions as the OSM converter.\n3. Import Heightmap: select this PNG and enter the exact minimum, maximum\n   and water level above. Leave each edited number field and wait for the\n   preview to finish updating before clicking Import. Verify north/south\n   orientation and terrain heights after import.\n4. Review terrain, then import the matching OSM Lua dataset on this map.\n\nThe float64 GeoTIFF preserves elevations before PNG range clipping.\nAn exported heightmap does not create a game save or automatically install.\nNative TF3 import still requires an in-game verification session.\n'''
+  instructions=f'''TF3 HEIGHTMAP IMPORT\n\nPNG: {output.name}\nPixels: {nx} x {ny} (16-bit grayscale)\nGame map: {context['size'][0]:g} x {context['size'][1]:g} metres\nMinimum height: {height_metres(lo)} metres\nMaximum height: {height_metres(hi)} metres\nWater level: {options['water_level']:g} metres\n\n1. Copy the PNG into TF3 userdata/<Steam user>/3493540/local/heightmaps.\n2. In the map editor, use the same map dimensions as the OSM converter.\n3. Import Heightmap: select this PNG and enter the exact minimum, maximum\n   and water level above. Leave each edited number field and wait for the\n   preview to finish updating before clicking Import. Verify north/south\n   orientation and terrain heights after import.\n4. Review terrain, then import the matching OSM Lua dataset on this map.\n\nThe float64 GeoTIFF preserves elevations before PNG range clipping.\nAn exported heightmap does not create a game save or automatically install.\nNative TF3 import still requires an in-game verification session.\n'''
   if clipped:instructions+=f'\nManual-range clipping affected {clipped:,} PNG pixels.\n'
   if destination['native']:
    instructions=instructions.replace('1. Copy the PNG into TF3 userdata/<Steam user>/3493540/local/heightmaps.',

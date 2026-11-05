@@ -105,7 +105,18 @@ def detect():
  return GamePaths(installation,local,tuple(profiles),source,profile_source)
 
 
-def suggested_output(paths,source='',fallback=''):
+def height_metres(value):
+ return str(int(value)) if value==int(value) else str(value)
+
+
+def heightmap_output_path(output,lo,hi):
+ output=Path(output)
+ number=r'-?\d+(?:\.\d+)?(?:e[+-]?\d+)?'
+ stem=re.sub(rf'__min{number}m__max{number}m$','',output.stem)
+ return output.with_name(f'{stem}__min{height_metres(lo)}m__max{height_metres(hi)}m{output.suffix}')
+
+
+def suggested_output(paths,source='',fallback='',height_range=None):
  """Derive the map name without overwriting an existing heightmap by default."""
  if source:
   name=Path(source).stem
@@ -116,11 +127,14 @@ def suggested_output(paths,source='',fallback=''):
  if re.match(r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)',name,re.I):name='map_'+name
  parent=paths.heightmaps if paths.local else Path(fallback).parent if fallback else None
  if parent is None:return ''
- output=parent/(name+'.png');index=2
+ def candidate(stem):
+  path=parent/(stem+'.png')
+  return heightmap_output_path(path,*height_range) if height_range is not None else path
+ output=candidate(name);index=2
  def occupied(path):
   biome_folder=paths.biomes if paths.local else path.parent
   return path.exists() or any((biome_folder/f'{path.stem}.{key}.png').exists() for key in ('biomes','mountains','rivers')) or bool(paths.local and (paths.local/'heightmap_studio'/path.stem).exists())
- while occupied(output):output=parent/(name+'-'+str(index)+'.png');index+=1
+ while occupied(output):output=candidate(name+'-'+str(index));index+=1
  return str(output)
 
 

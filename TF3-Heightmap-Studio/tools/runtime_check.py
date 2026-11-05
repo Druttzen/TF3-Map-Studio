@@ -73,8 +73,10 @@ def check(output):
    terrain=prepare(context,xml,files,{'biomes':True,'biome_layers':True});local=folder/'fictional-game-local'
    exported=export(terrain,local/'heightmaps/fictional.png',game_paths=GamePaths(local=local))
    assert len(list((local/'heightmaps').iterdir()))==1
-   assert {path.name for path in (local/'biomes').iterdir()}=={'fictional.biomes.png','fictional.mountains.png','fictional.rivers.png'}
-   assert Path(exported['files']['project']).parent==local/'heightmap_studio/fictional'
+   stem=Path(exported['files']['png']).stem
+   assert stem==f"fictional__min{int(exported['importMinimumMetres'])}m__max{int(exported['importMaximumMetres'])}m"
+   assert {path.name for path in (local/'biomes').iterdir()}=={f'{stem}.{key}.png' for key in ('biomes','mountains','rivers')}
+   assert Path(exported['files']['project']).parent==local/'heightmap_studio'/stem
    installed=detect()
    result={'ok':True,'frozenGui':'hidden Tk window and clam theme initialized' if getattr(sys,'frozen',False) else 'source-mode check','certificateBundle':'packaged CA roots loaded for HTTPS verification','laspy':laspy.__version__,'lazCompression':'round-trip passed','projection':'EPSG:3857 verified','groundFiltering':'building excluded','geotiff':'written and read','geotiffDetail':'priority, nodata fallback and OSM bounds passed',
            'nativeExportRouting':'heightmap, biomes and companions separated; fictional temporary folders only',

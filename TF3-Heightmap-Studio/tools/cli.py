@@ -7,7 +7,7 @@ def main():
  parser=argparse.ArgumentParser(description='TF3 Heightmap Studio')
  parser.add_argument('project',help='Saved .heightmap-project.json')
  destination=parser.add_mutually_exclusive_group()
- destination.add_argument('--output',help='Override output PNG path')
+ destination.add_argument('--output',help='Override the base output PNG path; the import heights are appended to the name')
  destination.add_argument('--to-tf3',action='store_true',help='Find installed TF3/Steam profile and export to its native heightmap/biome folders')
  parser.add_argument('--cache',help='Public elevation cache folder')
  args=parser.parse_args();p=load_project(args.project)
@@ -16,6 +16,6 @@ def main():
  output=suggested_output(game_paths,p['osmFile']) if args.to_tf3 else args.output or p['output']
  progress=lambda percent,stage,detail:print(f'{percent:5.1f}% {stage} {detail}',flush=True)
  result=prepare(p['converterReport'],p['osmFile'],p['elevationFiles'],p['options'],p['brushStrokes'],cache=args.cache,progress=progress,api_key=os.environ.get('TF3_OPENTOPO_KEY'),lua_path=p.get('convertedLua'),lua_sha=p.get('luaSha256'),biome_strokes=p.get('biomeStrokes'),osm_sha=p.get('osmSha256'))
- report=export(result,output,progress=progress,game_paths=game_paths)
+ report=export(result,output,progress=progress,game_paths=game_paths,auto_name=args.to_tf3)
  print(json.dumps({'png':report['files']['png'],'min':report['importMinimumMetres'],'max':report['importMaximumMetres']},indent=2))
 if __name__=='__main__':main()

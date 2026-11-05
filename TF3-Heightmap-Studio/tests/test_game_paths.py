@@ -129,9 +129,10 @@ def test_native_export_routes_only_import_pngs_to_game_folders(source,tmp_path):
     result=prepare(source['report'],source['xml'],[source['dem']],{'biomes':True})
     output=local/'heightmaps/partille_test.png'
     report=export(result,output,game_paths=paths)
+    output=Path(report['files']['png'])
     assert list((local/'heightmaps').iterdir())==[output]
-    assert list((local/'biomes').iterdir())==[local/'biomes/partille_test.biomes.png']
-    details=local/'heightmap_studio/partille_test'
+    assert list((local/'biomes').iterdir())==[local/'biomes'/f'{output.stem}.biomes.png']
+    details=local/'heightmap_studio'/output.stem
     for key,path in report['files'].items():
         assert Path(path).is_file()
         if key not in {'png','biomes'}:assert Path(path).parent==details
@@ -181,17 +182,19 @@ def test_native_export_preserves_original_backups_when_recovery_fails(source,tmp
     local=profile(tmp_path/'Steam',12);paths=GamePaths(local=local)
     result=prepare(source['report'],source['xml'],[source['dem']],{'biomes':True})
     output=local/'heightmaps/test.png';report=export(result,output,game_paths=paths)
-    before=output.read_bytes()
+    actual=Path(report['files']['png'])
+    backup='backup-'+actual.name
+    before=actual.read_bytes()
     from terrain import os
     replace=os.replace
     def fail(src,dst):
-        if Path(dst).parent==local/'biomes' or Path(src).name=='backup-test.png':
+        if Path(dst).parent==local/'biomes' or Path(src).name==backup:
             raise OSError('Simulated write/recovery failure')
         return replace(src,dst)
     with patch('terrain.os.replace',side_effect=fail),pytest.raises(OSError,match='backup files are retained'):
         export(result,output,game_paths=paths)
     staging=list((local/'heightmaps').glob('.tf3-heightmap-export-*'))
-    assert len(staging)==1 and (staging[0]/'backup-test.png').read_bytes()==before
+    assert len(staging)==1 and (staging[0]/backup).read_bytes()==before
 
 
 def test_native_export_cannot_replace_its_input_dem(source,tmp_path):
@@ -230,6 +233,10 @@ def test_cli_exports_to_detected_game_profile(source,tmp_path):
     import cli
     with patch('cli.detect',return_value=GamePaths(local=local)),patch.object(sys,'argv',['cli.py',project,'--to-tf3']):
         cli.main()
-    assert (local/'heightmaps/demo.png').is_file()
-    assert (local/'biomes/demo.biomes.png').is_file()
-    assert (local/'heightmap_studio/demo/demo.heightmap-project.json').is_file()
+        first=next((local/'heightmaps').glob('demo__min*m__max*m.png'))
+        before=first.read_bytes()
+        cli.main()
+    assert first.read_bytes()==before
+    assert (local/'heightmaps'/first.name.replace('demo__','demo-2__',1)).is_file()
+    assert (local/'biomes'/f'{first.stem}.biomes.png').is_file()
+    assert (local/'heightmap_studio'/first.stem/f'{first.stem}.heightmap-project.json').is_file()
