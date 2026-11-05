@@ -29,26 +29,8 @@ jobs:
           python-version: '3.14'
       - run: python -m pip install -r requirements-dev.txt pytest
       - run: python -m pytest -q
-  converter:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        python: ['3.10', '3.12', '3.14']
-    defaults:
-      run:
-        working-directory: TRF3-Mod-Converter
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python }}
-      - run: python -m pip install -e '.[dev]'
-      - run: python -m pytest -q
-      - run: python -m build
   windows-apps:
-    needs: [tools, converter, release-checks]
+    needs: [tools, release-checks]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
@@ -58,7 +40,7 @@ jobs:
       - name: Provision a complete private interpreter and packages for each app
         shell: pwsh
         run: |
-          foreach ($tool in @('TF3-Heightmap-Studio','OSM-TF3-Vanilla-Converter','TF3-OSM-Importer-Mod','TRF3-Mod-Converter')) {
+          foreach ($tool in @('TF3-Heightmap-Studio','OSM-TF3-Vanilla-Converter','TF3-OSM-Importer-Mod')) {
             python -I scripts/private_runtime.py provision --tool $tool --source $env:pythonLocation
             if ($LASTEXITCODE -ne 0) { throw "Private runtime provisioning failed: $tool" }
             & "$tool/.runtime/python.exe" -I scripts/private_runtime.py install --tool $tool
@@ -68,18 +50,13 @@ jobs:
         run: ./TF3-Heightmap-Studio/.runtime/python.exe -I scripts/test_map_pipeline.py --output work/ci-map-pipeline
       - run: ./TF3-Heightmap-Studio/build.ps1
       - run: ./OSM-TF3-Vanilla-Converter/build.ps1
-      - run: ./.runtime/python.exe -I ../scripts/private_runtime.py run --tool . -- scripts/build_windows.py
-        working-directory: TRF3-Mod-Converter
       - uses: actions/upload-artifact@v7
         with:
           name: TF3-Map-Studio-Windows
           path: |
             TF3-Heightmap-Studio/dist/*.exe
             OSM-TF3-Vanilla-Converter/dist/*.exe
-            TRF3-Mod-Converter/dist/*.zip
             TF3-Heightmap-Studio/dist/*-manifest.json
             OSM-TF3-Vanilla-Converter/dist/*-manifest.json
-            TRF3-Mod-Converter/dist/*-manifest.json
             TF3-Heightmap-Studio/dist/runtime-check.json
             OSM-TF3-Vanilla-Converter/dist/runtime-check.json
-            TRF3-Mod-Converter/dist/runtime-check.json

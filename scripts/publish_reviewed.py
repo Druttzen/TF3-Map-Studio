@@ -17,8 +17,7 @@ import zipfile
 
 
 ARTIFACT = 'TF3-Map-Studio-Windows'
-TOOLS = ('TF3-Heightmap-Studio', 'OSM-TF3-Vanilla-Converter',
-         'TRF3-Mod-Converter', 'TF3-OSM-Importer-Mod')
+DESKTOP_TOOLS = ('TF3-Heightmap-Studio', 'OSM-TF3-Vanilla-Converter')
 RELEASE_TAG_PATTERN = r'map-studio-review-[0-9]{4}-[0-9]{2}-[0-9]{2}(?:-fix[1-9][0-9]*)?'
 
 
@@ -62,20 +61,12 @@ def verify_executable(executable, source, tool):
     checked = []
     osm_self_check = (tool == 'OSM-TF3-Vanilla-Converter'
                       and (source/'tools/runtime_check.py').is_file())
-    if tool == 'TRF3-Mod-Converter':
-        files = [(('trf3_mod_converter' + ('' if p.stem == '__init__' else '.' + p.stem)), p)
-                 for p in (source/'src/trf3_mod_converter').glob('*.py')]
-        launcher = source/'desktop_launcher.py'
-        entry = 'desktop_launcher'
-        # CLI entry points are intentionally absent from the desktop executable.
-        files = [(name, path) for name, path in files if path.stem not in {'cli', '__main__'}]
-    else:
-        files = [(p.stem, p) for p in (source/'tools').glob('*.py')]
-        if tool == 'TF3-Heightmap-Studio':
-            files += [(p.stem, p) for p in (source/'vendor').glob('*.py')]
-        launcher = source/'tools/gui.py'
-        entry = 'gui'
-        files = [(name, path) for name, path in files if name not in {'cli', 'build_check'}]
+    files = [(p.stem, p) for p in (source/'tools').glob('*.py')]
+    if tool == 'TF3-Heightmap-Studio':
+        files += [(p.stem, p) for p in (source/'vendor').glob('*.py')]
+    launcher = source/'tools/gui.py'
+    entry = 'gui'
+    files = [(name, path) for name, path in files if name not in {'cli', 'build_check'}]
     for name, path in files:
         if name in pyz.toc:
             code = pyz.extract(name)
@@ -194,21 +185,16 @@ def main():
                         f'--output={source_zip}', sha], check=True)
         extract_zip(source_zip, work/'source')
         source = work/'source/TF3-Map-Studio'
+        assert not (source/'TRF3-Mod-Converter').exists(), 'Select a CI run from after the Mod Converter separation'
         incoming = work/'artifact'
         subprocess.run(['gh', 'run', 'download', run_id, '--repo', repository,
                         '--name', ARTIFACT, '--dir', str(incoming)], check=True)
-        heightmap = incoming/'TF3-Heightmap-Studio/dist/TF3-Heightmap-Studio.exe'
-        osm = incoming/'OSM-TF3-Vanilla-Converter/dist/OSM-TF3-Vanilla-Converter.exe'
-        vehicle_zip = incoming/'TRF3-Mod-Converter/dist/TRF3-Mod-Converter-Windows.zip'
-        for path in (heightmap, osm, vehicle_zip):
+        executables = {tool: incoming/tool/'dist'/f'{tool}.exe' for tool in DESKTOP_TOOLS}
+        for path in executables.values():
             assert path.is_file(), f'Missing reviewed app: {path}'
-        extract_zip(vehicle_zip, work/'vehicle')
-        vehicle = work/'vehicle/TRF3-Mod-Converter.exe'
-        coverage = {tool: verify_executable(exe, source/tool, tool) for tool, exe in (
-            ('TF3-Heightmap-Studio', heightmap), ('OSM-TF3-Vanilla-Converter', osm),
-            ('TRF3-Mod-Converter', vehicle))}
+        coverage = {tool: verify_executable(exe, source/tool, tool) for tool, exe in executables.items()}
         dependency_manifests = {}
-        for tool, exe in (('TF3-Heightmap-Studio', heightmap), ('OSM-TF3-Vanilla-Converter', osm), ('TRF3-Mod-Converter', vehicle)):
+        for tool, exe in executables.items():
             candidate = incoming/tool/'dist/dependency-manifest.json'
             if candidate.is_file():
                 record = json.loads(candidate.read_text(encoding='utf-8'))
@@ -227,9 +213,7 @@ def main():
             'validationNote': 'Source validation.json records may describe earlier local builds. This manifest identifies the CI binaries in this package; source archive is unchanged.',
             'executables': {tool: {'sha256': hashlib.sha256(exe.read_bytes()).hexdigest(),
                                    'embeddedModulesVerified': coverage[tool]}
-                            for tool, exe in (('TF3-Heightmap-Studio', heightmap),
-                                              ('OSM-TF3-Vanilla-Converter', osm),
-                                              ('TRF3-Mod-Converter', vehicle))},
+                            for tool, exe in executables.items()},
         }, indent=2) + '\n', encoding='utf-8')
         assets = [source_zip]
         all_entries = {'TF3-Map-Studio/README.md': source/'README.md',
@@ -238,11 +222,9 @@ def main():
         for name in ('SYSTEM-TEST-2026-11-05.md', 'PRIVATE-RUNTIMES.md', 'AGENTS.md'):
             if (source/name).is_file():all_entries['TF3-Map-Studio/'+name] = source/name
         heightmap_gui=(source/'TF3-Heightmap-Studio/tools/gui.py').read_text(encoding='utf-8')
-        import tomllib
         versions = {'TF3-Heightmap-Studio': osm_version(source/'TF3-Heightmap-Studio') if 'APP_VERSION=' in heightmap_gui else '0.10',
-                    'OSM-TF3-Vanilla-Converter': osm_version(source/'OSM-TF3-Vanilla-Converter'),
-                    'TRF3-Mod-Converter': tomllib.loads((source/'TRF3-Mod-Converter/pyproject.toml').read_text(encoding='utf-8'))['project']['version']}
-        for tool, exe in (('TF3-Heightmap-Studio', heightmap), ('OSM-TF3-Vanilla-Converter', osm), ('TRF3-Mod-Converter', vehicle)):
+                    'OSM-TF3-Vanilla-Converter': osm_version(source/'OSM-TF3-Vanilla-Converter')}
+        for tool, exe in executables.items():
             entries = docs(source/tool)
             entries[f'dist/{tool}.exe'] = exe
             entries['build-manifest.json'] = manifest
