@@ -98,5 +98,43 @@ class NativeOwnerTests(unittest.TestCase):
         self.assertEqual(self.state.value.builtEdges, len(self.lua.globals().dataset.edges))
         self.assertEqual(self.state.value.builtScenery, len(self.lua.globals().dataset.scenery))
 
+    def test_native_copies_are_read_once_and_accepted_build_is_durable_before_ownership(self):
+        self.tick()
+        self.lua.execute('''
+          local function copy(v)
+            if type(v)~="table" then return v end
+            local result={}; for k,item in pairs(v) do result[k]=copy(item) end
+            return result
+          end
+          nativeReads=0
+          function state:get() nativeReads=nativeReads+1; return copy(self.value) end
+          function state:set(v) self.value=copy(v) end
+          local send=api.cmd.sendCommand
+          function api.cmd.sendCommand(command,callback)
+            if command.ownership then
+              assert(state.value.acceptedUnjournalled==nil)
+              assert(state.value.pendingScenery or state.value.pendingOwnership)
+              assert(state.value.cursor>1,"Accepted cursor must already be persisted")
+            end
+            return send(command,callback)
+          end
+        ''')
+        self.queue('start')
+        self.lua.execute('nativeReads=0; failOwnershipNext=true')
+        self.owner.engineTick(None, self.state, 1, self.lua.table())
+        self.assertEqual(self.lua.globals().nativeReads, 1)
+        self.assertEqual(self.state.value.phase, 'error')
+        self.assertEqual(self.state.value.errorKind, 'finalization')
+        self.assertIsNotNone(self.state.value.pendingScenery)
+        accepted = len(self.lua.globals().commands)
+        self.queue('retry'); self.queue('pause'); self.tick()
+        self.assertEqual(len(self.lua.globals().commands), accepted)
+        self.queue('resume'); self.tick()
+        for _ in range(200):
+            if self.state.value.phase in ('finished', 'error'): break
+            self.tick()
+        self.assertEqual(self.state.value.phase, 'finished', self.state.value.error)
+        self.assertEqual(self.state.value.builtEdges, len(self.lua.globals().dataset.edges))
+
 
 if __name__ == '__main__': unittest.main()

@@ -938,6 +938,17 @@ function script.queueEvent(_userParams,state,_src,id,name,param)
 end
 
 function script.engineTick(userParams,state,dt,_result)
+  -- Native get() materializes the complete persisted table. Reuse one read
+  -- within this synchronous callback; writes still reach TF3 immediately,
+  -- including the accepted-command journal before fallible finalization.
+  local nativeState=state
+  local current=nativeState:get()
+  state={
+    get=function() return current end,
+    set=function(_,value) current=value; nativeState:set(value) end,
+    hasEventSubscriptions=function() return nativeState:hasEventSubscriptions() end,
+    subscribeToEvent=function(_,name) nativeState:subscribeToEvent(name) end,
+  }
   -- Restore and check saved source identity before processing queued commands.
   local result=script.update(userParams,state,dt)
   local value=state:get()
