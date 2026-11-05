@@ -308,7 +308,7 @@ def _normalize_mod_descriptor(raw: dict[str, Any]) -> ModDescriptor:
             if not isinstance(value, str):
                 descriptor.blockers.append(f"{key}.fileName must be text; an empty string disables the script.")
             if descriptor.script_configs[key].get("params"):
-                descriptor.warnings.append(f"{key}.params is preserved, but TF3 mod lifecycle callbacks receive configDict/allModParams, not resource captureParams. Verify the script's argument contract in TF3.")
+                descriptor.warnings.append(f"{key}.params is preserved as the first captureParams argument. TF3 mod lifecycle callbacks then receive configDict/allModParams (and baseConfig for preRun). Top-level mod.params remains separate; verify the script's argument contract in TF3.")
         if value is not None and not isinstance(value, str):
             descriptor.blockers.append(f"{key} must reference a TF3 script module.")
         else:

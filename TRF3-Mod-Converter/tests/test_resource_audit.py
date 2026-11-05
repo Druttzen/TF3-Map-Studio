@@ -272,6 +272,36 @@ def test_tf3_numeric_parameter_array_written_as_doubles(tmp_path):
     assert type(prepare_mod(source).source_metadata['mod.json']['params'][0]['numbers'][0]) is int
 
 
+def test_converted_native_fixture_uses_capture_then_game_lifecycle_arguments(tmp_path):
+    source = Path(__file__).resolve().parents[1] / 'examples/native_smoke_mod'
+    convert_mod(source, tmp_path / 'output')
+    runtime = pytest.importorskip('lupa').LuaRuntime()
+    runtime.execute('''
+      messages={}
+      function print(s) messages[#messages+1]=s end
+      function getCurrentModId() return "mapstudio_converter_smoke_030" end
+      function ug_require(name)
+        assert(name=="mapstudio_converter_smoke_030::/helper.lua")
+        return {marker="helper_ok"}
+      end
+      config={climate="temperate"}
+      allParams={mapstudio_converter_smoke_030={mode=1}}
+    ''')
+    runtime.execute((tmp_path / 'output/content/mod.script.lua').read_text())
+    callbacks = runtime.globals().data()
+    capture = runtime.table_from({'mode': 'preserved_params'})
+    config, params = runtime.globals().config, runtime.globals().allParams
+    callbacks.preRunFn(capture, config, params, runtime.table())
+    callbacks.runFn(capture, config, params)
+    callbacks.postRunFn(runtime.table(), config, params)
+    assert any('RUN_OK mode=1 helper=helper_ok' in line for line in runtime.globals().messages.values())
+    assert any('POST_OK mode=1 helper=helper_ok' in line for line in runtime.globals().messages.values())
+    with pytest.raises(Exception, match='capture parameters changed'):
+        callbacks.runFn(runtime.table(), config, params)
+    with pytest.raises(Exception, match='parameter missing or changed'):
+        callbacks.runFn(capture, config, runtime.table())
+
+
 @pytest.mark.parametrize('numbers', [[True], ['7'], [], [1, 2]])
 def test_invalid_parameter_numbers_blocked(tmp_path, numbers):
     source = tmp_path / 'source'

@@ -260,7 +260,7 @@ Native extension fields and complete script-reference objects (including params)
 
 Version 0.6.1 fixes inspection of unnamed numeric metadata entries. Mixed numeric/string Lua table keys are archived as typed luaTableEntries, and malformed metadata is blocked for review instead of crashing or guessing a missing dependency. Legacy .module files are recognized in general analysis and explicitly blocked by the vehicle-only exporter.
 
-TF3 mod lifecycle functions receive configDict/allModParams (and baseConfig for preRun); selected mod parameters come from top-level mod.params. This differs from general resource scripts with captureParams. Nested lifecycle-reference params are preserved and explicitly flagged for review, never silently converted into selected mod parameters.
+The installed TF3 build 40425 passes captureParams first, followed by configDict/allModParams (and baseConfig for preRun), as also shown by its built-in No Costs mod. Nested lifecycle-reference params supply captureParams; selected mod parameters come from top-level mod.params through allModParams. Both are preserved separately and explicitly flagged for review. The public mod-script wiki currently omits captureParams in its callback descriptions; verify against the target game's installed API and native execution.
 
 An existing modId is preserved when changing the display name or installation folder. An explicit name override also updates existing localized names. An ID override updates manifest lifecycle references only when copied resources and retained configuration contain no references to the old namespace. Otherwise conversion stops with the affected files; migrate their references explicitly. The tool does not blindly replace strings inside scripts or binary assets.
 
