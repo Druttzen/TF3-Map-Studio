@@ -38,5 +38,7 @@ def check(output):
                   'sourcePreservation': 'source fingerprints unchanged'}
     except Exception as exc:
         result['error'] = str(exc)
+        import traceback
+        result['traceback'] = traceback.format_exc()
     Path(output).write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
     return 0 if result['ok'] else 1
