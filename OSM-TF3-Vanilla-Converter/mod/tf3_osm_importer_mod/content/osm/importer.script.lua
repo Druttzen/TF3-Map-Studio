@@ -8,7 +8,6 @@ local worldAudit = ug_require "druttzen_osm_vanilla::/osm/world_audit.lua"
 local water = ug_require "druttzen_osm_vanilla::/osm/water.lua"
 local matcher = ug_require "druttzen_osm_vanilla::/osm/object_matcher.lua"
 local towns = ug_require "druttzen_osm_vanilla::/osm/towns.lua"
-local stateBridge = ug_require "druttzen_osm_vanilla::/osm/native_state.lua"
 local script = {}
 local eventId = "druttzen_osm_vanilla"
 local sceneryName = "druttzen_osm_vanilla::/osm/scenery.con"
@@ -935,7 +934,6 @@ end
 -- exchange compact persisted requests, never copies of the million-item map.
 local nativeAwake=false
 function script.wakeUpdate(_userParams,state,_dt)
-  state=stateBridge.open(state)
   if not state:hasEventSubscriptions() then
     for _,name in ipairs({"osm.start","osm.pause","osm.resume","osm.retry","osm.skip","osm.status","osm.validate","osm.configure","osm.mapSize"}) do
       state:subscribeToEvent(name)
@@ -950,7 +948,6 @@ end
 
 function script.queueEvent(_userParams,state,_src,id,name,param)
   if id~=eventId or type(name)~="string" then return end
-  state=stateBridge.open(state)
   local value=state:get() or {}
   value.nativeRequests=value.nativeRequests or {}
   if #value.nativeRequests>=64 then
@@ -962,7 +959,17 @@ function script.queueEvent(_userParams,state,_src,id,name,param)
 end
 
 function script.engineTick(userParams,state,dt,_result)
-  state=stateBridge.open(state)
+  -- Native get() materializes the complete persisted table. Reuse one read
+  -- within this synchronous callback; writes still reach TF3 immediately,
+  -- including the accepted-command journal before fallible finalization.
+  local nativeState=state
+  local current=nativeState:get()
+  state={
+    get=function() return current end,
+    set=function(_,value) current=value; nativeState:set(value) end,
+    hasEventSubscriptions=function() return nativeState:hasEventSubscriptions() end,
+    subscribeToEvent=function(_,name) nativeState:subscribeToEvent(name) end,
+  }
   -- Restore and check saved source identity before processing queued commands.
   local result=script.update(userParams,state,dt)
   local value=state:get()
