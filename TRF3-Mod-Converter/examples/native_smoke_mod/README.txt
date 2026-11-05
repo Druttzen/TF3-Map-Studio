@@ -9,10 +9,12 @@ TF3_MAPSTUDIO_CONVERTER_030_RUN_OK mode=1 helper=helper_ok config=table
 TF3_MAPSTUDIO_CONVERTER_030_POST_OK mode=1 helper=helper_ok
 TF3_MAPSTUDIO_CONVERTER_030_PRE_OBSERVED records whether preRun is invoked.
 
-Build 40425 lifecycle callbacks receive captureParams, configDict, allModParams, then baseConfig for preRun. Nested reference params are checked separately from the selected mod option.
-Its nested reference params must reach captureParams unchanged. Top-level
+Build 40425 lifecycle callbacks receive captureParams, configDict, allModParams,
+then baseConfig for preRun. Its captureParams table was empty despite the
+nested reference params: CAPTURE_OBSERVED logs this separately, without claiming
+runtime delivery. Export must preserve the nested metadata unchanged. Top-level
 mod.params (numbers=[7.0]) separately tests actual mod parameter dispatch.
-Build 40408 Map Editor supplied the selected option index 1 rather than 7;
+Builds 40408/40425 supplied the selected option index 1 rather than 7;
 the converter preserves the metadata and does not silently rewrite scripts.
 
 This fixture validates metadata/layout conversion and callback dispatch.

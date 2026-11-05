@@ -3,13 +3,13 @@ local helper = ug_require "mapstudio_converter_smoke_030::/helper.lua"
 function data()
     return {
         preRunFn = function(captureParams, configDict, allModParams, baseConfig)
-            assert(captureParams.mode == "preserved_params", "Converted preRun capture parameters changed")
+            print("TF3_MAPSTUDIO_CAPTURE_OBSERVED pre=" .. tostring(captureParams.mode))
             print("TF3_MAPSTUDIO_CONVERTER_030_PRE_OBSERVED config=" .. type(configDict) .. " params=" .. type(allModParams) .. " base=" .. type(baseConfig))
         end,
         runFn = function(captureParams, configDict, allModParams)
-            assert(captureParams.mode == "preserved_params", "Converted run capture parameters changed")
+            print("TF3_MAPSTUDIO_CAPTURE_OBSERVED run=" .. tostring(captureParams.mode))
             local params = allModParams[getCurrentModId()]
-            -- Build 40408 supplies the selected 1-based option index here, even
+            -- Builds 40408/40425 supply the selected 1-based option index here, even
             -- with numbers=[7.0]. Preserve and report that observed distinction.
             assert(params and params.mode == 1, "Converted mod parameter missing or changed")
             assert(helper.marker == "helper_ok", "Converted local helper reference failed")

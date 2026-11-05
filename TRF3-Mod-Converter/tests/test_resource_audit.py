@@ -296,8 +296,11 @@ def test_converted_native_fixture_uses_capture_then_game_lifecycle_arguments(tmp
     callbacks.postRunFn(runtime.table(), config, params)
     assert any('RUN_OK mode=1 helper=helper_ok' in line for line in runtime.globals().messages.values())
     assert any('POST_OK mode=1 helper=helper_ok' in line for line in runtime.globals().messages.values())
-    with pytest.raises(Exception, match='capture parameters changed'):
-        callbacks.runFn(runtime.table(), config, params)
+    # Native 40425 passed an empty capture table despite reference metadata.
+    callbacks.runFn(runtime.table(), config, params)
+    assert any('CAPTURE_OBSERVED run=nil' in line for line in runtime.globals().messages.values())
+    exported = json.loads((tmp_path / 'output/mod.json').read_text())
+    assert exported['runScript']['params'] == {'mode': 'preserved_params'}
     with pytest.raises(Exception, match='parameter missing or changed'):
         callbacks.runFn(capture, config, runtime.table())
 
