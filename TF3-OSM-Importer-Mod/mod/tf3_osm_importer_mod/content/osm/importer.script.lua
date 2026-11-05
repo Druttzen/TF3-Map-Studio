@@ -140,12 +140,15 @@ end
 local function advanceCheck(value,job,budget)
   assert(job.datasetId==dataset.id,"Dataset changed during checking; restore the original dataset.")
   local box=api.engine.terrain.getBoundingBox()
+  local function positionOnMap(p)
+    return api.engine.terrain.isValidCoordinate(api.type.Vec2f.new(p[1],p[2]))
+  end
   local function checkPosition(p)
     assert(type(p)=="table" and type(p[1])=="number" and type(p[2])=="number"
       and p[1]==p[1] and p[2]==p[2] and math.abs(p[1])<math.huge and math.abs(p[2])<math.huge,
       "Invalid dataset coordinate")
     p=controls.position(p,box)
-    assert(api.engine.terrain.isValidCoordinate(api.type.Vec2f.new(p[1],p[2])),
+    assert(positionOnMap(p),
       string.format("Dataset coordinate x %.3f, y %.3f is outside this map; check converter map width and height.",p[1],p[2]))
   end
   local checked=job.resources
@@ -177,6 +180,9 @@ local function advanceCheck(value,job,budget)
       if item.match then
         checkPosition(item.pos)
         local match=matcher.resolve(item,value.options)
+        if not match.unmatched and not positionOnMap(controls.position(match.pos,box)) then
+          match={unmatched=true,kind=match.kind,reason="Matched model origin is outside the map"}
+        end
         if matcher.isSourceMatch(item,match) then
           job.directMatches=(job.directMatches or 0)+1
           job.directExamples=job.directExamples or {}
@@ -184,9 +190,10 @@ local function advanceCheck(value,job,budget)
         else job.matches[job.cursor]=matcher.pack(match,job.matchCatalog) end
         if match.unmatched then return end
         item=controls.resolvedItem(item,job.cursor,{matches=job.matches,matchCatalog=job.matchCatalog})
+      elseif item.model then
+        checkPosition(item.pos)
       end
       if item.model then resource(api.res.modelRep,item.model,item.match~=nil) end
-      if item.model then checkPosition(item.pos) end
       if item.texture then
         if item.category=="waterways" then
           assert(item.texture=="druttzen_osm_vanilla::/osm/dirty_water.gtex","Invalid mapped-water material")

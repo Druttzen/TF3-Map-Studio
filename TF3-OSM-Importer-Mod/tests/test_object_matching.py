@@ -192,6 +192,20 @@ class MatchedImportTests(unittest.TestCase):
         self.lua.execute(MODELS)
         self.lua.execute('dataset.edges={}; dataset.labels={}; dataset.scenery={{category="mappedObjects",match={kind="bench"},pos={20,30},rotation=0}}')
 
+    def test_fitted_origin_outside_map_leaves_only_that_object_unbuilt(self):
+        self.lua.execute('''
+          modelData[0].boundingInfo={bbMin={-1,0,0},bbMax={1,6,4}}
+          api.engine.terrain.isValidCoordinate=function(p) return math.abs(p.x)<=500 and math.abs(p.y)<=500 end
+          dataset.scenery[2]={category="mappedObjects",match={kind="bench"},pos={20,-499},rotation=0}
+        ''')
+        self.event('start'); self.finish()
+        value=self.state.value
+        self.assertEqual(value.builtScenery,1)
+        self.assertEqual(value.matchSummary.unmatched,1)
+        matcher=self.lua.globals().modules['druttzen_osm_vanilla::/osm/object_matcher.lua']
+        self.assertEqual(matcher.unpack(value.matches[2],value.matchCatalog).reason,'Matched model origin is outside the map')
+        self.assertEqual(self.lua.globals().dataset.scenery[2].pos[2],-499)
+
     def test_unchanged_configured_objects_do_not_duplicate_source_in_saved_matches(self):
         self.lua.execute('''
           dataset.scenery={}
