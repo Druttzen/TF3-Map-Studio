@@ -1,6 +1,6 @@
 -- GPL-3.0. Deterministic static-model matching against the current game's repositories.
 local matcher={}
-local catalog
+local catalog,catalogWarning
 local curated={
   fountain="::/assets/landmarks/msc/fountain.mdl",
   bollard="::/assets/stations/water/mooring_bollard_passengers.mdl",
@@ -65,10 +65,24 @@ end
 
 local function loadCatalog()
   if catalog then return catalog end
-  catalog={}
+  local entries={}
   local rep=api.res.modelRep
-  assert(type(rep.getAll)=="function","The loaded model repository cannot be enumerated in this TF3 build")
-  local names=rep.getAll(true)
+  -- Native API methods can be callable userdata, rather than Lua functions.
+  -- Check the actual call, not its type; older builds may omit enumeration.
+  local ok,names=pcall(function()
+    local result={}
+    for id,name in pairs(rep.getAll(true)) do result[id]=name end
+    return result
+  end)
+  if not ok or names==nil then
+    names={}
+    catalogWarning="Loaded model enumeration is unavailable; only known vanilla substitutions were checked."
+    for _,name in pairs(curated) do
+      local found,id=pcall(rep.find,name)
+      if found and valid(id) then names[id]=name end
+    end
+    print("[OSM Vanilla] "..catalogWarning.." API member type: "..type(rep.getAll))
+  end
   for id,name in pairs(names) do
     if valid(id) and type(name)=="string" and name:match("^[^:]*::/") and name:sub(-4)==".mdl" then
       local ok,model=pcall(rep.get,id)
@@ -76,12 +90,13 @@ local function loadCatalog()
         local kind=kindFor(name,model)
         if kind then
           local box=geometry(model)
-          if box then catalog[#catalog+1]={name=name,kind=kind,geometry=box,vanilla=name:sub(1,3)=="::/"} end
+          if box then entries[#entries+1]={name=name,kind=kind,geometry=box,vanilla=name:sub(1,3)=="::/"} end
         end
       end
     end
   end
-  table.sort(catalog,function(a,b) return a.name<b.name end)
+  table.sort(entries,function(a,b) return a.name<b.name end)
+  catalog=entries
   return catalog
 end
 
@@ -170,7 +185,7 @@ function matcher.resolve(item,options)
       if best then return best end
     end
   end
-  return {unmatched=true,kind=kind,reason="No safe class/footprint match in vanilla"..(options.useActiveMods and " or loaded active mods" or " resources")}
+  return {unmatched=true,kind=kind,reason=catalogWarning or ("No safe class/footprint match in vanilla"..(options.useActiveMods and " or loaded active mods" or " resources"))}
 end
 
 function matcher.summary(matches)

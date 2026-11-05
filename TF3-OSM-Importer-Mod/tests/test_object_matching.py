@@ -38,6 +38,38 @@ class MatchingTests(unittest.TestCase):
         self.assertEqual(result.model,'::/assets/bench.mdl')
         self.assertEqual(result.origin,'vanilla')
 
+    def test_native_callable_userdata_can_enumerate_models(self):
+        self.lua.globals().nativeEnumeration = lambda invisible: self.lua.globals().modelNames
+        self.lua.execute('api.res.modelRep.getAll=nativeEnumeration; assert(type(api.res.modelRep.getAll)=="userdata")')
+        result=self.match('{match={kind="bench"},pos={0,0}}')
+        self.assertEqual(result.model,'::/assets/bench.mdl')
+        self.assertEqual(result.origin,'vanilla')
+
+    def test_missing_enumeration_uses_only_verified_curated_vanilla_models(self):
+        self.lua.execute('''
+          api.res.modelRep.getAll=nil
+          modelNames[9]="::/assets/stations/street/bench_era_c_rep_1.mdl"
+          modelData[9]=modelData[0]
+        ''')
+        result=self.match('{match={kind="bench"},pos={0,0}}')
+        self.assertEqual(result.model,'::/assets/stations/street/bench_era_c_rep_1.mdl')
+        self.assertEqual(result.origin,'vanilla')
+        unknown=self.match('{match={kind="water_tower"},pos={0,0}}')
+        self.assertTrue(unknown.unmatched)
+        self.assertIn('enumeration is unavailable',unknown.reason)
+        self.assertEqual(self.match('{match={kind="water_tower"},pos={0,0}}').reason,unknown.reason)
+
+    def test_unusable_enumeration_does_not_poison_the_catalog_or_select_vehicles(self):
+        for expression in ('function() error("API unavailable") end','function() return false end'):
+            with self.subTest(expression=expression):
+                self.lua.execute('api.res.modelRep.getAll='+expression)
+                self.matcher=self.lua.execute((CONTENT/'object_matcher.lua').read_text(encoding='utf8'))
+                first=self.match('{match={kind="water_tower"},pos={0,0}}')
+                second=self.match('{match={kind="water_tower"},pos={0,0}}')
+                self.assertTrue(first.unmatched)
+                self.assertEqual(first.reason,second.reason)
+                self.assertIn('only known vanilla',first.reason)
+
     def test_active_mod_fallback_can_be_disabled_and_vehicle_is_excluded(self):
         result=self.match('{match={kind="water_tower"},pos={0,0}}')
         self.assertEqual(result.model,'custom::/assets/water_tower.mdl')
