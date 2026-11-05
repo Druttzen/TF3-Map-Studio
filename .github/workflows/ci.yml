@@ -40,15 +40,17 @@ jobs:
       - name: Provision a complete private interpreter and packages for each app
         shell: pwsh
         run: |
-          foreach ($tool in @('TF3-Heightmap-Studio','OSM-TF3-Vanilla-Converter')) {
+          foreach ($tool in @('TF3-Heightmap-Studio','OSM-TF3-Vanilla-Converter','TF3-OSM-Importer-Mod')) {
             python -I scripts/private_runtime.py provision --tool $tool --source $env:pythonLocation
             if ($LASTEXITCODE -ne 0) { throw "Private runtime provisioning failed: $tool" }
             & "$tool/.runtime/python.exe" -I scripts/private_runtime.py install --tool $tool
             if ($LASTEXITCODE -ne 0) { throw "Private package provisioning failed: $tool" }
           }
+      - name: Test the OSM, heightmap and importer pipeline offline
+        run: ./TF3-Heightmap-Studio/.runtime/python.exe -I scripts/test_map_pipeline.py --output work/ci-map-pipeline
       - run: ./TF3-Heightmap-Studio/build.ps1
       - run: ./OSM-TF3-Vanilla-Converter/build.ps1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: TF3-Map-Studio-Windows
           path: |

@@ -29,6 +29,17 @@ def test_report_over_64mb_streams_source_graph_without_retaining_it(tmp_path):
  assert report['reportPath']==str(p.resolve())
 
 
+def test_large_water_feature_geometry_does_not_count_against_alignment_metadata(tmp_path):
+ p=tmp_path/'water.report.json'
+ footprint={'flat':[[[0,0],[4,0],[0,4]]],'follow':[]}
+ p.write_text(json.dumps({**metadata(), 'waterFootprint':footprint, 'waterFeatures':[
+  {'osmId':'way/1','centreline':[[i%100,i//100] for i in range(25001)]}
+ ]}))
+ report=read_report(p)
+ assert report['waterFootprint']==footprint
+ assert 'waterFeatures' not in report
+
+
 def test_importer_folder_and_bom_resolve_the_actual_report(tmp_path):
  p=tmp_path/'import-report.json';p.write_text(json.dumps(metadata()),encoding='utf-8-sig')
  assert read_report(tmp_path)['reportPath']==str(p.resolve())

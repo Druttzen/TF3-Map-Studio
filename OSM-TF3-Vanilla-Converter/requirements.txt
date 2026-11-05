@@ -1,2 +1,2 @@
 # Runtime dependency for OSM map tiles, the area picker and overview PNGs.
-Pillow==12.3.0
+Pillow==13.0.0

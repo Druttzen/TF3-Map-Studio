@@ -5,7 +5,7 @@ from ijson.common import ObjectBuilder
 
 FIELDS = frozenset({'dataset', 'input', 'bounds', 'mapSize', 'settings',
                     'sourceSha256', 'luaSha256', 'alignment', 'output', 'report',
-                    'edges', 'sceneryItems', 'placeLabels', 'waterFeatures',
+                    'edges', 'sceneryItems', 'placeLabels',
                     'format', 'converterDataset', 'waterFootprint'})
 
 

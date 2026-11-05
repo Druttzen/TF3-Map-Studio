@@ -45,7 +45,7 @@ This does not claim that a large live Overpass download or game import works.
 
 ## Run from source
 
-Use Python 3.10 or later with Tk. Run these commands from this tool's folder:
+Use this tool's private Python 3.14 with Tk, as in the Windows build. Run these commands from this tool's folder:
 
 ```powershell
 # First provision this tool's complete .runtime following ../PRIVATE-RUNTIMES.md.

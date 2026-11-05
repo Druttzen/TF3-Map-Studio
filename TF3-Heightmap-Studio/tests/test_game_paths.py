@@ -1,4 +1,7 @@
 """Installed-game discovery and transactional export to native user folders."""
+import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -240,3 +243,17 @@ def test_cli_exports_to_detected_game_profile(source,tmp_path):
     assert (local/'heightmaps'/first.name.replace('demo__','demo-2__',1)).is_file()
     assert (local/'biomes'/f'{first.stem}.biomes.png').is_file()
     assert (local/'heightmap_studio'/first.stem/f'{first.stem}.heightmap-project.json').is_file()
+
+
+def test_cli_exports_with_ascii_streams_and_prints_json_on_stdout(source,tmp_path):
+    result=prepare(source['report'],source['xml'],[source['dem']])
+    project=export(result,tmp_path/'project/map.png')['files']['project']
+    cli=Path(game_paths.__file__).with_name('cli.py')
+    completed=subprocess.run(
+        [sys.executable,'-s',str(cli),project,'--output',str(tmp_path/'Åland.png')],
+        env={**os.environ,'PYTHONIOENCODING':'ascii'},capture_output=True,text=True,
+    )
+    assert completed.returncode==0,completed.stderr
+    assert 'Terrain ready' in completed.stderr
+    output=Path(json.loads(completed.stdout)['png'])
+    assert output.name.startswith('Åland__min') and output.is_file()

@@ -204,10 +204,11 @@ SOURCE / REBUILD
 Complete application source, example, tests, pinned requirements and build.ps1
 are included. GPL-3.0 applies to our code and the vendored OSM converter.
 Third-party packages retain their own licences in third-party/.
-Create a Python 3.14 virtual environment, install requirements-dev.txt,
-run: python -m pytest tests
-build: .\build.ps1 -Python <your venv Python.exe>
-CLI alternative: python tools\cli.py <project.json> --output <map.png>
+Follow PRIVATE-RUNTIMES.md in the repository to provision this tool's private
+Python 3.14 with Tk and install its dependencies. From this tool's folder:
+Tests: .\.runtime\python.exe -I ..\scripts\private_runtime.py run --tool . -- -m pytest tests
+Build: .\build.ps1
+CLI: .\.runtime\python.exe -I ..\scripts\private_runtime.py run --tool . -- tools/cli.py <project.json> --output <map.png>
 
 MULTIPLE ELEVATION WEBSITES (0.2)
 Copernicus GLO-30 / GLO-90: public AWS downloads, no account or API key.
