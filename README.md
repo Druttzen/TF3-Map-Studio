@@ -12,6 +12,12 @@ Three Transport Fever 3 mapping tools in one project. Each folder includes its s
 
 ## Windows downloads
 
+**TF3 Map Studio Setup** installs both desktop apps for the current Windows user. It detects Transport Fever 3 and proposes a user folder when it can identify the profile. Confirm both paths, browse to a different folder, or leave the user folder blank to install just the desktop apps. Use **Settings → Advanced → Open User Data Folder** in TF3 if you need to check which profile the game is using.
+
+Setup adds the OSM Importer to the selected profile's `mods` folder. If that profile already has the importer, setup keeps that copy and uses it for the converter's **Update installed mod** destination. Enable the mod in TF3. Heightmap Studio uses the same profile for `heightmaps` and `biomes`. Uninstalling the desktop apps leaves the game-side importer and maps in the profile.
+
+Build the installer with `./installer/build.ps1` after provisioning the private development runtimes. GitHub Actions publishes the installer and its dependency manifest in the **TF3-Map-Studio-Windows** artifact.
+
 Download and extract the package for the tool you need, then open its `.exe`. The packages include the runtime, so a separate Python installation is not required.
 
 - [OSM-TF3-Vanilla-Converter — Preview 0.16.3](https://github.com/Druttzen/TF3-Map-Studio/releases/download/map-studio-review-2026-11-05/OSM-TF3-Vanilla-Converter-0.16.3-Windows.zip)

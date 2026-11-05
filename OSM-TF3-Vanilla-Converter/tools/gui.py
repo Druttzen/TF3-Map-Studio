@@ -222,10 +222,25 @@ class App(tk.Tk):
     def default_target():
         try:
             import winreg
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER,r'Software\TF3 Map Studio\OSM Converter') as key:
+                    configured=winreg.QueryValueEx(key,'Importer')[0]
+            except OSError:
+                configured=None
+            if configured is not None:
+                # A configured profile takes precedence even when its mod has been removed.
+                if not configured:
+                    return ''
+                path=Path(configured)
+                if path.is_absolute():
+                    definition=json.loads((path/'mod.json').read_text(encoding='utf-8-sig'))
+                    if isinstance(definition,dict) and definition.get('modId')==MOD_ID:
+                        return str(path)
+                return ''
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER,r'Software\Valve\Steam') as key: steam=Path(winreg.QueryValueEx(key,'SteamPath')[0])
             choices=sorted(path for folder in (MOD_FOLDER,MOD_ID) for path in (steam/'userdata').glob('*/3493540/local/mods/'+folder))
             if len(choices)==1: return str(choices[0])
-        except (ImportError,OSError): pass
+        except (ImportError,OSError,TypeError,ValueError): pass
         return ''
 
     def choose_source(self):
@@ -262,7 +277,9 @@ class App(tk.Tk):
     def choose_target(self):
         if self.mode.get()==MODES[0]: path=filedialog.asksaveasfilename(parent=self,title='Save Lua map',defaultextension='.lua',filetypes=[('Lua map','*.lua')])
         else:
-            path=filedialog.askdirectory(parent=self,title='Choose existing mod folder' if self.mode.get()==MODES[1] else 'Choose parent folder for the new mod')
+            initial=self.default_target() if self.mode.get()==MODES[1] else ''
+            path=filedialog.askdirectory(parent=self,title='Choose existing mod folder' if self.mode.get()==MODES[1] else 'Choose parent folder for the new mod',
+                                         initialdir=initial or None)
             if path and self.mode.get()==MODES[2]: path=str(Path(path)/MOD_FOLDER)
         if path: self.target.set(path)
 
