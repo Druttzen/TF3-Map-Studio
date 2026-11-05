@@ -1,9 +1,12 @@
+from contextlib import redirect_stdout
 import importlib.util
+import io
 import json
 import math
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
 import sys
@@ -12,6 +15,15 @@ spec=importlib.util.spec_from_file_location('converter',ROOT/'tools/converter.py
 c=importlib.util.module_from_spec(spec); spec.loader.exec_module(c)
 
 class ConverterTests(unittest.TestCase):
+    def test_cli_report_supports_legacy_windows_stdout(self):
+        report={'name':'测试机场','_preview':object()}
+        buffer=io.BytesIO()
+        with io.TextIOWrapper(buffer,encoding='cp1252') as stdout:
+            with patch.object(c,'export_file',return_value=report), redirect_stdout(stdout):
+                c.main(['input.osm','--output','map.lua','--size','20480','20480'])
+            stdout.flush()
+            self.assertEqual(json.loads(buffer.getvalue()),{'name':report['name']})
+
     def test_report_checksums_actual_source_bytes(self):
         import hashlib
         with tempfile.TemporaryDirectory() as folder:

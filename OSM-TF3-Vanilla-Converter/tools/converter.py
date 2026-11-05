@@ -704,7 +704,7 @@ def main(argv=None):
         action=export if args.mod else export_file if args.output else export_new_mod
         report=action(args.input,args.mod or args.output or args.new_mod,args.bounds,args.size,args.tree_spacing,args.max_trees,options=options)
     except (OSError,ValueError,KeyError,ET.ParseError) as exc: parser.exit(2,'Conversion failed: '+str(exc)+'\n')
-    print(json.dumps({k:v for k,v in report.items() if k!='_preview'},indent=2,ensure_ascii=False))
+    print(json.dumps({k:v for k,v in report.items() if k!='_preview'},indent=2))
 
 
 if __name__=='__main__': main()
