@@ -15,14 +15,13 @@ import sys
 import uuid
 import zipfile
 
-TOOLS = {'OSM-TF3-Vanilla-Converter', 'TF3-Heightmap-Studio',
-         'TRF3-Mod-Converter', 'TF3-OSM-Importer-Mod'}
+TOOLS = {'OSM-TF3-Vanilla-Converter', 'TF3-Heightmap-Studio', 'TF3-OSM-Importer-Mod'}
 
 
 def tool_root(path):
     root = Path(path).resolve()
     if root.name not in TOOLS or not (root / 'README.md').is_file():
-        raise ValueError('Select one of this repository\'s four tool folders.')
+        raise ValueError('Select one of this repository\'s tool folders.')
     return root
 
 
@@ -232,8 +231,8 @@ def main():
         print(json.dumps(executable_manifest(root, args.executable, args.report), indent=2)); return
     if args.action == 'install':
         subprocess.run([str(python), '-I', '-m', 'ensurepip', '--upgrade'], env=env, check=True)
-        requirements = ['-e', str(root) + '[dev]'] if root.name == 'TRF3-Mod-Converter' else ['-r', str(root / 'requirements-dev.txt'), 'pytest']
-        subprocess.run([str(python), '-I', '-m', 'pip', 'install', *requirements], env=env, check=True)
+        subprocess.run([str(python), '-I', '-m', 'pip', 'install', '-r',
+                        str(root / 'requirements-dev.txt'), 'pytest'], env=env, check=True)
         record(root, runtime, json.loads((runtime / 'ownership.json').read_text())['source']); return
     if args.action == 'check-executable':
         if not args.executable or not args.report: parser.error('--executable and --report are required')

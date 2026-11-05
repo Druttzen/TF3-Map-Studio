@@ -18,7 +18,7 @@ $Tool = 'TF3-Heightmap-Studio'
 & "$Tool/.runtime/python.exe" -I scripts/private_runtime.py run --tool $Tool -- -m pytest -q "$Tool/tests"
 ```
 
-Repeat separately for `OSM-TF3-Vanilla-Converter`, `TRF3-Mod-Converter` and
+Repeat separately for `OSM-TF3-Vanilla-Converter` and
 the importer development tests. Select a compatible CPython version for each
 tool; different versions coexist. Run tests from the tool folder, or supply
 its test directory when running from the root.
@@ -26,12 +26,9 @@ its test directory when running from the root.
 Launch source entry points through `run --tool <folder> -- <folder>/tools/gui.py`.
 The wrapper starts an isolated child with explicit app-owned paths and excludes
 inherited Python, Conda, user-site and pip configuration. It does not modify
-machine/user settings. For the mod converter, `install` also installs its source
-package into that tool's private environment.
+machine/user settings.
 
-Build OSM and Heightmap with their `build.ps1`. Build the mod converter from its
-folder with `.runtime/python.exe -I ../scripts/private_runtime.py run --tool .
--- scripts/build_windows.py`. External Python arguments are rejected. Every
+Build OSM and Heightmap with their `build.ps1`. External Python arguments are rejected. Every
 desktop build runs its frozen executable's offline `--self-check`.
 
 `.runtime/ownership.json` records ownership, sources, interpreter hashes, actual
