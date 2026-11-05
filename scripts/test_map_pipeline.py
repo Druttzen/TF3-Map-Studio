@@ -34,6 +34,7 @@ def stage(name, output):
         from rasterio import Affine
         from PIL import Image
         from alignment import mercator_bounds
+        from game_paths import heightmap_output_path
         from terrain import prepare, export, load_project
         mod = output/'tf3_osm_importer_mod'; report = mod/'import-report.json'
         info = json.loads(report.read_text(encoding='utf-8'))
@@ -53,9 +54,11 @@ def stage(name, output):
         assert header[24:26] == bytes([16,0])
         assert Path(exported['files']['biomes']).is_file()
         # Exercise the public CLI using this exact exported project too.
+        cli_output = output/'cli-heightmap.png'
         subprocess.run([sys.executable,'-I',str(ROOT/'scripts/private_runtime.py'),'run','--tool',str(ROOT/'TF3-Heightmap-Studio'),'--',str(ROOT/'TF3-Heightmap-Studio/tools/cli.py'),str(exported['files']['project']),
-                        '--output',str(output/'cli-heightmap.png')], env=child_environment(ROOT/'TF3-Heightmap-Studio'), check=True)
-        assert (output/'cli-heightmap.png').read_bytes() == Path(exported['files']['png']).read_bytes()
+                        '--output',str(cli_output)], env=child_environment(ROOT/'TF3-Heightmap-Studio'), check=True)
+        cli_png = heightmap_output_path(cli_output, exported['importMinimumMetres'], exported['importMaximumMetres'])
+        assert cli_png.read_bytes() == Path(exported['files']['png']).read_bytes()
         return {'pixels':[65,65], 'bitDepth':16, 'biomes':True, 'luaReportIdentityVerified':True, 'projectReloadAndCliRoundTrip':True}
     from lupa import LuaRuntime
     data = LuaRuntime().execute((output/'tf3_osm_importer_mod/content/osm/dataset.lua').read_text(encoding='utf-8'))
