@@ -104,10 +104,18 @@ function controls.resolvedItem(item,index,value)
   if not item.match then return item end
   local match=value.matches and value.matches[index]
   if not match then return item.model and item or nil end
+  -- Compact matches share static model/reason metadata, while fitted origins
+  -- remain exact absolute coordinates. Continue reading legacy full records.
+  local packed=type(match)=="table" and match[1] and match or nil
+  if type(match)=="number" or packed then
+    match=assert(value.matchCatalog and value.matchCatalog[packed and packed[1] or match],"Missing saved match catalog entry")
+  end
   if match.unmatched then return nil end
   local result={}
   for key,v in pairs(item) do result[key]=v end
-  result.model=match.model; result.pos=match.pos; result.rotation=match.rotation
+  result.model=match.model
+  result.pos=packed and {packed[2],packed[3],packed[5]} or match.pos
+  result.rotation=packed and packed[4] or match.rotation
   return result
 end
 

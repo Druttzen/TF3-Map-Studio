@@ -54,18 +54,20 @@ local function initialState(state)
     value.settingsRevision=10
   end
   value.waterRecords=value.waterRecords or {}
-  if value.matchStorageRevision~=1 and (not value.datasetId or value.datasetId==dataset.id)
+  if value.matchStorageRevision~=2 and (not value.datasetId or value.datasetId==dataset.id)
     and (not value.mapSource or loadedSource==value.mapSource) then
     -- Exact configured substitutions already live in the immutable source.
     -- Keep fitted/changed matches and unmatched decisions in the journal.
-    matcher.compact(value.matches,dataset.scenery)
+    local _,_,catalog=matcher.compact(value.matches,dataset.scenery,value.matchCatalog)
+    value.matchCatalog=catalog
     if value.check then
-      local count,examples=matcher.compact(value.check.matches,dataset.scenery)
+      local count,examples,checkCatalog=matcher.compact(value.check.matches,dataset.scenery,value.check.matchCatalog)
+      value.check.matchCatalog=checkCatalog
       value.check.directMatches=(value.check.directMatches or 0)+count
       value.check.directExamples=value.check.directExamples or {}
       for label in pairs(examples) do value.check.directExamples[label]=true end
     end
-    value.matchStorageRevision=1
+    value.matchStorageRevision=2
   end
   if not value.datasetInfo or not value.mapSource and value.datasetInfo.id~=dataset.id then value.datasetInfo=maps.describe(dataset) end
   return value
@@ -86,7 +88,7 @@ local function useMap(value,data,source)
   else
     value.options=controls.options(data.importOptions)
     if #data.edges+#data.scenery+#data.labels>1000 and not (data.importOptions and data.importOptions.stepLimit~=nil) then value.options.stepLimit=100 end
-    value.phase="ready"; value.cursor=1; value.matches=nil; value.matchSummary=nil; value.audit=nil
+    value.phase="ready"; value.cursor=1; value.matches=nil; value.matchCatalog=nil; value.matchSummary=nil; value.audit=nil
     value.check=nil; value.error=nil; value.errorKind=nil; value.placeNamesPage=nil
   end
   dataset=data; loadedSource=source; attemptedSource=source or false
@@ -128,7 +130,7 @@ local function newCheck(value,starting)
     string.format("Prepared area %.0f x %.0f m is larger than this map (%.0f x %.0f m). Reconvert OSM and heightmap with matching dimensions; do not scale only one file.",
       dataset.size[1],dataset.size[2],width,height))
   return {datasetId=dataset.id,starting=starting,returnPhase=value.phase,section=1,cursor=1,checked=0,
-    total=#dataset.edges+#dataset.scenery+#dataset.labels,resources={},matches={},directMatches=0,directExamples={},townNames={}}
+    total=#dataset.edges+#dataset.scenery+#dataset.labels,resources={},matches={},matchCatalog={},directMatches=0,directExamples={},townNames={}}
 end
 
 local function advanceCheck(value,job,budget)
@@ -175,9 +177,9 @@ local function advanceCheck(value,job,budget)
           job.directMatches=(job.directMatches or 0)+1
           job.directExamples=job.directExamples or {}
           job.directExamples[match.kind..": "..match.model]=true
-        else job.matches[job.cursor]=match end
+        else job.matches[job.cursor]=matcher.pack(match,job.matchCatalog) end
         if match.unmatched then return end
-        item=controls.resolvedItem(item,job.cursor,{matches=job.matches})
+        item=controls.resolvedItem(item,job.cursor,{matches=job.matches,matchCatalog=job.matchCatalog})
       end
       if item.model then resource(api.res.modelRep,item.model,item.match~=nil) end
       if item.model then checkPosition(item.pos) end
@@ -233,7 +235,8 @@ end
 
 local function finishCheck(value,job)
   value.check=nil; value.phase=job.returnPhase
-  value.matches=job.matches; value.matchSummary=matcher.summary(job.matches,job.directMatches,job.directExamples)
+  value.matches=job.matches; value.matchCatalog=job.matchCatalog
+  value.matchSummary=matcher.summary(job.matches,job.directMatches,job.directExamples,job.matchCatalog)
   if job.starting then beginImport(value)
   else value.notice=string.format("Map/resource checks passed. Object matches: %d vanilla, %d active mod, %d without a safe match (left unbuilt).",
     value.matchSummary.vanilla,value.matchSummary.mods,value.matchSummary.unmatched) end
@@ -542,7 +545,7 @@ end
 
 function script.update(_userParams, state, _dt)
   local previous=state:get()
-  local dirty=not dataset or attemptedSource~=(previous and previous.mapSource or false) or not previous or not previous.phase or previous.settingsRevision~=10 or previous.matchStorageRevision~=1
+  local dirty=not dataset or attemptedSource~=(previous and previous.mapSource or false) or not previous or not previous.phase or previous.settingsRevision~=10 or previous.matchStorageRevision~=2
   local value=initialState(state)
   if checkGroundRecovery(value) then dirty=true end
   if not state:hasEventSubscriptions() then
@@ -643,7 +646,7 @@ function script.handleEvent(_userParams, state, _src, id, name, param)
   if name=="osm.configure" then
     local ok,options=pcall(controls.configure,value.options,param,value.datasetId~=nil)
     if ok then value.options=options; value.notice="Import settings saved."
-      if not value.datasetId then value.matches=nil; value.matchSummary=nil end
+      if not value.datasetId then value.matches=nil; value.matchCatalog=nil; value.matchSummary=nil end
     else value.notice=tostring(options) end
     state:set(value); return
   end

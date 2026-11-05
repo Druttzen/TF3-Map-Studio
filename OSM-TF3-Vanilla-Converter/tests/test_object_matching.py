@@ -112,18 +112,49 @@ class MatchingTests(unittest.TestCase):
           matches[2].pos[1]=12.5
           matches[3].rotation=0.4
           matches[4]={unmatched=true,kind="bicycle_parking",reason="No safe model"}
-          count,examples=matcher.compact(matches,scenery)
+          count,examples,catalog=matcher.compact(matches,scenery)
         ''')
         g = self.lua.globals()
         self.assertEqual(g.count, 1)
         self.assertIsNone(g.matches[1])
-        self.assertEqual(g.matches[2].pos[1], 12.5)
-        self.assertEqual(g.matches[3].rotation, 0.4)
-        self.assertTrue(g.matches[4].unmatched)
-        summary = self.matcher.summary(g.matches, g.count, g.examples)
+        self.assertEqual(self.matcher.unpack(g.matches[2], g.catalog).pos[1], 12.5)
+        self.assertEqual(self.matcher.unpack(g.matches[3], g.catalog).rotation, 0.4)
+        self.assertTrue(self.matcher.unpack(g.matches[4], g.catalog).unmatched)
+        summary = self.matcher.summary(g.matches, g.count, g.examples, g.catalog)
         self.assertEqual(summary.vanilla, 3)
         self.assertEqual(summary.unmatched, 1)
         self.assertEqual(len(summary.examples), 2)
+
+    def test_pooled_origins_are_lossless_and_repeated_unmatched_reasons_are_shared(self):
+        self.lua.globals().matcher=self.matcher
+        self.lua.execute('''
+          catalog={}; matches={}
+          for i=1,10000 do matches[i]=matcher.pack({unmatched=true,kind="bicycle_parking",reason="No safe model"},catalog) end
+          fitted={model="::/assets/bench.mdl",kind="bench",origin="vanilla",method="class and footprint fit (no scaling)",
+            pos={8123.456789012345,-7890.123456789012},rotation=1.234567890123456}
+          matches[10001]=matcher.pack(fitted,catalog)
+          fitted2={model=fitted.model,kind=fitted.kind,origin=fitted.origin,method=fitted.method,
+            pos={-8123.456789012345,7890.123456789012},rotation=-1.234567890123456}
+          matches[10002]=matcher.pack(fitted2,catalog)
+        ''')
+        g=self.lua.globals()
+        self.assertEqual(len(g.catalog), 2)
+        self.assertEqual(g.matches[1], g.matches[10000])
+        for index,source in ((10001,g.fitted),(10002,g.fitted2)):
+            result=self.matcher.unpack(g.matches[index],g.catalog)
+            self.assertEqual((result.pos[1],result.pos[2],result.rotation),
+                             (source.pos[1],source.pos[2],source.rotation))
+        summary=self.matcher.summary(g.matches,0,None,g.catalog)
+        self.assertEqual((summary.vanilla,summary.unmatched),(2,10000))
+
+    def test_missing_catalog_never_falls_back_to_a_source_model(self):
+        controls=self.lua.execute((CONTENT/'controls.lua').read_text())
+        item=self.lua.eval('{model="::/assets/bench.mdl",match={kind="bench"},pos={0,0}}')
+        value=self.lua.eval('{matches={[1]=1},matchCatalog={{unmatched=true,kind="bench",reason="Not approved"}}}')
+        self.assertIsNone(controls.resolvedItem(item,1,value))
+        value.matchCatalog=None
+        with self.assertRaisesRegex(Exception,'Missing saved match catalog'):
+            controls.resolvedItem(item,1,value)
 
 
 class MatchedImportTests(unittest.TestCase):
@@ -189,11 +220,11 @@ class MatchedImportTests(unittest.TestCase):
     def test_foreign_dataset_check_cannot_replace_saved_matches_after_restore(self):
         original_id=self.lua.globals().dataset.id
         self.event('start'); self.event('pause')
-        original=self.state.value.matches[1].model
+        original=self.lua.globals().modules['druttzen_osm_vanilla::/osm/controls.lua'].resolvedItem(self.lua.globals().dataset.scenery[1],1,self.state.value).model
         self.lua.execute('dataset.id="foreign"; dataset.scenery[1].match.kind="water_tower"')
         self.event('validate')
         self.assertIn('restore the original dataset',self.state.value.notice)
-        self.assertEqual(self.state.value.matches[1].model,original)
+        self.assertEqual(self.lua.globals().modules['druttzen_osm_vanilla::/osm/controls.lua'].resolvedItem(self.lua.globals().dataset.scenery[1],1,self.state.value).model,original)
         self.assertEqual(self.state.value.phase,'paused')
         self.lua.globals().dataset.id=original_id
         self.lua.execute('dataset.scenery[1].match.kind="bench"')

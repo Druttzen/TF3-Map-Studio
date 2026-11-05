@@ -196,20 +196,65 @@ function matcher.isSourceMatch(item,match)
     and match.rotation==(item.rotation or 0)
 end
 
-function matcher.compact(matches,scenery)
+local catalogLookups=setmetatable({},{__mode="k"})
+local catalogFields={"model","kind","origin","method","reason","unmatched"}
+local function catalogKey(match)
+  local parts={}
+  for _,field in ipairs(catalogFields) do
+    local value=type(match[field])..":"..tostring(match[field])
+    parts[#parts+1]=#value..":"..value
+  end
+  return table.concat(parts)
+end
+
+function matcher.pack(match,catalog)
+  if type(match)~="table" or match[1] then return match end
+  if not match.unmatched and type(match.pos)~="table" then return match end
+  local lookup=catalogLookups[catalog]
+  if not lookup then
+    lookup={}; for id,entry in ipairs(catalog) do lookup[catalogKey(entry)]=id end
+    catalogLookups[catalog]=lookup
+  end
+  local key=catalogKey(match)
+  local id=lookup[key]
+  if not id then
+    local entry={}; for _,field in ipairs(catalogFields) do entry[field]=match[field] end
+    id=#catalog+1; catalog[id]=entry; lookup[key]=id
+  end
+  if match.unmatched then return id end
+  -- Absolute doubles retain the exact fitted origin, including offsets at
+  -- concave building footprints. Never reconstruct them by adding deltas.
+  return {id,match.pos[1],match.pos[2],match.rotation,match.pos[3]}
+end
+
+function matcher.unpack(match,catalog)
+  if type(match)=="number" then
+    local common=catalog and catalog[match]
+    assert(common,"Missing saved match catalog entry"); return common
+  end
+  if type(match)~="table" or not match[1] then return match end
+  local common=assert(catalog and catalog[match[1]],"Missing saved match catalog entry")
+  local result={}; for key,value in pairs(common) do result[key]=value end
+  result.pos={match[2],match[3],match[5]}; result.rotation=match[4]
+  return result
+end
+
+function matcher.compact(matches,scenery,catalog)
+  catalog=catalog or {}
   local count,examples=0,{}
   for index,match in pairs(matches or {}) do
     if matcher.isSourceMatch(scenery[index],match) then
       count=count+1; examples[match.kind..": "..match.model]=true
       matches[index]=nil
-    end
+    else matches[index]=matcher.pack(match,catalog) end
   end
-  return count,examples
+  return count,examples,catalog
 end
 
-function matcher.summary(matches,directCount,directExamples)
+function matcher.summary(matches,directCount,directExamples,catalog)
   local result={vanilla=directCount or 0,mods=0,unmatched=0,examples={}}
   for _,match in pairs(matches or {}) do
+    match=matcher.unpack(match,catalog)
     if match.unmatched then result.unmatched=result.unmatched+1
     elseif match.origin=="vanilla" then result.vanilla=result.vanilla+1
     else result.mods=result.mods+1 end
@@ -218,6 +263,7 @@ function matcher.summary(matches,directCount,directExamples)
   local examples={}
   for label in pairs(directExamples or {}) do seen[label]=true; examples[#examples+1]=label end
   for _,match in pairs(matches or {}) do
+    match=matcher.unpack(match,catalog)
     local label=match.kind..": "..(match.model or match.reason)
     if not seen[label] then seen[label]=true; examples[#examples+1]=label end
   end
