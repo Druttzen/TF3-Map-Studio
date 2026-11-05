@@ -7,6 +7,7 @@ local polling=ug_require "::/gui/main/engine_react_util.tl"
 local controls=ug_require "druttzen_osm_vanilla::/osm/controls.lua"
 local uiSnapshot=ug_require "druttzen_osm_vanilla::/osm/ui_snapshot.lua"
 local mapLoader=ug_require "druttzen_osm_vanilla::/osm/map_loader.lua"
+local stateBridge=ug_require "druttzen_osm_vanilla::/osm/native_state.lua"
 local panelId="druttzen-osm-import-panel"
 local result={}
 
@@ -33,7 +34,13 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
     if not entity then return nil end
     local gameScript=api.engine.getComponent(entity,api.type.ComponentType.GAME_SCRIPT)
     if not gameScript then return nil end
-    return uiSnapshot.fromState(gameScript.state,api.engine.terrain.getBoundingBox())
+    local saved
+    local ok,native=pcall(function() return gameScript.state_native end)
+    if ok and native then
+      saved=stateBridge.open({get_native=function() return native end,
+        set_native=function() error("The import panel is read-only") end}):get()
+    else saved=gameScript.state end
+    return uiSnapshot.fromState(saved,api.engine.terrain.getBoundingBox())
   end,0.25):old()
   if type(snapshot)~="table" or not snapshot.options then
     return builtin.Window{

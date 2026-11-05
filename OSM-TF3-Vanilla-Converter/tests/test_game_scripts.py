@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTENT = ROOT/'mod/tf3_osm_importer_mod/content/osm'
 
 def install_map_modules(lua):
-    for name in ('map_data','map_loader'):
+    for name in ('map_data','map_loader','native_state'):
         lua.globals().modules['druttzen_osm_vanilla::/osm/'+name+'.lua']=lua.execute(
             (CONTENT/(name+'.lua')).read_text(encoding='utf-8'))
 
