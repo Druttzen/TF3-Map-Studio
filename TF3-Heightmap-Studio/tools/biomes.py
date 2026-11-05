@@ -28,6 +28,21 @@ CODES=np.array([0,63,127,191,255],dtype=np.uint8)
 COLORS=np.array([[0,161,230],[54,128,33],[161,255,140],[128,128,71],[255,255,255]],dtype=np.uint8)
 MODES=('Height, slope and OSM','Height and slope','Single biome','Import biome PNG')
 
+def mapped_water(context,shape,job,profiles=('flat','follow')):
+ footprint=context.get('report',{}).get('waterFootprint')
+ if footprint is None:
+  return None
+ polygons=[]
+ for profile in profiles:
+  for face in footprint[profile]:
+   job.check()
+   polygons.append({'type':'Polygon','coordinates':[[*face,face[0]]]})
+ if not polygons:
+  return np.zeros(shape,dtype=bool)
+ ny,nx=shape;width,height=context['size'];dx=width/(nx-1);dy=height/(ny-1)
+ transform=Affine(dx,0,-width/2-dx/2,0,-dy,height/2+dy/2)
+ return rasterize(polygons,out_shape=shape,transform=transform,fill=0,dtype='uint8').astype(bool)
+
 def biome_id(label):
  if label not in BIOME_CHOICES:raise ValueError('Choose a vanilla biome from the list.')
  return BIOME_CHOICES.index(label)
@@ -145,6 +160,9 @@ def generate(terrain,context,options,strokes=None,job=None):
      del cover
   if options['biome_water']:
    for row in range(0,ny,128):job.check();grid[row:row+128][terrain[row:row+128]<options['water_level']]=0
+   if mode=='Height, slope and OSM':
+    mask=mapped_water(context,grid.shape,job)
+    if mask is not None:grid[mask]=0
  # Paint is authoritative, including imported maps. TF3 may rederive underwater
  # biome 0 when applying its vanilla import generator.
  for s in strokes:job.check();paint(grid,size,s)

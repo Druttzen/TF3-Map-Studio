@@ -553,11 +553,17 @@ def write_outputs(source,data_path,report_path,bounds,size,spacing,max_trees,opt
     if source in {data_path,report_path}: raise ValueError('Input and output paths must differ.')
     job=Job(progress,cancel)
     data=convert(source,bounds,size,spacing,max_trees,options=options,_job=job)
+    water_faces={'flat':[], 'follow':[]}
+    for i,item in enumerate(data['scenery']):
+        if i%1024==0: job.check()
+        if item.get('waterSurface') in water_faces:
+            water_faces[item['waterSurface']].append(item['face'])
     report={'dataset':data['id'],'input':source.name,'bounds':data['bounds'],'mapSize':data['size'],
             'edges':len(data['edges']),'sceneryItems':len(data['scenery']),'placeLabels':len(data['labels']),
             'waterFeatures':len(data.get('waterFeatures',[])),
             'objectMetadata':data.get('objectMetadata',{}),'unavailableObjects':data.get('unavailableObjects',[]),
             'waterMetadata':{**data['waterMetadata'],'features':data['waterFeatures']},
+            'waterFootprint':water_faces,
             'warnings':data['warnings'],'settings':data['conversionSettings'],'output':str(data_path),
             'report':str(report_path),'sourceSha256':job.source_sha256,
             'alignment':{'projection':'EPSG:3857 scaled to map size','origin':'centre',

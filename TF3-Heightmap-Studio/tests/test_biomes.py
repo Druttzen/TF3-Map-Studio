@@ -84,6 +84,20 @@ def test_layers_follow_north_up_elevation_and_surface_rivers():
  assert not rivers[32,32] and not rivers[42,32] and not rivers[46,32]
  assert rivers[53,27] and not rivers[53,32]
 
+def test_biomes_and_rivers_share_the_prepared_water_footprint():
+ terrain=np.full((65,65),30.)
+ context={'size':[256,256], 'report':{'waterFootprint':{
+  'flat':[[[-40,-80],[40,-80],[0,-40]]],
+  'follow':[[[-40,40],[40,40],[0,80]]],
+ }}}
+ options=normalize({'biomes':True,'biome_rock_slope':90})
+ rivers=biome_layer_mask('rivers',terrain,context,options,Job())
+ grid,_=biomes.generate(terrain,context,options)
+ assert rivers[18,32] and not rivers[46,32]
+ assert grid[18,32]==grid[46,32]==0
+ assert grid[18,41]==grid[32,32]==2
+ assert np.all(terrain==30)
+
 def test_height_slope_water_and_osm_precedence():
  z=np.zeros((65,65));z[:16]=1600;z[16:32]=700;z[48:]=-10
  ctx={'size':[256,256],'lines':[],'bounds':[0,0,.01,.01],

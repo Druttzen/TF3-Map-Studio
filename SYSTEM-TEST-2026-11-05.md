@@ -246,6 +246,31 @@ shrub placement around accepted water footprints and rejection of a preview
 that includes a shore plant or a rock. The importer and converter suites
 passed 271 and 399 tests respectively.
 
+## New blank Partille with three biome layers and OSM water
+
+Created a new Temperate Very Large map in TF3 build 40425 and reused the
+OSM Download extract centred on 57.73906 N, 12.10218 E. Imported a 4097 × 4097
+heightmap for the 16,384 × 16,384 m world. The heightmap project used zero
+terrain refinement and a global water level of 0 m. Biomes used the prepared
+OSM water footprints, and Rivers used their terrain-following subset.
+
+Exported the live map before Apply, after Apply, after restarting TF3 and
+reopening the first save, and after reopening the final water and vegetation
+save. The baseline biome layers were all zero. The game retained all five
+Biomes codes, with 16,556,697 of 16,785,409 pixels matching the input class.
+It kept all 5,851,648 input Mountains marks and added 277,954. It kept all
+3,200 input Rivers marks and added 3,059. The base height export had zero
+changed pixels. All four exported PNGs after each reload were byte-identical
+to the export immediately after Apply.
+
+On `MapStudio-Partille-Blank-Water-Biomes.sav`, the saved-world check verified
+29,999 Water Dirty ground faces and 91,422 imported vegetation models. It
+found zero tree or shrub positions in accepted water. There were no skipped
+import steps. The geometry budget was reached during conversion. Only 29 OSM
+features had paintable faces on this map, including 26 flat features and
+three following the terrain. The budget left 1,236 water records for review.
+The save therefore covers only part of the original extract's mapped water.
+
 ## Limits
 
 This is broad regression, integration, packaging, ownership and native importer

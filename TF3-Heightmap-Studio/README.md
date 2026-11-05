@@ -65,11 +65,23 @@ The registry is read without changes. See [automatic game export](GAME-FOLDERS.m
 
 In **Biomes**, enable biome export and **Also export Mountains and supported
 Rivers masks** to add the game's independent layer PNGs. Mountains marks high
-or steep land above the configured water level. Rivers follows OSM river areas
-and surface waterways using the configured river width for centerlines. All
-four vanilla climates support Mountains. Temperate and Dry also support Rivers.
-Assign each PNG to its named selector in the game's **Biomes** tab. The layer
-export uses the heightmap grid and leaves elevations intact.
+or steep land above the configured water level. With a current conversion
+report, Rivers uses the same terrain-following triangles as the OSM importer's
+water paint. The automatic OSM biome map also uses those footprints and the
+flat lake triangles to mark water. Older reports use original OSM river areas
+and buffered centerlines for Rivers. All four vanilla climates support
+Mountains. Temperate and Dry also support Rivers.
+
+Assign each PNG to its named selector in the game's **Biomes** tab and wait
+for the preview to finish. Click **Apply**, wait for it to finish and save.
+The layer export uses the heightmap grid and leaves elevations intact. The
+game can adjust the masks and generate vegetation on Apply. Run the OSM
+import afterwards with **Mapped waterways** and **Vegetation** enabled. The
+importer clears existing plants from the painted footprint and excludes its
+own vegetation from accepted water faces. On large maps, check the converter
+report for water features that exceeded the face budget. To verify the saved
+masks, reopen the map and export with **Biomes Data** enabled in **Generate
+Heightmap**.
 
 This folder contains the application source, existing tests, pinned dependencies,
 portable synthetic examples and licence notices. See the

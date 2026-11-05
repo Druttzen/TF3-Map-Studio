@@ -521,6 +521,16 @@ function audit.inspect(dataset,value)
   if report.partial then
     report.limitations[#report.limitations+1]=string.format("Accepted XYZ positions are missing for %d models/markers from older or incomplete journals; their vertical position is not verified.",report.missingModelHeights)
   end
+  if options.waterways and options.vegetation and value.waterPass==false then
+    local water=ug_require "druttzen_osm_vanilla::/osm/water.lua"
+    local footprint=water.footprints(dataset.scenery,box,controls,value.sceneryRecords,value.sceneryOmissions or {})
+    if next(footprint) then
+      report.plantsInPaintedWater=water.countPlantsInFootprint(footprint,box)
+      if report.plantsInPaintedWater>0 then
+        problem("waterVegetation",tostring(report.plantsInPaintedWater).." tree or shrub positions are inside accepted painted water.")
+      end
+    end
+  end
   report.ok=#report.problems==0 and not report.partial
   return report
 end
@@ -532,6 +542,9 @@ function audit.format(report)
     c.nodes,e.nodes,c.streets,e.streets,c.tracks,e.tracks,c.usableEdges,e.usableEdges,c.models,e.models,
     c.surfaces,e.surfaces,c.labels,e.labels,c.components,e.components)
   text=text..string.format(" | functioning towns %d/%d",c.towns or 0,e.towns or 0)
+  if report.plantsInPaintedWater~=nil then
+    text=text..string.format(" | trees/shrubs in painted water %d",report.plantsInPaintedWater)
+  end
   if #report.problems>0 then
     local shown={}
     for i=1,math.min(3,#report.problems) do shown[#shown+1]=report.problems[i] end

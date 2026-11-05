@@ -6,7 +6,7 @@ from ijson.common import ObjectBuilder
 FIELDS = frozenset({'dataset', 'input', 'bounds', 'mapSize', 'settings',
                     'sourceSha256', 'luaSha256', 'alignment', 'output', 'report',
                     'edges', 'sceneryItems', 'placeLabels', 'waterFeatures',
-                    'format', 'converterDataset'})
+                    'format', 'converterDataset', 'waterFootprint'})
 
 
 def read_fields(path):
@@ -32,6 +32,7 @@ def read_fields(path):
                 if len(seen) > 10000:
                     raise ValueError('The converter report contains too many metadata fields.')
                 builder = ObjectBuilder() if key in FIELDS else None
+                field_events = 0
                 event, value = next(events)
                 depth = 0
                 while True:
@@ -42,8 +43,12 @@ def read_fields(path):
                     if depth > 128:
                         raise ValueError('The converter report is nested too deeply.')
                     if builder is not None:
-                        retained_events += 1
-                        if retained_events > 100000:
+                        field_events += 1
+                        if key != 'waterFootprint':
+                            retained_events += 1
+                        # A triangle has 14 events. Allow the converter's
+                        # 30,000-face budget without lifting other limits.
+                        if retained_events > 100000 or field_events > 420010:
                             raise ValueError('The converter alignment metadata is too large.')
                         builder.event(event, value)
                     if depth == 0:

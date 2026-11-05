@@ -67,6 +67,41 @@ function water.inFootprint(tiles,x,y)
   return false
 end
 
+local function plants(entity,T,modelTypes,visit)
+  if not api.engine.getComponent(entity,T.ASSET_GROUP) then return end
+  local models=api.engine.getComponent(entity,T.MODEL_INSTANCE_LIST)
+  local function check(modelId,kind,index,p)
+    if modelTypes[modelId]==nil then
+      local model=api.res.modelRep.get(modelId)
+      modelTypes[modelId]=not not (model and model.metadata and model.metadata.tree)
+    end
+    if modelTypes[modelId] then visit(kind,index,p) end
+  end
+  for i,model in ipairs(models and models.thinInstances or {}) do
+    check(model.modelId,"thin",i,model.pos)
+  end
+  for i,model in ipairs(models and models.fatInstances or {}) do
+    check(model.modelId,"fat",i,model.transf:cols(3))
+  end
+end
+
+function water.countPlantsInFootprint(tiles,box)
+  if not next(tiles) then return 0 end
+  local limits=api.engine.mapgen.getMinMaxValidTerrainHeight()
+  local V=api.type.Vec3f.new
+  local region=api.type.Box3.new(V(box.min.x,box.min.y,limits[1]),V(box.max.x,box.max.y,limits[2]))
+  local count,seen,modelTypes=0,{},{}
+  local T=api.type.ComponentType
+  api.engine.system.octreeSystem.findIntersectingEntities(region,function(entity)
+    if seen[entity] then return end
+    seen[entity]=true
+    plants(entity,T,modelTypes,function(_,_,p)
+      if water.inFootprint(tiles,p.x,p.y) then count=count+1 end
+    end)
+  end)
+  return count
+end
+
 function water.clearanceTargets(items,expected,modelTypes)
   local x0,y0,x1,y1=math.huge,math.huge,-math.huge,-math.huge
   for _,item in ipairs(items) do
@@ -80,13 +115,8 @@ function water.clearanceTargets(items,expected,modelTypes)
   local region=api.type.Box3.new(V(x0,y0,limits[1]),V(x1,y1,limits[2]))
   local targets,seen={},{}
   local T=api.type.ComponentType
-  local function check(entity,modelId,kind,index,p)
+  local function check(entity,kind,index,p)
     if p.x<x0 or p.x>x1 or p.y<y0 or p.y>y1 then return end
-    if modelTypes[modelId]==nil then
-      local model=api.res.modelRep.get(modelId)
-      modelTypes[modelId]=not not (model and model.metadata and model.metadata.tree)
-    end
-    if not modelTypes[modelId] then return end
     for _,item in ipairs(items) do
       if contains(item.face,p.x,p.y) then
         local group=expected[entity] or {}
@@ -101,15 +131,9 @@ function water.clearanceTargets(items,expected,modelTypes)
     end
   end
   api.engine.system.octreeSystem.findIntersectingEntities(region,function(entity)
-    if seen[entity] or not api.engine.getComponent(entity,T.ASSET_GROUP) then return end
+    if seen[entity] then return end
     seen[entity]=true
-    local models=api.engine.getComponent(entity,T.MODEL_INSTANCE_LIST)
-    for i,model in ipairs(models and models.thinInstances or {}) do
-      check(entity,model.modelId,"thin",i,model.pos)
-    end
-    for i,model in ipairs(models and models.fatInstances or {}) do
-      check(entity,model.modelId,"fat",i,model.transf:cols(3))
-    end
+    plants(entity,T,modelTypes,function(kind,index,p) check(entity,kind,index,p) end)
   end)
   return targets
 end

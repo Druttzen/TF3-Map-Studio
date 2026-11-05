@@ -150,10 +150,13 @@ class ShallowWaterTests(unittest.TestCase):
           items={{face={{0,0},{4,0},{0,4}}}}
           expected={}
           targets=water.clearanceTargets(items,expected,{})
+          plantsInWater=water.countPlantsInFootprint({["0,0"]={items[1].face}},
+            {min={x=0,y=0},max={x=8,y=8}})
           function checkPreview(...) previewModels={...}; return pcall(water.verifyClearance,{},expected) end
         ''')
         lua=self.lua.globals()
         self.assertEqual(len(lua.targets),1)
+        self.assertEqual(lua.plantsInWater,1)
         row=self.lua.table_from
         script=load_script(self.lua,CONTENT/'scenery.script.lua')
         face=self.lua.eval("{{0,0,10},{4,0,10},{0,4,10}}")

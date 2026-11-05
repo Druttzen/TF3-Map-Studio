@@ -32,6 +32,19 @@ def read_report(path):
  bounds=value.get('bounds'); size=value.get('mapSize')
  if not isinstance(bounds,list) or not isinstance(size,list) or any(type(v) not in {float,int} for v in bounds+size):raise ValueError('Converter bounds and map size must be numbers.')
  osm.validate_bounds(bounds,size)
+ if 'waterFootprint' in value:
+  footprint=value['waterFootprint']
+  if (not isinstance(footprint,dict) or set(footprint)!={'flat','follow'}
+      or any(not isinstance(faces,list) for faces in footprint.values())
+      or sum(map(len,footprint.values()))>30000):
+   raise ValueError('Invalid mapped-water footprint in converter report.')
+  for faces in footprint.values():
+   for face in faces:
+    if (not isinstance(face,list) or len(face)!=3 or any(
+        not isinstance(point,list) or len(point)!=2 or any(
+        type(coord) not in {float,int} or not -extent/2<=coord<=extent/2
+        for coord,extent in zip(point,size)) for point in face)):
+     raise ValueError('Invalid mapped-water triangle in converter report.')
  if 'sourceSha256' in value and (not isinstance(value['sourceSha256'],str) or not re.fullmatch('[0-9a-f]{64}',value['sourceSha256'])):raise ValueError('Invalid OSM checksum in converter report.')
  if 'luaSha256' in value and (not isinstance(value['luaSha256'],str) or not re.fullmatch('[0-9a-f]{64}',value['luaSha256'])):raise ValueError('Invalid Lua checksum in converter report.')
  if value.get('alignment') and value['alignment']!={'projection':'EPSG:3857 scaled to map size','origin':'centre','north':'positiveY','pngRows':'north to south'}:

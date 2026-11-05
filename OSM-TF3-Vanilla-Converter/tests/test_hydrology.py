@@ -45,6 +45,22 @@ class HydrologyTests(unittest.TestCase):
         self.assertEqual(d['waterFeatures'][0]['status'],'prepared')
         self.assertTrue(all(item['waterSurface']=='flat' and 'depth' not in item for item in d['scenery']))
 
+    def test_report_footprint_matches_the_lua_water_triangles(self):
+        text=fixture({'1':(-10,-10),'2':(10,-10),'3':(10,10),'4':(-10,10)},[
+            ('11',['1','2','3','4','1'],{'water':'pond'}),
+            ('12',['3','4'],{'waterway':'stream','width':'4'})])
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'water.osm'; path.write_text(text)
+            output=Path(folder)/'map.lua'
+            export_file(path,output,None,(100,100))
+            report=json.loads(output.with_suffix('.report.json').read_text(encoding='utf-8'))
+            dataset=LuaRuntime().execute(output.read_text(encoding='utf-8'))
+            for profile in ('flat','follow'):
+                faces=[[[p[1],p[2]] for p in item.face.values()] for item in dataset.scenery.values()
+                       if item.waterSurface==profile]
+                self.assertTrue(faces)
+                self.assertEqual(report['waterFootprint'][profile],faces)
+
     def test_stream_missing_width_has_visible_configured_fallback(self):
         d=self.convert(fixture({'1':(-10,0),'2':(0,0),'3':(10,10)},[
             ('11',['1','2','3'],{'waterway':'stream'})]),{'waterway_width':3})
@@ -183,6 +199,7 @@ class HydrologyTests(unittest.TestCase):
             dataset=runtime.execute(output.read_text(encoding='utf-8'))
             metadata=report['waterMetadata']; feature=metadata['features'][0]
             self.assertEqual(report['waterFeatures'],1)
+            self.assertEqual(report['waterFootprint'],{'flat':[],'follow':[]})
             self.assertEqual(feature['tags'],tags)
             self.assertEqual(feature['height'],{'raw':'72.4','datum':'OSM-untransformed'})
             self.assertEqual(feature['source'],{'type':'way','ref':'11'})

@@ -62,6 +62,8 @@ def biome_layer_mask(key,terrain,context,options,job):
    mask[row:end]=(height>options['water_level'])&(
     (height>=options['biome_highland_m'])|(slope>=options['biome_rock_slope']))
   return mask
+ exact=biomes.mapped_water(context,terrain.shape,job,profiles=('follow',))
+ if exact is not None:return exact
  mask=water_mask(context,terrain.shape,job,river_only=True)
  channels=[]
  for line in context['lines']:
@@ -402,6 +404,9 @@ def export(result,output,progress=None,cancel=None,game_paths=None):
     mask=biome_layer_mask(key,terrain,context,options,job)
     biome_report['layers'][key]={'label':label,'pixels':[nx,ny],'encoding':'8-bit grayscale: 0 or 255',
                                 'markedPixels':int(np.count_nonzero(mask))}
+    if key=='rivers':
+     biome_report['layers'][key]['geometrySource']=('OSM converter water footprint' if 'waterFootprint' in context['report']
+                                                    else 'Original OSM river areas and buffered lines')
     Image.fromarray(mask.astype(np.uint8)*255).save(staging/targets[key].name,format='PNG')
     del mask
   report={'format':'TF3-Heightmap-Studio-report','version':1,'createdUtc':datetime.now(timezone.utc).isoformat(),
@@ -433,7 +438,7 @@ def export(result,output,progress=None,cancel=None,game_paths=None):
               else 'Copy the biome PNGs to TF3 userdata/<Steam user>/3493540/local/biomes.')
    selectors=[('Biomes',targets['biomes'].name)]+[(biomes.LAYER_LABELS[key],targets[key].name) for key in layer_keys]
    selection='\n'.join(f'   {label}: {name}' for label,name in selectors)
-   instructions+=f'''\nVANILLA BIOMES\nCreate the map with the {options['biome_climate']} climate.\nAll PNGs below are {nx} x {ny} pixels, 8-bit grayscale.\n1. {copy_step}\n2. After importing the heightmap, open the map editor's Biomes tab.\n3. Choose the matching {options['biome_climate']} (Import) generator and assign:\n{selection}\n   Leave selectors that are not listed above empty.\n4. Inspect the game preview, then Apply.\nBiome codes: 0, 63, 127, 191, 255. Additional layers use 0 and 255.\nThe .biomes.tif stores IDs 0-4 for GIS. Water is determined by game heights.\n'''
+   instructions+=f'''\nVANILLA BIOMES\nCreate the map with the {options['biome_climate']} climate.\nAll PNGs below are {nx} x {ny} pixels, 8-bit grayscale.\n1. {copy_step}\n2. After importing the heightmap, open the map editor's Biomes tab.\n3. Choose the matching {options['biome_climate']} (Import) generator and assign:\n{selection}\n   Leave selectors that are not listed above empty.\n4. Check every filename in its selector and wait for the preview to finish.\n   Click Apply and wait for it to finish before exporting or saving.\n5. For a new OSM map, import Mapped waterways and Vegetation together after Apply.\n   To verify the save, reopen it and use Generate Heightmap > Export with\n   Biomes Data set to Yes. Check each exported layer separately. The game\n   may adjust mask values when applying its import generator.\nBiome codes: 0, 63, 127, 191, 255. Additional layers use 0 and 255.\nThe .biomes.tif stores IDs 0-4 for GIS. Water is determined by game heights.\n'''
   (staging/targets['instructions'].name).write_text(instructions,encoding='utf-8')
   attribution='OSM geometry: © OpenStreetMap contributors, ODbL. https://www.openstreetmap.org/copyright\n'
   if result['public']:
