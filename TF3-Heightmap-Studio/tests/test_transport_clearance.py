@@ -29,6 +29,17 @@ def test_disabled_clearance_preserves_underwater_source_profile():
  np.testing.assert_allclose(terrain,original)
 
 
+def test_clearance_only_preserves_dry_land_heights_at_overlapping_roads():
+ yy,xx=np.mgrid[-128:129:4,-128:129:4]
+ original=(xx*.1+yy*.07+12).astype(float)
+ terrain=original.copy()
+ for points in ([(-96,0),(96,0)],[(0,-96),(0,96)]):
+  corridor(terrain,original,{'points':points},(256,256),40,20,0,0,Job(),minimum_height=2)
+ np.testing.assert_array_equal(terrain[original>=2],original[original>=2])
+ assert np.all(terrain>=original)
+ assert sample_world(terrain,[(-96,0),(0,0),(96,0)],(256,256)).min()>=2
+
+
 def test_clearance_respects_nonzero_water_and_grade_limit():
  points=np.array([[i*10,0] for i in range(30)],dtype=float)
  sampled=np.linspace(5,25,30)

@@ -72,6 +72,7 @@ def limit_grade(heights,points,percent):
 
 def corridor(terrain,original,line,size,width,blend,smoothing,grade,job,river_depth=None,minimum_height=None):
  ny,nx=terrain.shape;dx=size[0]/(nx-1);dy=size[1]/(ny-1)
+ clearance_only=minimum_height is not None and smoothing==0 and grade==0 and river_depth is None
  step=max(.1,min(dx,dy,width/2,10));points=densify(line['points'],step)
  heights=sample_world(original,points,size)
  if smoothing>0:heights=gaussian_filter1d(heights,smoothing/step,mode='nearest')
@@ -92,6 +93,7 @@ def corridor(terrain,original,line,size,width,blend,smoothing,grade,job,river_de
   weight=np.clip((radius-distance)/blend,0,1) if blend else (distance<=width/2).astype(float)
   weight=weight*weight*(3-2*weight)
   target=heights[i]+t*(heights[i+1]-heights[i]);patch=terrain[r0:r1,c0:c1]
+  if clearance_only:target=np.maximum(patch,minimum_height)
   if river_depth is not None:target=np.minimum(patch,target)
   patch+=weight*(target-patch)
 
@@ -177,6 +179,7 @@ def prepare(report_path,osm_path,source_files,options=None,strokes=None,cache=No
  if chosen:warnings.append('Road/rail terrain refinements alter the DEM for construction. Bridge and tunnel interiors are excluded; inspect junctions and grades in the game.')
  if options['transport_water_clearance']>0 and any(line['kind'] in {'road','rail'} for line in chosen):
   warnings.append(f"AUTHORED TERRAIN: enabled ground-road/rail corridor profiles have a minimum height of {options['water_level']+options['transport_water_clearance']:.2f} m ({options['transport_water_clearance']:g} m above global water). This forms local embankments, not measured elevation or navigable bridges; inspect coastlines and corridor widths in TF3.")
+  warnings.append('For coastal embankments only, set the selected transport smoothing and grade controls to zero. Then clearance raises low corridor pixels without flattening or lowering existing dry-land heights.')
  if options['roads'] or options['railways']:
   skipped=sum(1 for line in context['lines'] if line['kind'] in {'road','rail'} and (line['bridge'] or line['tunnel']))
   if skipped:warnings.append(f'{skipped} bridge/tunnel polylines were excluded from terrain corridor editing.')
