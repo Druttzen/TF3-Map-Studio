@@ -65,10 +65,12 @@ try {
         (Test-Path "$Apps/TF3-Heightmap-Studio/TF3-Heightmap-Studio.exe")) {
         throw 'Uninstall did not remove both apps and preserve game-side files.'
     }
-    Invoke-Checked $Installer ($InstallArgs + '/NOIMPORTER=1' + ('/LOG="{0}/apps-only.log"' -f $TestRoot))
+    $AppsOnlyArgs = $Quiet + @(('/DIR="{0}"' -f $Apps), '/TF3GAME=', '/TF3USER=', ('/LOG="{0}/apps-only.log"' -f $TestRoot))
+    Invoke-Checked $Installer $AppsOnlyArgs
     if ((Get-ItemProperty "$StateKey/OSM Converter").Importer -or
-        (Get-ItemProperty "$StateKey/Heightmap Studio").UserData) {
-        throw 'The apps-only install configured a TF3 profile.'
+        (Get-ItemProperty "$StateKey/Heightmap Studio").UserData -or
+        (Get-ItemProperty "$StateKey/Heightmap Studio").Installation) {
+        throw 'The apps-only install configured TF3 paths.'
     }
     Invoke-Checked "$Apps/unins000.exe" ($Quiet + ('/LOG="{0}/uninstall-apps-only.log"' -f $TestRoot))
     Write-Host "Windows installer smoke test passed. Logs: $TestRoot"

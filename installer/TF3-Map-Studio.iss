@@ -39,7 +39,7 @@ Root: HKCU; Subkey: "Software\TF3 Map Studio\OSM Converter"; ValueType: string; 
 
 [Code]
 var
-  PathsPage: TInputDirWizardPage;
+  PathsPage: TInputQueryWizardPage;
   InstalledPaths: TArrayOfString;
 
 function RunHelper(Mode, Extra: String; var Lines: TArrayOfString): Boolean;
@@ -62,19 +62,48 @@ begin
   end;
 end;
 
+procedure BrowseTF3Folder(Sender: TObject);
+var
+  Index: Integer;
+  Folder: String;
+begin
+  Index := TNewButton(Sender).Tag;
+  Folder := PathsPage.Values[Index];
+  if BrowseForFolder(PathsPage.PromptLabels[Index].Caption, Folder, False) then
+    PathsPage.Values[Index] := Folder;
+end;
+
+procedure AddFolderField(Prompt: String);
+var
+  Index: Integer;
+  Browse: TNewButton;
+begin
+  Index := PathsPage.Add(Prompt, False);
+  PathsPage.Edits[Index].Width := PathsPage.Edits[Index].Width - ScaleX(88);
+  Browse := TNewButton.Create(PathsPage);
+  Browse.Parent := PathsPage.Surface;
+  Browse.Caption := 'Browse...';
+  Browse.Left := PathsPage.Edits[Index].Left + PathsPage.Edits[Index].Width + ScaleX(8);
+  Browse.Top := PathsPage.Edits[Index].Top - 1;
+  Browse.Width := ScaleX(80);
+  Browse.Height := WizardForm.NextButton.Height;
+  Browse.Tag := Index;
+  Browse.OnClick := @BrowseTF3Folder;
+end;
+
 procedure InitializeWizard;
 var
   Detected: TArrayOfString;
   Existing: String;
 begin
-  PathsPage := CreateInputDirPage(wpSelectDir, 'Transport Fever 3 folders',
+  { The standard directory page rejects empty fields even in silent mode. }
+  PathsPage := CreateInputQueryPage(wpSelectDir, 'Transport Fever 3 folders',
     'Choose the game and the user profile for your maps.',
     'Setup puts the OSM Importer mod in the selected user folder. ' +
     'Leave the user folder blank to install only the desktop apps. ' +
-    'You can find the user folder in TF3 under Settings > Advanced > Open User Data Folder.',
-    False, '');
-  PathsPage.Add('Game installation folder:');
-  PathsPage.Add('User data folder:');
+    'You can find the user folder in TF3 under Settings > Advanced > Open User Data Folder.');
+  AddFolderField('Game installation folder:');
+  AddFolderField('User data folder:');
   ExtractTemporaryFile('setup-game.exe');
   if RunHelper('detect', '', Detected) and (GetArrayLength(Detected) >= 3) then
   begin
@@ -92,21 +121,20 @@ begin
   if RegQueryStringValue(HKCU, 'Software\TF3 Map Studio\Heightmap Studio', 'UserData', Existing)
     and DirExists(Existing) then
     PathsPage.Values[1] := Existing;
+  Existing := ExpandConstant('{param:TF3GAME|<auto>}');
+  if Existing <> '<auto>' then PathsPage.Values[0] := Existing;
+  Existing := ExpandConstant('{param:TF3USER|<auto>}');
+  if Existing <> '<auto>' then PathsPage.Values[1] := Existing;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   Choices: TArrayOfString;
-  ChoiceFile, GameOverride, ProfileOverride: String;
+  ChoiceFile: String;
 begin
-  GameOverride := ExpandConstant('{param:TF3GAME|}');
-  ProfileOverride := ExpandConstant('{param:TF3USER|}');
   SetArrayLength(Choices, 3);
   Choices[0] := Trim(PathsPage.Values[0]);
   Choices[1] := Trim(PathsPage.Values[1]);
-  if GameOverride <> '' then Choices[0] := GameOverride;
-  if ProfileOverride <> '' then Choices[1] := ProfileOverride;
-  if ExpandConstant('{param:NOIMPORTER|0}') = '1' then Choices[1] := '';
   Choices[2] := WizardDirValue;
   ChoiceFile := ExpandConstant('{tmp}\tf3-selection.txt');
   Result := 'Setup could not prepare the Transport Fever 3 folders.';
