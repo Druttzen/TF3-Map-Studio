@@ -67,6 +67,15 @@ import. The converter preserves valid OSM outlines and island holes. The mod
 uses the game's Water Dirty material and holds the visible terrain to a
 fixed surface. Each lake, pond or reservoir shares one sampled base height
 across its triangles and batches. Waterway triangles follow the terrain.
+The import clears eligible landscape trees and shrubs with their roots
+inside the painted outline. The game previews the removals before the
+batch is built. A batch stops for inspection if the preview includes a
+different object or leaves an in-water plant behind. TF3 can exclude
+separately placed asset groups from automatic removal. Use the vegetation
+eraser on the obstruction before retrying that batch.
+With both water and vegetation selected, the importer paints the water first
+and leaves new trees and shrubs out of the completed water footprints.
+Clearance runs during import.
 Older converted maps with the 0.5 m shallow-bed treatment retain their
 previous alignment. Reconvert the OSM source for the new behavior.
 

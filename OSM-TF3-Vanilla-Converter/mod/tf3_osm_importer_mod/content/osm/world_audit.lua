@@ -444,7 +444,9 @@ function audit.inspect(dataset,value)
   end
   if #assetEntities>0 then
     for index,item in ipairs(dataset.scenery or {}) do
-      if item.model and controls.selectedScenery(item,options) then expectAsset(item,itemKey(item),nil,index,"scenery") end
+      if item.model and controls.selectedScenery(item,options) and not (value.sceneryOmissions and value.sceneryOmissions[index]) then
+        expectAsset(item,itemKey(item),nil,index,"scenery")
+      end
     end
     if options.places then
       for index,label in ipairs(dataset.labels or {}) do

@@ -1,6 +1,7 @@
 -- GPL-3.0. TF3 builder using its installed API definitions and vanilla resources.
 local dataset
 local loadedSource,attemptedSource
+local waterFootprintDataset,waterFootprintTiles
 local maps = ug_require "druttzen_osm_vanilla::/osm/map_data.lua"
 local controls = ug_require "druttzen_osm_vanilla::/osm/controls.lua"
 local groundRecovery = ug_require "druttzen_osm_vanilla::/osm/ground_recovery.lua"
@@ -241,6 +242,10 @@ end
 
 local function beginImport(value)
   value.datasetId=dataset.id; value.phase="scenery"; value.cursor=1; value.nodes={}; value.runSteps=0
+  -- When both are selected, paint water first so new scenery never plants
+  -- trees in it. Keep original source indices for saved progress and audit.
+  value.waterPass=value.options.waterways and value.options.vegetation or nil
+  waterFootprintDataset=nil
   value.mapExpectedSize=dataset.size
   -- Preserve older saves' height rules. New imports exclude construction
   -- alignments from their height reference, including future water basins.
@@ -455,6 +460,8 @@ local function finishScenery(value)
   local record=value.pendingScenery
   if not record then return end
   assert(#record.entities>0,"The game returned no scenery entity. Keep this save for inspection; do not rebuild this accepted step.")
+  water.removeClearance(record.clearanceEntities)
+  record.clearanceEntities=nil
   for _,entity in ipairs(record.entities) do
     assert(api.engine.entityExists(entity),"An accepted scenery object is missing. Keep this save for inspection.")
     api.cmd.sendCommand(api.cmd.makeEntitySetPlayerCmd(entity,api.engine.util.getPlayer()))
@@ -513,25 +520,45 @@ local function sceneryProposal(value)
   local last=value.cursor-1
   local included=0
   local scanned=0
+  local box=api.engine.terrain.getBoundingBox()
+  local function selected(index)
+    local source=dataset.scenery[index]
+    if not controls.selectedScenery(source,value.options) then return nil end
+    if value.waterPass~=nil and (source.category=="waterways")~=value.waterPass then return nil end
+    return controls.resolvedItem(source,index,value)
+  end
   -- Scan by original dataset index, so progress remains resumable when the
   -- batch size changes. A batch counts selected items, not excluded ones.
   while last<#dataset.scenery and included<value.options.batchSize and scanned<checkBudget do
     last=last+1
     scanned=scanned+1
-    if controls.selectedScenery(dataset.scenery[last],value.options) and controls.resolvedItem(dataset.scenery[last],last,value) then included=included+1 end
+    if selected(last) then included=included+1 end
   end
   -- A preparation failure belongs to this explicit candidate batch, even if
   -- terrain/resource checks stop before a native proposal can be submitted.
   value.failedLast=last
   for i=value.cursor,last do
-    local source=controls.resolvedItem(dataset.scenery[i],i,value)
-    if source and controls.selectedScenery(source,value.options) and source.model then
+    local source=selected(i)
+    if source and source.model then
       requireResource(api.res.modelRep,source.model)
-      local pos=controls.position(source.pos,api.engine.terrain.getBoundingBox())
-      items[#items+1]={sourceIndex=i,model=source.model,rotation=source.rotation,
-        pos={pos[1],pos[2],terrainZ(pos)}}
-    elseif source and controls.selectedScenery(source,value.options) and source.texture then
-      local box=api.engine.terrain.getBoundingBox()
+      local pos=controls.position(source.pos,box)
+      if value.waterPass==false and controls.sceneryCategory(source)=="vegetation" then
+        if waterFootprintDataset~=dataset then
+          waterFootprintTiles=water.footprints(dataset.scenery,box,controls,value.sceneryRecords,value.sceneryOmissions or {})
+          waterFootprintDataset=dataset
+        end
+        if water.inFootprint(waterFootprintTiles,pos[1],pos[2]) then
+          value.sceneryOmissions=value.sceneryOmissions or {}
+          value.sceneryOmissions[i]="Vegetation inside painted water"
+          included=included-1
+          source=nil
+        end
+      end
+      if source then
+        items[#items+1]={sourceIndex=i,model=source.model,rotation=source.rotation,
+          pos={pos[1],pos[2],terrainZ(pos)}}
+      end
+    elseif source and source.texture then
       local prepared,reason=controls.groundFace(source.face,box)
       if not prepared then
         value.sceneryOmissions=value.sceneryOmissions or {}
@@ -573,9 +600,9 @@ local function sceneryProposal(value)
   if included==0 then return nil,last,0 end
   local proposal=api.type.SimpleProposal.new()
   local constructions={}
-  local function add(params)
+  local function add(params,fileName)
     local construction=api.type.SimpleProposal.ConstructionEntity.new()
-    construction.fileName=sceneryName
+    construction.fileName=fileName or sceneryName
     construction.params=params
     if params.origin then
       local V=api.type.Vec4f.new
@@ -590,8 +617,16 @@ local function sceneryProposal(value)
   end
   if #items>0 then add({items=items,seed=0}) end
   for _,tile in ipairs(waterTileOrder) do add(tile) end
+  local expected,modelTypes={},{}
+  for _,tile in ipairs(waterTileOrder) do
+    local targets=water.clearanceTargets(tile.items,expected,modelTypes)
+    if #targets>0 then
+      requireResource(api.res.constructionRep,water.clearanceConstruction)
+      add({seed=0,origin=tile.origin,vegetationTargets=targets,clearanceFace=tile.items[1].face},water.clearanceConstruction)
+    end
+  end
   proposal.constructionsToAdd=constructions
-  return proposal,last,included
+  return proposal,last,included,expected
 end
 
 local function proposedModelPositions(value,phase,last,proposal)
@@ -931,7 +966,8 @@ function script.postUpdate(_userParams, state, _dt, _result)
   value.cooldown=math.max(0,(value.cooldown or 0)-math.max(0,_dt or 0))
   if value.cooldown>0 then state:set(value); return end
   if value.phase=="scenery" and value.cursor>#dataset.scenery then
-    value.phase="edges"; value.cursor=1; state:set(value)
+    if value.waterPass then value.waterPass=false else value.phase="edges" end
+    value.cursor=1; state:set(value)
   end
   if value.phase=="edges" then
     local scanned=0
@@ -969,18 +1005,19 @@ function script.postUpdate(_userParams, state, _dt, _result)
       towns.build(value,state,{name=source.name,pos=pos})
       return
     end
-    local proposal,last,included
+    local proposal,last,included,clearance
     local edge
     if phase=="edges" then
       edge=dataset.edges[value.cursor]; proposal,last=networkProposal(value)
     elseif phase=="labels" then proposal,last=labelProposal(value)
-    else proposal,last,included=sceneryProposal(value) end
+    else proposal,last,included,clearance=sceneryProposal(value) end
     if not proposal then value.cursor=last+1; value.failedFirst=nil; value.failedLast=nil; state:set(value); return end
     -- Preserve the exact world XYZ supplied for models. Water constructions
     -- only contain faces. Publish model evidence only after acceptance, before any
     -- separate ownership/name commands can fail. Older journals stay unchanged.
     local modelPositions=proposedModelPositions(value,phase,last,proposal)
     value.failedLast=last
+    if clearance and next(clearance) then water.verifyClearance(proposal,clearance) end
     local called=false
     -- Native construction evaluation can fail while preparing this command.
     -- Nothing has been submitted then, so the same source range is safe to
@@ -1032,12 +1069,17 @@ function script.postUpdate(_userParams, state, _dt, _result)
           finishOwnership(value)
         else
           local record={entities={},name=proposal.constructionsToAdd[1].name,phase=phase,first=value.cursor,last=last,
-            modelJournalSchema=2,modelPositions=modelPositions}
+            waterOnly=phase=="scenery" and value.waterPass or nil,modelJournalSchema=2,modelPositions=modelPositions}
           for _,entry in ipairs(resultEntities or res.resultEntities or {}) do
             local entity=entry[1]
-            if api.engine.entityExists(entity) and
-              (api.engine.getComponent(entity,compType.CONSTRUCTION) or api.engine.getComponent(entity,compType.ASSET_GROUP)) then
-              record.entities[#record.entities+1]=entity
+            if api.engine.entityExists(entity) then
+              local construction=api.engine.getComponent(entity,compType.CONSTRUCTION)
+              if construction and construction.fileName==water.clearanceConstruction then
+                record.clearanceEntities=record.clearanceEntities or {}
+                record.clearanceEntities[#record.clearanceEntities+1]=entity
+              elseif construction or api.engine.getComponent(entity,compType.ASSET_GROUP) then
+                record.entities[#record.entities+1]=entity
+              end
             end
           end
           value.sceneryRecords=value.sceneryRecords or {}

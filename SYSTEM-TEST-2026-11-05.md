@@ -228,6 +228,24 @@ water-protection evidence includes native height logs and in-game images
 of both features. The final automated suites passed 269 importer tests
 and 397 converter tests, with 501 and 630 subtests respectively.
 
+## Partille water vegetation clearance
+
+TF3 build 40425 painted all 628 Water Dirty faces for Bockemossen and
+Besebäcken. The native model inventory showed 30 trees removed inside the
+lake and seven inside the stream. The 45 models measured outside the water
+outlines matched their original model names and coordinates. No temporary
+clearance construction or placeholder model remained in the tested areas.
+The engine rendered both water features after clearance.
+
+The importer checks the native removal preview before submitting a water
+batch. It stops before changing the map if the preview would affect another
+object or leave an identified plant in the footprint. A separately placed
+two-shrub asset group reproduced the second case. Automatic clearance for
+that protected group type remains unsupported. The automated tests cover
+shrub placement around accepted water footprints and rejection of a preview
+that includes a shore plant or a rock. The importer and converter suites
+passed 271 and 399 tests respectively.
+
 ## Limits
 
 This is broad regression, integration, packaging, ownership and native importer

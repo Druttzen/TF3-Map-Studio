@@ -103,3 +103,70 @@ class ShallowWaterTests(unittest.TestCase):
             self.assertEqual(list(construction.params['items'][1].face[1].values()),[x,y,9.5])
             sub=script.updateFn(None,construction.params).subconstructions[1]
             self.assertEqual(list(sub.groundFaces[1].face[1].values()),[0,0,9.5,1])
+
+    def test_shrubs_are_skipped_only_inside_accepted_water(self):
+        self.lua.execute('''
+          local waterFace=dataset.scenery[1]
+          local shrub="::/assets/vegetation/trees/hzl_01/hzl_01.mdl"
+          dataset.scenery={
+            {category="vegetation",model=shrub,pos={1,1}},
+            {category="vegetation",model=shrub,pos={3,3}},
+            waterFace,
+          }
+        ''')
+        self.h.event('configure',dict(vegetation=True))
+        self.h.event('start')
+        self.h.finish()
+        state=self.h.state.value
+        self.assertEqual(state.builtScenery,2)
+        self.assertEqual(state.sceneryOmissions[1],"Vegetation inside painted water")
+        self.assertIsNone(state.sceneryOmissions[2])
+        self.assertTrue(state.sceneryRecords[1].waterOnly)
+        self.assertEqual(self.lua.globals().commands[2].constructionsToAdd[1].params['items'][1].sourceIndex,2)
+
+    def test_preview_requires_the_exact_vegetation_models(self):
+        self.lua.execute('''
+          local T=api.type.ComponentType
+          T.MODEL_INSTANCE_LIST=7
+          local existing=api.engine.getComponent
+          api.engine.getComponent=function(id,kind)
+            if id==90 and kind==T.ASSET_GROUP then return {} end
+            if id==90 and kind==T.MODEL_INSTANCE_LIST then
+              return {thinInstances={
+                {modelId=1,pos={x=1,y=1,z=10}}, -- shrub in water
+                {modelId=1,pos={x=3,y=3,z=10}}, -- shrub on bank
+                {modelId=2,pos={x=1,y=1,z=10}}, -- rock in water
+              }}
+            end
+            return existing(id,kind)
+          end
+          api.res.modelRep={find=function() return 1 end,
+            get=function(id) return {metadata=id==1 and {tree={}} or {rock={}}} end}
+          api.engine.system.octreeSystem.findIntersectingEntities=function(_,cb) cb(90) end
+          api.engine.util.proposal={makeProposalData=function(_)
+            return {collisionInfo={autoRemovalEntity2models={[90]=previewModels}}}
+          end}
+          water=ug_require "druttzen_osm_vanilla::/osm/water.lua"
+          items={{face={{0,0},{4,0},{0,4}}}}
+          expected={}
+          targets=water.clearanceTargets(items,expected,{})
+          function checkPreview(...) previewModels={...}; return pcall(water.verifyClearance,{},expected) end
+        ''')
+        lua=self.lua.globals()
+        self.assertEqual(len(lua.targets),1)
+        row=self.lua.table_from
+        script=load_script(self.lua,CONTENT/'scenery.script.lua')
+        face=self.lua.eval("{{0,0,10},{4,0,10},{0,4,10}}")
+        params=row(dict(origin=row([1,1]),vegetationTargets=lua.targets,clearanceFace=face))
+        sub=script.updateFn(None,params).subconstructions[1]
+        self.assertEqual(len(sub.models),0)
+        self.assertEqual(len(sub.groundFaces),1)
+        self.assertEqual(len(sub.colliders),1)
+        self.assertTrue(lua.checkPreview(row([0,0])))
+        for index in (1,2):
+            ok,error=lua.checkPreview(row([0,0]),row([0,index]))
+            self.assertFalse(ok)
+            self.assertIn("outside the selected vegetation",error)
+        ok,error=lua.checkPreview()
+        self.assertFalse(ok)
+        self.assertIn("could not clear",error)

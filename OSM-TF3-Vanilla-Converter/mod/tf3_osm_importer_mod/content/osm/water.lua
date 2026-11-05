@@ -2,6 +2,7 @@
 local water={}
 water.construction="druttzen_osm_vanilla::/osm/water.con"
 water.model="druttzen_osm_vanilla::/osm/water_triangle.mdl"
+water.clearanceConstruction="druttzen_osm_vanilla::/osm/water_clearance.con"
 
 local function finite(n) return type(n)=="number" and n==n and math.abs(n)<math.huge end
 function water.checkEmpty(face,margin)
@@ -19,6 +20,144 @@ function water.checkEmpty(face,margin)
     if api.engine.getComponent(entity,T.BASE_EDGE) or (con and con.fileName~="druttzen_osm_vanilla::/osm/scenery.con") then blocked=true end
   end)
   assert(not blocked,"Shallow water is near an existing road, railway or construction; network heights have priority")
+end
+
+local function contains(face,x,y)
+  for i,a in ipairs(face) do
+    local b=face[i%3+1]
+    if (b[1]-a[1])*(y-a[2])-(b[2]-a[2])*(x-a[1]) < -1e-6 then return false end
+  end
+  return true
+end
+
+local function tileKey(column,row)
+  return column..","..row
+end
+
+function water.footprints(scenery,box,controls,records,omissions)
+  local tiles={}
+  for _,record in ipairs(records or {}) do
+    if record.waterOnly then
+      for i=record.first,record.last do
+        local item=scenery[i]
+        if item.category=="waterways" and not omissions[i] then
+          local face=assert(controls.groundFace(item.face,box))
+          local a,b,c=face[1],face[2],face[3]
+          local x0,x1=math.min(a[1],b[1],c[1]),math.max(a[1],b[1],c[1])
+          local y0,y1=math.min(a[2],b[2],c[2]),math.max(a[2],b[2],c[2])
+          for column=math.floor(x0/64),math.floor(x1/64) do
+            for row=math.floor(y0/64),math.floor(y1/64) do
+              local key=tileKey(column,row)
+              local tile=tiles[key] or {}
+              tiles[key]=tile
+              tile[#tile+1]=face
+            end
+          end
+        end
+      end
+    end
+  end
+  return tiles
+end
+
+function water.inFootprint(tiles,x,y)
+  for _,face in ipairs(tiles[tileKey(math.floor(x/64),math.floor(y/64))] or {}) do
+    if contains(face,x,y) then return true end
+  end
+  return false
+end
+
+function water.clearanceTargets(items,expected,modelTypes)
+  local x0,y0,x1,y1=math.huge,math.huge,-math.huge,-math.huge
+  for _,item in ipairs(items) do
+    for _,p in ipairs(item.face) do
+      x0=math.min(x0,p[1]); y0=math.min(y0,p[2])
+      x1=math.max(x1,p[1]); y1=math.max(y1,p[2])
+    end
+  end
+  local limits=api.engine.mapgen.getMinMaxValidTerrainHeight()
+  local V=api.type.Vec3f.new
+  local region=api.type.Box3.new(V(x0,y0,limits[1]),V(x1,y1,limits[2]))
+  local targets,seen={},{}
+  local T=api.type.ComponentType
+  local function check(entity,modelId,kind,index,p)
+    if p.x<x0 or p.x>x1 or p.y<y0 or p.y>y1 then return end
+    if modelTypes[modelId]==nil then
+      local model=api.res.modelRep.get(modelId)
+      modelTypes[modelId]=not not (model and model.metadata and model.metadata.tree)
+    end
+    if not modelTypes[modelId] then return end
+    for _,item in ipairs(items) do
+      if contains(item.face,p.x,p.y) then
+        local group=expected[entity] or {}
+        expected[entity]=group
+        local key=kind..":"..index
+        if not group[key] then
+          group[key]=true
+          targets[#targets+1]={p.x,p.y,p.z}
+        end
+        return
+      end
+    end
+  end
+  api.engine.system.octreeSystem.findIntersectingEntities(region,function(entity)
+    if seen[entity] or not api.engine.getComponent(entity,T.ASSET_GROUP) then return end
+    seen[entity]=true
+    local models=api.engine.getComponent(entity,T.MODEL_INSTANCE_LIST)
+    for i,model in ipairs(models and models.thinInstances or {}) do
+      check(entity,model.modelId,"thin",i,model.pos)
+    end
+    for i,model in ipairs(models and models.fatInstances or {}) do
+      check(entity,model.modelId,"fat",i,model.transf:cols(3))
+    end
+  end)
+  return targets
+end
+
+function water.verifyClearance(proposal,expected)
+  local preview=api.engine.util.proposal.makeProposalData(proposal)
+  local collisions=preview and preview.collisionInfo
+  assert(collisions,"The game did not provide a vegetation clearance preview")
+  assert(#(collisions.buildingEntities or {})==0 and #(collisions.removableModules or {})==0,
+    "Water clearance would affect an existing building or module")
+  local removed={}
+  local kinds={[0]="thin",[1]="fat"}
+  for entity,models in pairs(collisions.autoRemovalEntity2models or {}) do
+    local group={}
+    removed[entity]=group
+    for _,entry in ipairs(models) do
+      -- Native removal indices are zero-based. Kind 0 is the thin instance list.
+      local kind=kinds[entry[1]]
+      local key=kind and kind..":"..(entry[2]+1)
+      assert(key and expected[entity] and expected[entity][key],
+        "Water clearance would remove an object outside the selected vegetation")
+      group[key]=true
+    end
+  end
+  for entity,models in pairs(expected) do
+    for key in pairs(models) do
+      assert(removed[entity] and removed[entity][key],"The game could not clear a tree or shrub inside the water footprint")
+    end
+  end
+end
+
+function water.removeClearance(entities)
+  local pending={}
+  for _,entity in ipairs(entities or {}) do
+    if api.engine.entityExists(entity) then
+      local construction=api.engine.getComponent(entity,api.type.ComponentType.CONSTRUCTION)
+      assert(construction and construction.fileName==water.clearanceConstruction,
+        "The temporary water clearance construction changed")
+      pending[#pending+1]=entity
+    end
+  end
+  if #pending==0 then return end
+  local proposal=api.type.SimpleProposal.new()
+  proposal.constructionsToRemove=pending
+  api.cmd.sendCommand(api.cmd.makeWorldBuildProposalCmd(proposal,nil,false,false))
+  for _,entity in ipairs(pending) do
+    assert(not api.engine.entityExists(entity),"Temporary water clearance remains. Retry to finish the accepted step.")
+  end
 end
 function water.settings(source)
   local p={x=0,y=0,level=20,endLevel=20,width=20,length=20,depth=2,carve=false}

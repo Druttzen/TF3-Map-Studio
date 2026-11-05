@@ -4,6 +4,21 @@ local script = {}
 function script.updateFn(_captureParams, params)
   local sub = { tag = 1, models = {}, groundFaces = {}, terrainAlignmentLists = {{type="EQUAL",faces={}}} }
   local origin=params.origin or {0,0}
+  if params.vegetationTargets then
+    local colliders={}
+    for _,p in ipairs(params.vegetationTargets) do
+      colliders[#colliders+1]={type="BOX",params={halfExtents={0.08,0.08,0.4}},
+        transf={1,0,0,0, 0,1,0,0, 0,0,1,0, p[1]-origin[1],p[2]-origin[2],p[3]+0.4,1}}
+    end
+    sub.colliders=colliders
+    -- A ground face keeps the helper identifiable as a native construction.
+    -- TF3 otherwise replaces collider-only constructions with placeholder models.
+    local face={}
+    for i,p in ipairs(params.clearanceFace) do face[i]={p[1]-origin[1],p[2]-origin[2],p[3],1} end
+    sub.groundFaces[1]={face=face,loop=true,modes={{type="FILL",
+      key="druttzen_osm_vanilla::/osm/dirty_water.gtex",texCoords={{0,0},{1,0},{0,1}}}}}
+    return {cost=0,maintenanceCost=0,noCostAtAll=true,subconstructions={sub}}
+  end
   for _, item in ipairs(params.items or {}) do
     if item.model then
       local c, s = math.cos(item.rotation or 0), math.sin(item.rotation or 0)
