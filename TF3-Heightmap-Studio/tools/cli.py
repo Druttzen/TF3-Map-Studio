@@ -1,5 +1,5 @@
 """Reproducible command-line entry point; the Windows app uses the same engine."""
-import argparse,json,os
+import argparse,json,os,sys
 from terrain import prepare,export,load_project
 from game_paths import detect, suggested_output
 
@@ -14,7 +14,8 @@ def main():
  game_paths=detect() if args.to_tf3 else None
  if args.to_tf3 and not game_paths.local:parser.error('A unique TF3 user folder could not be selected. Use --output with its heightmaps folder or select it in the app.')
  output=suggested_output(game_paths,p['osmFile']) if args.to_tf3 else args.output or p['output']
- progress=lambda percent,stage,detail:print(f'{percent:5.1f}% {stage} {detail}',flush=True)
+ def progress(percent,stage,detail):
+  print(f'{percent:5.1f}% {stage} {detail}',file=sys.stderr,flush=True)
  result=prepare(p['converterReport'],p['osmFile'],p['elevationFiles'],p['options'],p['brushStrokes'],cache=args.cache,progress=progress,api_key=os.environ.get('TF3_OPENTOPO_KEY'),lua_path=p.get('convertedLua'),lua_sha=p.get('luaSha256'),biome_strokes=p.get('biomeStrokes'),osm_sha=p.get('osmSha256'))
  report=export(result,output,progress=progress,game_paths=game_paths,auto_name=args.to_tf3)
  print(json.dumps({'png':report['files']['png'],'min':report['importMinimumMetres'],'max':report['importMaximumMetres']},indent=2))
