@@ -12,7 +12,7 @@ from lua_map import find_map
 from height_settings import DEFAULTS, CHOICES, RANGES, INTEGERS, normalize
 from terrain import prepare, export, preview_image, apply_stroke, load_project, project_osm_checksum
 from job import Cancelled
-from game_paths import detect, height_metres, suggested_output, select_user_folder
+from game_paths import detect, height_metres, setup_path, suggested_output, select_user_folder
 import biomes
 from osm_converter import atomic_write
 APP_VERSION='0.13-preview'
@@ -477,7 +477,11 @@ class App(tk.Tk):
   self.use_report(path)
 
  def choose_report_folder(self):
-  path=filedialog.askdirectory(parent=self,title='Choose importer mod folder containing import-report.json')
+  importer=setup_path('Importer')
+  if not self.game_paths.local or not importer or importer.parent.parent!=self.game_paths.local or not importer.is_dir():
+   importer=None
+  path=filedialog.askdirectory(parent=self,title='Choose importer mod folder containing import-report.json',
+                               initialdir=str(importer) if importer else None)
   if path:self.use_report(path)
 
  def use_report(self,path):

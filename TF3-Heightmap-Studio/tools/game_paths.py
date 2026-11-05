@@ -1,10 +1,11 @@
 """Read installed TF3/Steam paths; never modify the Windows registry. GPL-3.0."""
 from dataclasses import dataclass
-import os, re, sys
+import json, os, re, sys
 from pathlib import Path
 
 APP_ID='3493540'
 UNINSTALL_KEY=r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App '+APP_ID
+SETUP_KEY=r'Software\TF3 Map Studio\Heightmap Studio'
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,50 @@ def steam_libraries(roots):
  return list(dict.fromkeys(p.resolve() for p in libraries))
 
 
-def detect():
+def setup_path(name):
+ try:
+  import winreg
+  with winreg.OpenKey(winreg.HKEY_CURRENT_USER,SETUP_KEY) as handle:
+   value=winreg.QueryValueEx(handle,name)[0]
+  if isinstance(value,str) and value and Path(value).is_absolute():return Path(value)
+ except (ImportError,OSError,ValueError):pass
+ return None
+
+
+def non_steam_installations():
+ """Read registered GOG installs and Epic's installed-game manifests."""
+ try:import winreg
+ except ImportError:return
+ uninstall=r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+ for hive in (winreg.HKEY_LOCAL_MACHINE,winreg.HKEY_CURRENT_USER):
+  for view in (winreg.KEY_WOW64_32KEY,winreg.KEY_WOW64_64KEY):
+   try:
+    with winreg.OpenKey(hive,uninstall,0,winreg.KEY_READ|view) as parent:
+     for index in range(winreg.QueryInfoKey(parent)[0]):
+      try:
+       name=winreg.EnumKey(parent,index)
+       if name.lower().startswith('steam app '):continue
+       with winreg.OpenKey(parent,name) as entry:
+        if winreg.QueryValueEx(entry,'DisplayName')[0]!='Transport Fever 3':continue
+        location=winreg.QueryValueEx(entry,'InstallLocation')[0]
+       if isinstance(location,str) and Path(location).is_absolute():
+        yield Path(location),'TF3 Windows install registry'
+      except OSError:continue
+   except OSError:continue
+ if program_data:=os.environ.get('ProgramData'):
+  for manifest in (Path(program_data)/'Epic/EpicGamesLauncher/Data/Manifests').glob('*.item'):
+   try:
+    entry=json.loads(read_vdf(manifest))
+    location=Path(entry['InstallLocation'])
+    if entry['DisplayName']=='Transport Fever 3' and location.is_absolute():
+     yield location,'Epic TF3 manifest'
+   except (KeyError,ValueError,TypeError):continue
+ for key in ('ProgramW6432','ProgramFiles'):
+  if program_files:=os.environ.get(key):
+   yield Path(program_files)/'Epic Games/TransportFever3','Verified TF3 in Epic Games folder'
+
+
+def detect(*, configured=True):
  games,roots,active=registry_locations()
  if not roots:
   if sys.platform=='win32':
@@ -102,7 +146,24 @@ def detect():
  local=None;profile_source=''
  if installation and len(active_profiles)==1:local=active_profiles[0];profile_source='Active Steam account registry'
  elif installation and not active_profiles and len(profiles)==1:local=profiles[0];profile_source='Only existing TF3 Steam profile'
- return GamePaths(installation,local,tuple(profiles),source,profile_source)
+ if not installation:
+  for path,label in non_steam_installations():
+   if valid_installation(path):
+    installation=path.resolve();source=label
+    if roaming:=os.environ.get('APPDATA'):
+     candidate=Path(roaming)/'Transport Fever 3'
+     if (candidate/'settings.lua').is_file():
+      local=candidate.resolve();profile_source='Transport Fever 3 roaming profile'
+      profiles.insert(0,local)
+    break
+ result=GamePaths(installation,local,tuple(dict.fromkeys(profiles)),source,profile_source)
+ if configured:
+  if (path:=setup_path('Installation')) and valid_installation(path):
+   result=GamePaths(path.resolve(),result.local,result.profiles,'TF3 Map Studio setup',result.profile_source)
+  if path:=setup_path('UserData'):
+   try:return select_user_folder(path,result)
+   except (OSError,ValueError):pass
+ return result
 
 
 def height_metres(value):

@@ -37,6 +37,27 @@ def test_tf3_install_registry_and_separate_steam_user_folder(tmp_path):
     assert not result.heightmaps.exists()  # Discovery never changes game folders.
 
 
+def test_setup_profile_takes_precedence_over_active_steam_account(tmp_path):
+    steam=tmp_path/'Steam'; active=profile(steam,12); chosen=profile(steam,34)
+    game=installation(tmp_path/'Game')
+    with patch('game_paths.registry_locations',return_value=([(game,'registry')],[steam],'12')), \
+         patch('game_paths.setup_path',side_effect={'UserData':chosen,'Installation':None}.get):
+        assert detect().local==chosen
+        assert detect(configured=False).local==active
+
+
+def test_non_steam_installation_uses_roaming_profile(tmp_path,monkeypatch):
+    game=installation(tmp_path/'Epic')
+    local=tmp_path/'Roaming/Transport Fever 3'
+    local.mkdir(parents=True)
+    (local/'settings.lua').touch()
+    monkeypatch.setenv('APPDATA',str(local.parent))
+    with patch('game_paths.registry_locations',return_value=([],[tmp_path/'Steam'],'')), \
+         patch('game_paths.non_steam_installations',return_value=[(game,'Epic TF3 manifest')]):
+        paths=detect(configured=False)
+    assert paths.installation==game and paths.local==local
+
+
 def test_active_steam_account_wins_over_other_game_profiles(tmp_path):
     steam=tmp_path/'Steam';steam.mkdir();profile(steam,12);current=profile(steam,34)
     game=installation(tmp_path/'Game')
@@ -83,8 +104,9 @@ def test_wrong_or_escaping_manifest_is_not_used(tmp_path,appid,name):
     steam=tmp_path/'Steam';(steam/'steamapps').mkdir(parents=True)
     installation(tmp_path/'Other game');profile(steam,12)
     (steam/'steamapps/appmanifest_3493540.acf').write_text(f'"appid" "{appid}" "installdir" "{name}"')
-    with patch('game_paths.registry_locations',return_value=([],[steam],'')):
-        result=detect()
+    with patch('game_paths.registry_locations',return_value=([],[steam],'')), \
+         patch('game_paths.non_steam_installations',return_value=[]):
+        result=detect(configured=False)
     assert result.installation is None and result.local is None
 
 
