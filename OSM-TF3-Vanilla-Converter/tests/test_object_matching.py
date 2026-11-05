@@ -203,6 +203,30 @@ class MatchedImportTests(unittest.TestCase):
         self.assertEqual(self.state.value.builtScenery, 1)
         self.assertEqual(self.state.value.sceneryRecords[1].modelPositions[1][1], 20)
 
+    def test_legacy_partial_check_keeps_catalog_and_summary_after_reload(self):
+        self.lua.execute('''
+          dataset.scenery={}
+          for i=1,2001 do dataset.scenery[i]={category="mappedObjects",match={kind="bench"},pos={i/10,30},rotation=0.2} end
+        ''')
+        self.event('start'); self.step()
+        self.assertEqual(self.state.value.phase, 'checking')
+        self.assertGreater(self.state.value.check.checked, 0)
+        # Older saves stored full fitted matches, including during a check.
+        self.lua.execute('''
+          local matcher=modules["druttzen_osm_vanilla::/osm/object_matcher.lua"]
+          local job=state.value.check
+          for index,entry in pairs(job.matches) do job.matches[index]=matcher.unpack(entry,job.matchCatalog) end
+          job.matchCatalog=nil; state.value.matchStorageRevision=nil
+        ''')
+        self.script=_game.load_script(self.lua,CONTENT/'importer.script.lua')
+        self.script.update(None,self.state,1)
+        self.finish()
+        self.assertEqual(self.state.value.phase, 'finished', self.state.value.error)
+        self.assertEqual(self.state.value.matchSummary.vanilla, 2001)
+        self.assertEqual(self.state.value.builtScenery, 2001)
+        self.assertEqual(len(self.state.value.matchCatalog), 1)
+        self.assertEqual(self.state.value.sceneryRecords[1].modelPositions[1][1], 0.1)
+
     def test_matched_model_is_journalled_with_actual_xyz_and_reused_after_reload(self):
         self.event('validate')
         self.assertEqual(len(self.lua.globals().commands),0)
