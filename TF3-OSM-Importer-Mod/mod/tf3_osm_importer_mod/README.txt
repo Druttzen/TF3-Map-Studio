@@ -1,5 +1,5 @@
 TF3-OSM-Importer-Mod
-Companion Preview 0.16.3 | Mod revision 11 | GPL-3.0 | 25 October 2026
+Companion Preview 0.16.4 | Mod revision 12 | GPL-3.0 | 5 November 2026
 
 INSTALL
 Copy this tf3_osm_importer_mod folder into:

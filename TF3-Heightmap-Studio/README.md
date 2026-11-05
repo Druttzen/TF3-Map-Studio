@@ -1,11 +1,17 @@
 # TF3 Heightmap Studio
 
-Preview 0.12 is the terrain companion to OSM-TF3-Vanilla-Converter. It uses the
+Preview 0.13 is the terrain companion to OSM-TF3-Vanilla-Converter. It uses the
 converter's JSON report, exported Lua and original OSM file to align measured
 elevation with a Transport Fever 3 map. It supports local and public elevation
 sources, terrain editing, and optional vanilla biome exports.
 
-Preview 0.12 joins compatible neighbouring elevation files before interpolation,
+Preview 0.13 offers an optional minimum clearance above global water for
+ground road and rail corridors. It is disabled by default. Set both smoothing
+and grade to zero for clearance alone, which preserves dry heights above the
+floor. Bridge and tunnel corridors are excluded. Inspect the resulting
+embankments and junctions before building; these are authored terrain changes.
+
+The app joins compatible neighbouring elevation files before interpolation,
 so their file boundaries do not create artificial flat strips or height steps.
 The default export is one continuous 16-bit heightmap PNG on the native 4 m grid.
 **Cubic** is the default for new projects; saved explicit Bilinear or Nearest

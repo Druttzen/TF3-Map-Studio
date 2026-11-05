@@ -1,5 +1,11 @@
 TF3 HEIGHTMAP STUDIO - STEP 2
-Preview 0.12 | GPL-3.0 | 25 October 2026
+Preview 0.13 | GPL-3.0 | 5 November 2026
+
+GROUND CORRIDOR CLEARANCE
+Optional clearance raises ground road/rail corridors above global water.
+Set both smoothing and grade to zero to preserve existing dry terrain above
+the floor. It is disabled by default, excludes bridges and tunnels, and
+creates authored embankments that should be inspected in TF3.
 
 CONTINUOUS TERRAIN
 Compatible neighbouring elevation files are joined before interpolation, so

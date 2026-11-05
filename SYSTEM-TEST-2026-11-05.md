@@ -119,8 +119,48 @@ terrain, so raising only the road node did not resolve `Place on Land`; that
 insufficient candidate was removed. The panel now displays native warning/info
 messages instead of an empty error. Heightmap Studio gained optional, explicitly
 authored transport-corridor clearance, disabled for existing projects by default.
-The refined Partille export and native network/vehicle tests are still running.
-The large-map scenery acceptance is not a passing vehicle-route test.
+
+The full-profile refinement introduced a local road grade that TF3 rejected.
+The follow-up clearance-only mode raises low terrain within the corridor and
+preserves dry terrain at or above the clearance height. On the Partille coastal
+test export, the specified 2 m clearance affected ground road/rail corridors
+only; tagged bridges and tunnels were excluded. The maximum authored terrain
+change was 22.36 m. Native import of the −3 to 169 m PNG and its biome map on
+the 16,384 × 16,384 m world passed nine elevation checks within 0.01876 m.
+Leaving the numeric field and waiting for the preview was necessary to apply
+the requested native height range.
+
+On that map, the first seven groups of ten network segments passed, including
+the former E20 water failure at source 69. Six additional segments passed
+individually. A group rejected by TF3 did not add partial geometry; reducing
+the group and retrying preserved the 70 accepted segments. Source 77 (OSM
+way 4040443) still fails alone with `Construction Not Possible` at a motorway
+fork shared with source 60. The plan directions diverge by about 23 degrees;
+the precise native restriction is not identified by that generic error. The
+full 328,727-segment network is **not complete**. The importer now identifies
+the rejected source range or single OSM way so the location can be inspected.
+
+The driving test uses a separate extract from the same OSM download: 12 road
+segments from bus 519 between Lexby and Lexby skola (442.68 m) and 85 track
+segments from train 131 between Partille and Jonsered (4,354.54 m). OSM plan
+coordinates, connectivity, and bridge/tunnel flags are unchanged. The raw DSM
+produced up to 13.80% local rail grade and was rejected. The separate test
+profile limits rail grades to 2%; its largest changed rail node is 2.57 m
+from the sampled DSM. These are authored game elevations, not a survey. On
+the coastal terrain, native TF3 built all 97 edges, with no skipped steps.
+The live audit passed 99/99 nodes, 12/12 roads, 85/85 rails, 97/97 edges with
+vehicle lanes and 2/2 connected groups. This verifies the imported network;
+actual vehicle trips are checked separately.
+
+The native train completed Partille–Jonsered–Partille and began another trip.
+The test uses a vanilla diesel locomotive and passenger coach, native test
+stations near the OSM endpoints, and a connected depot. The log recorded
+145 vehicle samples, 139 moving samples, no path errors, and successive
+departure events at Partille, Jonsered and Partille. The train and its line
+were saved and continued moving after the save was reopened. The scenario
+checks vehicle movement and station service; it does not simulate passenger
+demand or claim an exact replica of the real stations.
+
 All native testing uses separately named `MapStudio-Partille-*` saves, backed
 up under `F:\project-backups\TF3-Map-Studio-Partille-20261105`. The user's
 original dataset and saves were retained.
@@ -128,10 +168,11 @@ original dataset and saves were retained.
 ## Limits
 
 This is broad regression, integration, packaging, ownership and native importer
-testing, not an exhaustive claim for every map, mod or game build. Native TF3
-heightmap/biome importing, real vehicle driving/rendering/audio, large real maps,
-bridge/tunnel clearances and experimental water still require their documented
-scenario-specific native checks. No personal provider credentials were used.
+testing, not an exhaustive claim for every map, mod or game build. The scope
+of the real-map terrain and network checks is recorded above. Full large-map
+network completion, general bridge/tunnel clearance, rendering/audio fidelity
+and experimental water still require their documented scenario-specific
+native checks. No personal provider credentials were used.
 The release build manifest identifies the exact successful GitHub CI run and
 reviewed source commit for the published binaries; local artifacts are not
 silently substituted for CI artifacts.

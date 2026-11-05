@@ -15,7 +15,7 @@ from job import Cancelled
 from game_paths import detect, suggested_output, select_user_folder
 import biomes
 from osm_converter import atomic_write
-APP_VERSION='0.12-preview'
+APP_VERSION='0.13-preview'
 
 def quality_text(result):
  info=result['terrainQuality'];ny,nx=result['terrain'].shape

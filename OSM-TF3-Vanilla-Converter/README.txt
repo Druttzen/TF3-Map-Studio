@@ -1,5 +1,12 @@
 OSM IMPORTER - TRANSPORT FEVER 3 VANILLA
-Preview 0.16.3 | GPL-3.0 | 25 October 2026
+Preview 0.16.4 | GPL-3.0 | 5 November 2026
+
+IMPORTER REVISION 12
+Native network groups can contain up to 100 segments and scenery groups up
+to 1,000 items. A rejected network group is identified by its source range;
+reduce the group size and retry to isolate the rejected segment. Short rail
+continuations align with accepted neighbouring rail tangents. See the root
+system test for the exact scope and limits of the Partille checks.
 
 DOWNLOAD OPENSTREETMAP (0.15)
 Project > Download OSM opens an interactive OpenStreetMap view. No OSM account
