@@ -1012,6 +1012,15 @@ function script.postUpdate(_userParams, state, _dt, _result)
           end
         end
         value.error=#details>0 and table.concat(details,"; ") or "Game rejected the build proposal; inspect the game log for native geometry details"
+        if phase=="edges" then
+          if last>value.cursor then
+            value.notice=string.format("Road/rail source segments %d–%d were not built. Choose a smaller group and retry to isolate the failure.",value.cursor,last)
+          else
+            local way=edge and edge.osmWay and (" (OSM way "..tostring(edge.osmWay):sub(1,64)..")") or ""
+            value.notice=string.format("Road/rail source segment %d%s was not built. Check the local junction and terrain before retrying.",value.cursor,way)
+          end
+          message(value.notice)
+        end
         status(value)
       end
       state:set(value)

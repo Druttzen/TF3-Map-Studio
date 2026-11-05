@@ -10,7 +10,7 @@ class CoastalNetworkTests(unittest.TestCase):
         self.lua.execute('''
           dataset.scenery={}; dataset.labels={}
           dataset.nodes={a={pos={0,0}},b={pos={0,60}}}
-          dataset.edges={{kind="STREET",node0="a",node1="b",
+          dataset.edges={{kind="STREET",node0="a",node1="b",osmWay="4040439",
             template="::/infrastructure/street/town/town_new_one_way_xsmall.street_template"}}
           globalWaterLevel=0
           api.engine.terrain.getBaseHeightAt=function(p) return p.y==0 and 0.45 or -1.47 end
@@ -26,6 +26,7 @@ class CoastalNetworkTests(unittest.TestCase):
         ''')
         self.h.event('start'); self.h.step()
         self.assertEqual(self.h.state.value.error, 'Place on Land')
+        self.assertIn('source segment 1 (OSM way 4040439)', self.h.state.value.notice)
 
     def test_completely_empty_native_error_has_actionable_fallback(self):
         self.lua.execute('''

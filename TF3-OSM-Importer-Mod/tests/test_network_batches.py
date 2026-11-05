@@ -38,6 +38,7 @@ class NetworkBatchTests(unittest.TestCase):
         self.h.event('start'); self.lua.globals().failNext = True; self.h.step()
         self.assertEqual(self.state.value.phase, 'error')
         self.assertEqual((self.state.value.failedFirst, self.state.value.failedLast), (1, 100))
+        self.assertIn('source segments 1–100 were not built', self.state.value.notice)
         self.assertEqual(len(self.state.value.nodes), 0)
         self.assertEqual(self.state.value.builtEdges, 0)
         self.h.event('configure', {'networkBatchSize': 10})
