@@ -69,6 +69,8 @@ class ShallowWaterTests(unittest.TestCase):
             waterAnchor=lake.waterAnchor,texture=lake.texture,face={{4,0},{4,4},{0,4}}}
           dataset.scenery[3]={category="waterways",waterSurface="follow",osmWater="way:456",
             texture=lake.texture,face={{30,0},{34,0},{30,4}}}
+          dataset.scenery[4]={category="waterways",waterSurface="follow",osmWater="way:789",
+            depth=1,texture=lake.texture,face={{40,0},{44,0},{40,4}}}
           api.engine.terrain.getBaseHeightAt=function(p) return 10+p.x+p.y end
         ''')
         self.h.event('configure',dict(batchSize=1))
@@ -77,13 +79,16 @@ class ShallowWaterTests(unittest.TestCase):
         self.lua.execute('api.engine.terrain.getBaseHeightAt=function(p) return 20+p.x+p.y end')
         self.h.finish()
         script=load_script(self.lua,CONTENT/'scenery.script.lua')
-        expected=[[14,14,14],[14,14,14],[50,54,54]]
+        expected=[[14,14,14],[14,14,14],[50,54,54],[59,63,63]]
         for index,heights in enumerate(expected,1):
             params=self.lua.globals().commands[index].constructionsToAdd[1].params
             self.assertEqual([p[3] for p in params['items'][1].face.values()],heights)
-            alignment=script.updateFn(None,params).subconstructions[1].terrainAlignmentLists[1]
+            sub=script.updateFn(None,params).subconstructions[1]
+            alignment=sub.terrainAlignmentLists[1]
             self.assertEqual(alignment.type,'EQUAL')
             self.assertEqual(len(alignment.faces),1)
+            self.assertEqual([p[3] for p in alignment.faces[1].values()],heights)
+            self.assertEqual([p[3] for p in sub.groundFaces[1].face.values()],heights)
 
     def test_one_batch_places_distant_water_in_local_constructions(self):
         self.lua.execute('''

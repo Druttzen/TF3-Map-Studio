@@ -29,12 +29,13 @@ local function itemKey(item,box)
       points[#points+1]=pos
     end
     local suffix=""
-    if item.depth~=nil then
-      if not controls.finiteHeight(item.depth) then return nil end
-      suffix="|depth:"..string.format("%.6f",item.depth)
-    elseif item.waterSurface~=nil then
-      if type(item.osmWater)~="string" or (item.waterSurface~="flat" and item.waterSurface~="follow") then return nil end
-      suffix="|water:"..item.waterSurface..":"..item.osmWater
+    if item.depth~=nil or item.waterSurface~=nil then
+      if controls.waterDepth(item)==nil then return nil end
+      if item.waterSurface~=nil then
+        if type(item.osmWater)~="string" then return nil end
+        suffix="|water:"..item.waterSurface..":"..item.osmWater
+      end
+      if item.depth~=nil then suffix=suffix.."|depth:"..string.format("%.6f",item.depth) end
     end
     return "surface|"..item.texture.."|"..table.concat(points,";")..suffix
   end
@@ -411,8 +412,8 @@ function audit.inspect(dataset,value)
                   for _,p in ipairs(item.face or {}) do
                     local key=item.waterSurface=="flat" and item.osmWater or coordinate(p)
                     local reference=value.shallowHeightReference and value.shallowHeightReference[key]
-                    local offset=item.waterSurface and 0 or 0.5
-                    if not controls.finiteHeight(reference) or not controls.finiteHeight(p[3]) or math.abs(p[3]-(reference-offset))>0.01 then
+                    local offset=controls.waterDepth(item)
+                    if offset==nil or not controls.finiteHeight(reference) or not controls.finiteHeight(p[3]) or math.abs(p[3]-(reference-offset))>0.01 then
                       problem("wrongScenery","Saved water surface differs from its prepared height reference.")
                     end
                   end

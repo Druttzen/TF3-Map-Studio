@@ -71,6 +71,25 @@ class HydrologyTests(unittest.TestCase):
         self.assertIn('waterFeatures',lua(d))
         self.assertTrue(any('approximation' in w for w in d['warnings']))
 
+    def test_only_rivers_and_canals_at_least_four_metres_get_a_recessed_bed(self):
+        nodes={'1':(-10,-10),'2':(10,-10),'3':(10,10),'4':(-10,10)}
+        for tags,refs,expected in (
+            ({'waterway':'river','width':'4 m'},['1','2'],1),
+            ({'waterway':'canal','est_width':'8'},['1','2'],1),
+            ({'waterway':'river','width':'3.99'},['1','2'],None),
+            ({'waterway':'stream','width':'8'},['1','2'],None),
+            ({'waterway':'canal'},['1','2'],1),
+            ({'natural':'water','water':'river','width':'45'},['1','2','3','4','1'],1),
+            ({'natural':'water','water':'river'},['1','2','3','4','1'],None),
+            ({'water':'lake','width':'45'},['1','2','3','4','1'],None),
+        ):
+            with self.subTest(tags=tags):
+                data=self.convert(fixture(nodes,[('11',refs,tags)]),{'waterway_width':4})
+                faces=data['scenery']
+                self.assertTrue(faces)
+                self.assertEqual({item.get('depth') for item in faces},{expected})
+                self.assertEqual(data['waterFeatures'][0].get('bedDepthMetres'),expected)
+
     def test_closed_linear_waterways_keep_dry_interiors_and_join_the_closure(self):
         nodes={'1':(-10,-10),'2':(10,-10),'3':(10,10),'4':(-10,10)}
         for waterway in ('canal','stream','river','ditch','drain'):

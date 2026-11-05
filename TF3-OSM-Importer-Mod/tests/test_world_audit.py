@@ -184,6 +184,17 @@ class WorldAuditTests(unittest.TestCase):
         self.assertTrue(self.inspect().ok)
         self.lua.execute('world[200][api.type.ComponentType.CONSTRUCTION].params.items[3].face[1][3]=8')
         self.assertFalse(self.inspect().ok)
+        self.lua.execute('''
+          local item=world[200][api.type.ComponentType.CONSTRUCTION].params.items[3]
+          local source=dataset.scenery[3]
+          for _,face in ipairs({source,item}) do
+            face.waterSurface="follow"; face.osmWater="way:42"; face.depth=1
+          end
+          for _,p in ipairs(item.face) do p[3]=9 end
+        ''')
+        self.assertTrue(self.inspect().ok)
+        self.lua.execute('world[200][api.type.ComponentType.CONSTRUCTION].params.items[3].face[1][3]=10')
+        self.assertFalse(self.inspect().ok)
         self.assertEqual(self.lua.globals().commandCalls,0)
 
     def test_missing_node_and_component_are_detected_without_invalid_query(self):

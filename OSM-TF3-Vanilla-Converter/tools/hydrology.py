@@ -241,9 +241,9 @@ def prepare(data, nodes, ways, relations, positions, members_for, join_rings,
             continue
         try:
             surface='flat' if category=='lake' else 'follow'
+            raw=tags.get('width',tags.get('est_width'))
             width=None
             if line:
-                raw=tags.get('width',tags.get('est_width'))
                 if raw is None:
                     width=fallback_width; feature['widthSource']='configured fallback'
                     warn(f'Water {id}: width missing; configured {fallback_width:g} m fallback is an approximation.')
@@ -271,6 +271,11 @@ def prepare(data, nodes, ways, relations, positions, members_for, join_rings,
             else:
                 validate_rings(rings,outer_count,inside)
                 raw_faces=triangulate(rings)
+                if raw is not None:
+                    try: width=float(raw.removesuffix(' m').strip())
+                    except ValueError: pass
+            river_or_canal=(tags.get('waterway') in {'river','canal','riverbank'} or tags.get('water') in {'river','canal'})
+            recessed=surface=='follow' and river_or_canal and width is not None and math.isfinite(width) and width>=4
             prepared=[]; omitted=0
             anchor=None; anchor_area=0
             for tri in raw_faces:
@@ -289,11 +294,13 @@ def prepare(data, nodes, ways, relations, positions, members_for, join_rings,
                             anchor_area=area
                         prepared.append({'texture':DIRTY_GROUND,'face':[list(p) for p in face],
                                          'category':'waterways','waterSurface':surface,'osmWater':id})
+                        if recessed: prepared[-1]['depth']=1
             if anchor:
                 for item in prepared:
                     item['waterAnchor']=anchor
             data['scenery'].extend(prepared); remaining-=len(prepared)
             feature.update(status='prepared',preparedFaces=len(prepared),reservedFaces=omitted,surface=surface)
+            if recessed and prepared: feature['bedDepthMetres']=1
             if anchor: feature['heightSample']=anchor
             if omitted: warn('Water near planned roads/rails is omitted within a conservative 20 m corridor. Network heights are unchanged until construction.')
         except (ValueError,OverflowError) as exc:

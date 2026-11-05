@@ -18,9 +18,9 @@ Revision 11 protects ground surfaces against float32 coordinate collapse. In the
 3. Enable the mod on a fresh, flat test map. The included fictional sample is 1000 Ãƒâ€” 1000 metres, with 10 road/rail segments, 117 scenery items and one named marker; it fits within 500 metres of the map centre.
 4. Click **OSM Import** in the game's mod button area, then **Check map and match objects** before **Start import**.
 
-The game displays **TF3-OSM-Importer-Mod**. The installable folder is `tf3_osm_importer_mod`; the internal mod identity remains `druttzen_osm_vanilla`, revision 12, to preserve saved resource references. TF3 identifies mods by this ID independently of their folder. Its [mod definition](https://wiki.transportfever3.com/doku.php?id=modding:general:moddefinition) restricts IDs to lowercase letters, digits and underscores and excludes hyphens from installation folder names. Tool 1 bundles the same mod: **install only one copy**, and do not enable a second renamed copy. Keep the mod enabled on saves containing its scenery. The original TF2 importer and its mods folder are separate.
+The game displays **TF3-OSM-Importer-Mod**. The installable folder is `tf3_osm_importer_mod`; the internal mod identity remains `druttzen_osm_vanilla`, revision 13, to preserve saved resource references. TF3 identifies mods by this ID independently of their folder. Its [mod definition](https://wiki.transportfever3.com/doku.php?id=modding:general:moddefinition) restricts IDs to lowercase letters, digits and underscores and excludes hyphens from installation folder names. Tool 1 bundles the same mod: **install only one copy**, and do not enable a second renamed copy. Keep the mod enabled on saves containing its scenery. The original TF2 importer and its mods folder are separate.
 
-When upgrading, close TF3, back up the installed mod, then replace its runtime files while preserving your `content/osm/dataset.lua` and `import-report.json`. The ZIP contains a fictional sample; copying that file over custom data replaces the prepared map. The converter's **Update installed mod** updates the dataset and report only; install revision 12's runtime separately. Restart the game completely after upgrading.
+When upgrading, close TF3, back up the installed mod, then replace its runtime files while preserving your `content/osm/dataset.lua` and `import-report.json`. The ZIP contains a fictional sample; copying that file over custom data replaces the prepared map. The converter's **Update installed mod** updates the dataset and report only; install revision 13's runtime separately. Restart the game completely after upgrading.
 
 ## Use your own OSM data
 
@@ -66,7 +66,11 @@ Select **Mapped lakes and waterways: Water Dirty** before starting a new
 import. The converter preserves valid OSM outlines and island holes. The mod
 uses the game's Water Dirty material and holds the visible terrain to a
 fixed surface. Each lake, pond or reservoir shares one sampled base height
-across its triangles and batches. Waterway triangles follow the terrain.
+across its triangles and batches. River and canal beds at least 4 m wide
+follow the sampled terrain 1 m lower. Other waterway triangles follow the
+sampled terrain at its original height. Lines use the OSM or configured
+fallback width. Mapped water polygons need an OSM width or estimated width
+to qualify for a cut. The existing 20 m limit for lines still applies.
 The import clears eligible landscape trees and shrubs with their roots
 inside the painted outline. The game previews the removals before the
 batch is built. A batch stops for inspection if the preview includes a

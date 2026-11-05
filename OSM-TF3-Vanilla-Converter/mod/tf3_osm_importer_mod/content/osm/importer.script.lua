@@ -190,8 +190,8 @@ local function advanceCheck(value,job,budget)
       if item.texture then
         if item.category=="waterways" then
           assert(item.texture=="druttzen_osm_vanilla::/osm/dirty_water.gtex","Invalid mapped-water material")
+          assert(controls.waterDepth(item)~=nil,"Invalid mapped-water surface or depth")
           if item.waterSurface~=nil then
-            assert(item.depth==nil and (item.waterSurface=="flat" or item.waterSurface=="follow"),"Invalid mapped-water surface")
             assert(type(item.osmWater)=="string" and item.osmWater:match("^%a+:%d+$"),"Invalid OSM water ID")
             if item.waterSurface=="flat" then
               checkPosition(item.waterAnchor)
@@ -200,8 +200,6 @@ local function advanceCheck(value,job,budget)
               assert(not prior or (prior[1]==item.waterAnchor[1] and prior[2]==item.waterAnchor[2]),"A lake must use one height sample across all its faces")
               job.waterAnchors[item.osmWater]=item.waterAnchor
             end
-          else
-            assert(item.depth==0.5,"Invalid shallow-water treatment")
           end
           assert(#item.face==3,"Mapped water requires a prepared triangle")
         end
@@ -510,7 +508,7 @@ local function mappedWaterHeight(value,source,pos,box)
     value.shallowHeightReference[key]=height
   end
   local limits=api.engine.mapgen.getMinMaxValidTerrainHeight()
-  local offset=source.waterSurface and 0 or 0.5
+  local offset=assert(controls.waterDepth(source),"Invalid mapped-water surface or depth")
   assert(controls.finiteHeight(height) and height-offset>=limits[1] and height<=limits[2],"Invalid shallow-water terrain height")
   return height-offset
 end

@@ -210,6 +210,13 @@ function controls.finiteHeight(z)
   return type(z)=="number" and z==z and math.abs(z)<math.huge
 end
 
+function controls.waterDepth(item)
+  if item.waterSurface=="follow" and (item.depth==nil or item.depth==1) then return item.depth or 0 end
+  if item.waterSurface=="flat" and item.depth==nil then return 0 end
+  if item.waterSurface==nil and item.depth==0.5 then return 0.5 end
+  return nil
+end
+
 -- The accepted XYZ evidence can contain hundreds of thousands of vectors.
 -- Hexadecimal float text round-trips every bit without executing saved text,
 -- and keeps each batch in one ordinary, savegame-safe ASCII string.
@@ -334,7 +341,7 @@ function controls.waterSupport(terrain)
   local level=terrain and terrain.waterLevel
   local prefix=controls.finiteHeight(level) and string.format("Current global water level: %.2f m. ",level) or "Global water level could not be read. "
   return prefix.."The installed TF3 API exposes one navigable water level. No supported command for separate navigable lake/river levels was found. "..
-    "Mapped lakes and waterways use Landscaping Water Dirty. Current datasets align lakes to one height and waterways to the sampled terrain. Older datasets can still use a 0.5 m shallow bed. Water Dirty is ground paint, not navigable water. No water or terrain was changed."
+    "Mapped lakes and waterways use Landscaping Water Dirty. Each lake has one height. Rivers and canals at least 4 m wide can have a 1 m bed cut. Other current waterways follow the sampled terrain. Water Dirty is ground paint, not navigable water."
 end
 
 function controls.skippable(value)

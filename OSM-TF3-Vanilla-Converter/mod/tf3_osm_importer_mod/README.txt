@@ -1,5 +1,5 @@
 TF3-OSM-Importer-Mod
-Companion Preview 0.16.4 | Mod revision 12 | GPL-3.0 | 5 November 2026
+Companion Preview 0.16.4 | Mod revision 13 | GPL-3.0 | 5 November 2026
 
 INSTALL
 Copy this tf3_osm_importer_mod folder into:
@@ -154,8 +154,9 @@ Terrain alignment is applied by TF3 when each network segment is constructed.
 MAPPED LAKES AND WATERWAYS
 Reconvert the original OSM XML with the updated converter. Select Mapped
 lakes and waterways: Water Dirty, then Check map and match objects and Start
-import. Lakes and ponds share one sampled level per feature. Waterways
-follow the original sampled terrain. TF3's exact alignment holds the
+import. Lakes and ponds share one sampled level per feature. Rivers and
+canals at least 4 m wide are painted 1 m below the sampled terrain.
+Other waterways follow the sampled terrain. TF3's exact alignment holds the
 visible surface when the land around it is edited. The Water Dirty material
 follows the OSM boundary and leaves mapped islands outside the fill.
 Legacy datasets with the 0.5 m shallow bed retain their original alignment.

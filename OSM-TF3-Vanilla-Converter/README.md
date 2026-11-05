@@ -6,7 +6,7 @@ Preview 0.16.4 checks ground surfaces at TF3's float32 coordinate precision, cle
 
 Large OSM downloads are fetched sequentially in smaller areas rather than one large server request. HTTP 504 and server XML resource-limit errors subdivide the affected area further. HTTP 429/502/503 receive one delayed retry, respecting a supported Retry-After value; cancellation remains available while waiting. Complete ways, nested relations and referenced nodes outside the selection are retained, shared objects are deduplicated on disk, and the saved bounds remain the exact selected frame. Conflicting objects or an incomplete part stop the download without replacing previous outputs. Limits of 64 completed areas and 128 requests prevent unbounded retries; a server that remains overloaded may still require a later retry or a regional .osm extract. The download log records successful area bounds and request count.
 
-The `mod/tf3_osm_importer_mod` folder includes importer revision 12 and a fictional demonstration dataset. Its native panel has separate scrolling areas for progress/messages and commands. **Verify built objects** compares saved import records with live nodes, roads, rails and model groups without building anything. **Show place names** displays recorded marker names and coordinates; TF3 may remove model names when optimizing them into asset groups. The sample completed in TF3 Windows build 40408. See the [Partille system test](../SYSTEM-TEST-2026-11-05.md) for the large-map and actual route results on build 40425.
+The `mod/tf3_osm_importer_mod` folder includes importer revision 13 and a fictional demonstration dataset. Its native panel has separate scrolling areas for progress/messages and commands. **Verify built objects** compares saved import records with live nodes, roads, rails and model groups without building anything. **Show place names** displays recorded marker names and coordinates; TF3 may remove model names when optimizing them into asset groups. The sample completed in TF3 Windows build 40408. See the [Partille system test](../SYSTEM-TEST-2026-11-05.md) for the large-map and actual route results on build 40425.
 
 Revision 5 checks large datasets in blocks of at most 1000 items and rejects prepared dimensions larger than the game map before scanning geometry. **Automatic pause** stops each run after a chosen number of successful build steps. New large datasets default to 100 steps; one step is one segment, one scenery batch or one marker. Save and inspect each run before resuming. Matching map dimensions alone do not establish heightmap alignment.
 
@@ -16,7 +16,8 @@ No game assets are included. Read [README.txt](README.txt) for installation, set
 
 The bundled mod applies the game's Landscaping **Water Dirty** material to
 mapped lakes, ponds and waterways. Each lake uses one sampled game height.
-Waterways follow the sampled terrain. Multipolygon islands remain unpainted,
+Waterways follow the sampled terrain. Rivers and canals at least 4 m wide
+use a 1 m bed cut with importer revision 13. Multipolygon islands remain unpainted,
 and widths missing from OSM use the converter's configured fallback. Enable
 **Mapped lakes and waterways** in the in-game importer for a new import.
 See [the water investigation](../TF3-OSM-Importer-Mod/WATER-RESEARCH.md).

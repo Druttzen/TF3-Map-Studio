@@ -33,7 +33,7 @@ function script.updateFn(_captureParams, params)
       if item.depth~=nil or item.waterSurface~=nil then
         assert(item.texture=="druttzen_osm_vanilla::/osm/dirty_water.gtex","Invalid mapped-water construction")
         local protected=item.waterSurface=="flat" or item.waterSurface=="follow"
-        assert(protected or (item.waterSurface==nil and item.depth==0.5),"Invalid mapped-water alignment")
+        assert(controls.waterDepth(item)~=nil,"Invalid mapped-water alignment")
         assert(#item.face==3,"Mapped water must be a triangle")
         local face={}
         for _,p in ipairs(item.face) do
