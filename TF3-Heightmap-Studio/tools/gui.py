@@ -450,7 +450,9 @@ class App(tk.Tk):
   self.field(f,20,'Paint region',self.biome_brush,list(biomes.BIOME_CHOICES));self.field(f,21,'Biome brush radius (metres)',self.biome_radius)
   self.biome_undo_button=ttk.Button(f,text='Undo last biome stamp',command=self.undo_biome,state='disabled');self.biome_undo_button.grid(row=22,column=0,columnspan=3,sticky='w',pady=6)
   ttk.Button(f,text='Clear biome paint + rebuild',command=self.clear_biomes).grid(row=23,column=0,columnspan=3,sticky='w',pady=6)
-  self.note(f,24,'After Build terrain, view Biomes and paint regions. Paint overrides automatic rules; save/load retains it. Exports include native grayscale PNG, colour preview, georeferenced ID GeoTIFF and import instructions. Native game biome import still requires verification.')
+  self.note(f,24,'After Build terrain, view Biomes and paint regions. Paint overrides automatic rules; save/load retains it. Exports include native grayscale PNG, colour preview, georeferenced ID GeoTIFF and import instructions.')
+  ttk.Checkbutton(f,text='Also export Mountains and supported Rivers masks',variable=self.values['biome_layers']).grid(row=25,column=0,columnspan=3,sticky='w',pady=7)
+  self.note(f,26,'Mountains uses the highland height and steep-rock slope above water. Temperate and Dry also get Rivers from OSM river areas and surface waterways, using River width under OSM terrain for centre lines. Masks apply through their own selectors in TF3 and do not change terrain heights.')
 
  def choose_biomes(self):
   path=filedialog.askopenfilename(parent=self,title='Choose TF3 biome PNG',filetypes=[('TF3 biome PNG','*.png')])

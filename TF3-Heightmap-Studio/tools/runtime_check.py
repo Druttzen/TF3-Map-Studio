@@ -70,9 +70,10 @@ def check(output):
    context=folder/'fictional.report.json';context.write_text(json.dumps({'dataset':'fictional-runtime','input':xml.name,'bounds':bounds,'mapSize':[128,128],'sourceSha256':hashlib.sha256(xml.read_bytes()).hexdigest(),'settings':{}}),encoding='utf-8')
    from alignment import read_report
    assert read_report(context)['dataset']=='fictional-runtime'
-   terrain=prepare(context,xml,files,{'biomes':True});local=folder/'fictional-game-local'
+   terrain=prepare(context,xml,files,{'biomes':True,'biome_layers':True});local=folder/'fictional-game-local'
    exported=export(terrain,local/'heightmaps/fictional.png',game_paths=GamePaths(local=local))
-   assert len(list((local/'heightmaps').iterdir()))==1 and len(list((local/'biomes').iterdir()))==1
+   assert len(list((local/'heightmaps').iterdir()))==1
+   assert {path.name for path in (local/'biomes').iterdir()}=={'fictional.biomes.png','fictional.mountains.png','fictional.rivers.png'}
    assert Path(exported['files']['project']).parent==local/'heightmap_studio/fictional'
    installed=detect()
    result={'ok':True,'frozenGui':'hidden Tk window and clam theme initialized' if getattr(sys,'frozen',False) else 'source-mode check','certificateBundle':'packaged CA roots loaded for HTTPS verification','laspy':laspy.__version__,'lazCompression':'round-trip passed','projection':'EPSG:3857 verified','groundFiltering':'building excluded','geotiff':'written and read','geotiffDetail':'priority, nodata fallback and OSM bounds passed',

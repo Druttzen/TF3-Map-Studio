@@ -16,6 +16,13 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'vendor'))
 from job import Job
 
 CLIMATES={'Temperate':'temperate','Dry':'dry','Tropical':'tropical','Subarctic':'subarctic'}
+LAYER_LABELS={'mountains':'Mountains','rivers':'Rivers'}
+
+def layer_keys(options):
+ if not (options['biomes'] and options['biome_layers']):return ()
+ if options['biome_climate'] in {'Temperate','Dry'}:return ('mountains','rivers')
+ return ('mountains',)
+
 BIOME_CHOICES=('Biome 0 · blue','Biome 1 · dark green','Biome 2 · light green','Biome 3 · olive','Biome 4 · white')
 CODES=np.array([0,63,127,191,255],dtype=np.uint8)
 COLORS=np.array([[0,161,230],[54,128,33],[161,255,140],[128,128,71],[255,255,255]],dtype=np.uint8)

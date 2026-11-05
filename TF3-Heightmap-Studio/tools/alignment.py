@@ -80,8 +80,12 @@ def load_context(report_path,osm_path,job=None,lua_path=None,lua_sha=None):
     if not chain:chain=[p]
     chain.append(q)
    if chain:chains.append(chain)
-   for chain in chains:lines.append({'way':id,'kind':'river' if river else 'road' if road else 'rail','points':chain,'bridge':bridge,'tunnel':tunnel})
+   for chain in chains:
+    line={'way':id,'kind':'river' if river else 'road' if road else 'rail','points':chain,'bridge':bridge,'tunnel':tunnel}
+    if river:line['waterway']=tags['waterway']
+    lines.append(line)
  def is_water(tags):return tags.get('natural')=='water' or tags.get('landuse') in {'reservoir','basin'} or tags.get('waterway')=='riverbank'
+ def is_river_area(tags):return tags.get('waterway')=='riverbank' or tags.get('water') in {'river','canal','stream'}
  def relation_parts(id,active=None,invert=False,used=None):
   active=set(active or ());used=used if used is not None else set()
   if id in active:raise ValueError('Cyclic water multipolygon.')
@@ -104,13 +108,13 @@ def load_context(report_path,osm_path,job=None,lua_path=None,lua_sha=None):
    used=set();parts=relation_parts(id,used=used)
    outer=osm.join_rings(parts['outer']);inner=osm.join_rings(parts['inner'])
    if not outer:raise ValueError('No outer water boundary.')
-   lake={'outer':[[positions[r] for r in ring] for ring in outer],'inner':[[positions[r] for r in ring] for ring in inner]}
+   lake={'outer':[[positions[r] for r in ring] for ring in outer],'inner':[[positions[r] for r in ring] for ring in inner],'riverArea':is_river_area(tags)}
    lakes.append(lake);covered.update(used)
   except (ValueError,KeyError) as exc:warnings.append(f'Water relation {id} skipped: {exc}')
  for id,(refs,tags) in ways.items():
   job.check()
   if id not in covered and is_water(tags) and len(refs)>=4 and refs[0]==refs[-1]:
-   try:lakes.append({'outer':[[positions[r] for r in refs[:-1]]],'inner':[]})
+   try:lakes.append({'outer':[[positions[r] for r in refs[:-1]]],'inner':[],'riverArea':is_river_area(tags)})
    except KeyError:warnings.append(f'Water way {id} has missing nodes; skipped.')
  from lua_map import read_map,find_map
  from biomes import land_areas

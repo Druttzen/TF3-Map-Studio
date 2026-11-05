@@ -17,7 +17,7 @@ DEFAULTS={
  'opentopo_dataset':'COP30','dem_urls':'','download_max_mb':512,
  'public_max_tiles':16,'source_credit':'','vertical_datum':'Unknown / unchanged',
  'lidar_max_points':100000000,
- 'biomes':False,'biome_climate':'Temperate','biome_mode':'Height, slope and OSM','biome_source':'',
+ 'biomes':False,'biome_layers':False,'biome_climate':'Temperate','biome_mode':'Height, slope and OSM','biome_source':'',
  'biome_base':BIOME_CHOICES[2],'biome_highland':BIOME_CHOICES[3],'biome_rock':BIOME_CHOICES[4],
  'biome_forest':BIOME_CHOICES[1],'biome_shrubs':BIOME_CHOICES[3],'biome_grass':BIOME_CHOICES[2],
  'biome_wetland':BIOME_CHOICES[1],'biome_sand':BIOME_CHOICES[3],'biome_water':True,

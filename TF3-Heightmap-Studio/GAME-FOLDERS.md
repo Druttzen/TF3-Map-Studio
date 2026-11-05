@@ -35,6 +35,7 @@ For a chosen TF3 userdata destination:
 | --- | --- |
 | 16-bit grayscale heightmap PNG | `heightmaps/<map>.png` |
 | Optional grayscale biome PNG | `biomes/<map>.biomes.png` |
+| Optional Mountains and supported Rivers masks | `biomes/<map>.mountains.png` and `biomes/<map>.rivers.png` |
 | GeoTIFF, previews, report, project, attribution, import instructions | `heightmap_studio/<map>/` |
 
 Only native import PNGs are placed in the game's map/biome pickers. The report
@@ -73,4 +74,4 @@ save or export synthetic probe maps into the user's real game folders.
 - [Steam install script registry handling](https://partner.steamgames.com/doc/sdk/installscripts)
   documents registry virtualization and the separate Windows registry views.
 
-Actual terrain/biome application in a running TF3 game remains unverified.
+See the [system test report](../SYSTEM-TEST-2026-11-05.md) for native import results.

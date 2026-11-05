@@ -181,6 +181,23 @@ original dataset and saves were retained. The vehicle proofs use
 `MapStudio-Partille-Bus-Running-20261105.sav` and
 `MapStudio-Partille-Train-Running-20261105.sav`.
 
+## Partille Mountains and Rivers import
+
+Heightmap Studio exported separate Mountains and Rivers masks on the original
+4,097 × 4,097 Partille grid, using a 100 m highland threshold for this map
+and the original OSM download for rivers. The exported heightmap was byte for
+byte identical to the verified coastal heightmap. In TF3 build 40425, the
+Temperate map editor preview showed the Biomes, Mountains and Rivers PNGs in
+their separate selectors, and Apply completed. Nine in-game base and visible
+height samples were identical before and after.
+
+TF3's own Biomes Data export read back both layers at the original dimensions
+with binary grayscale values. It retained all marked source pixels and added
+277,954 Mountains pixels and 326,335 Rivers pixels during native processing.
+The result was saved as `MapStudio-Partille-Mountains-Rivers-20261105.sav` and
+backed up under the same Partille backup folder. The other vanilla climates
+were checked by automated export tests against their shipped layer selectors.
+
 ## Limits
 
 This is broad regression, integration, packaging, ownership and native importer

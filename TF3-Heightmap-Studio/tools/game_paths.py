@@ -118,7 +118,8 @@ def suggested_output(paths,source='',fallback=''):
  if parent is None:return ''
  output=parent/(name+'.png');index=2
  def occupied(path):
-  return path.exists() or bool(paths.local and ((paths.biomes/(path.stem+'.biomes.png')).exists() or (paths.local/'heightmap_studio'/path.stem).exists()))
+  biome_folder=paths.biomes if paths.local else path.parent
+  return path.exists() or any((biome_folder/f'{path.stem}.{key}.png').exists() for key in ('biomes','mountains','rivers')) or bool(paths.local and (paths.local/'heightmap_studio'/path.stem).exists())
  while occupied(output):output=parent/(name+'-'+str(index)+'.png');index+=1
  return str(output)
 

@@ -56,16 +56,24 @@ See [GeoTIFF processing and verified references](GEOTIFF-DETAIL.md).
 Preview 0.9 finds the installed TF3 game through Windows registry keys and
 selects the current Steam account's user folder, or the only existing TF3
 profile. The PNG destination is filled automatically. Native exports place
-the heightmap in **local/heightmaps**, a biome PNG in **local/biomes**, and
+the heightmap in **local/heightmaps**, biome PNGs in **local/biomes**, and
 GeoTIFFs, reports, previews, projects and instructions in
 **local/heightmap_studio/<map>**. Default names preserve existing exports.
 Saved/manual paths remain available; **Find TF3 folders** restores automatic
 selection. Multiple unidentified profiles require selecting the user folder.
 The registry is read without changes. See [automatic game export](GAME-FOLDERS.md).
 
+In **Biomes**, enable biome export and **Also export Mountains and supported
+Rivers masks** to add the game's independent layer PNGs. Mountains marks high
+or steep land above the configured water level. Rivers follows OSM river areas
+and surface waterways using the configured river width for centerlines. All
+four vanilla climates support Mountains. Temperate and Dry also support Rivers.
+Assign each PNG to its named selector in the game's **Biomes** tab. The layer
+export uses the heightmap grid and leaves elevations intact.
+
 This folder contains the application source, existing tests, pinned dependencies,
-portable synthetic examples and licence notices. Native TF3 heightmap and biome
-import still require verification in a game session.
+portable synthetic examples and licence notices. See the
+[system test report](../SYSTEM-TEST-2026-11-05.md) for native import results.
 
 ## Set up and run
 

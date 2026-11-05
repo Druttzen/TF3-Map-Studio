@@ -37,14 +37,50 @@ def fill_gaps(terrain,size,options,job):
  return {'missingSamples':count,'filledSamples':count,'maximumFillDistanceMetres':maximum}
 
 
-def water_mask(context,shape,job=None):
+def water_mask(context,shape,job=None,river_only=False):
  job=job or Job();polygons=[]
  for lake in context['lakes']:
+  if river_only and not lake.get('riverArea'):continue
   for outer in lake['outer']:
    job.check();holes=[hole for hole in lake['inner'] if osm.inside(hole[0],outer)]
    polygons.append(({'type':'Polygon','coordinates':[outer+[outer[0]]]+[hole+[hole[0]] for hole in holes]},1))
  if not polygons:return np.zeros(shape,dtype=bool)
  return rasterize(polygons,out_shape=shape,transform=game_transform(context['size'],shape),fill=0,dtype='uint8').astype(bool)
+
+
+def biome_layer_mask(key,terrain,context,options,job):
+ """Generate a binary native layer on the heightmap's north-up grid."""
+ ny,nx=terrain.shape
+ dx=context['size'][0]/(nx-1);dy=context['size'][1]/(ny-1)
+ if key=='mountains':
+  mask=np.zeros(terrain.shape,dtype=bool)
+  for row in range(0,ny,128):
+   job.check();end=min(ny,row+128);lo=max(0,row-1);hi=min(ny,end+1)
+   height=terrain[row:end]
+   gy,gx=np.gradient(terrain[lo:hi],dy,dx)
+   slope=np.degrees(np.arctan(np.hypot(gy[row-lo:end-lo],gx[row-lo:end-lo])))
+   mask[row:end]=(height>options['water_level'])&(
+    (height>=options['biome_highland_m'])|(slope>=options['biome_rock_slope']))
+  return mask
+ mask=water_mask(context,terrain.shape,job,river_only=True)
+ channels=[]
+ for line in context['lines']:
+  job.check()
+  if line['kind']=='river' and line['waterway'] in {'river','canal','stream'} and not (line['bridge'] or line['tunnel']):
+   channels.append({'type':'LineString','coordinates':line['points']})
+ if not channels:return mask
+ centerlines=rasterize(channels,out_shape=terrain.shape,transform=game_transform(context['size'],terrain.shape),
+                       fill=0,dtype='uint8',all_touched=True).astype(bool)
+ radius=options['river_width']/2
+ # A row halo retains every centreline within the requested game-metre radius.
+ halo=math.ceil(radius/dy)
+ for row in range(0,ny,128):
+  job.check();end=min(ny,row+128);lo=max(0,row-halo);hi=min(ny,end+halo)
+  patch=centerlines[lo:hi]
+  if patch.any():
+   distances=distance_transform_edt(~patch,sampling=(dy,dx))
+   mask[row:end]|=distances[row-lo:end-lo]<=radius
+ return mask
 
 
 def densify(points,step):
@@ -325,10 +361,12 @@ def export(result,output,progress=None,cancel=None,game_paths=None):
  lo,hi,clipped=encoding_range(terrain,options);base=output.with_suffix('')
  targets={'png':output}
  destination=export_destination(output,game_paths)
+ layer_keys=biomes.layer_keys(options)
  suffixes={'dem':'.dem.tif','preview':'.preview.png','report':'.heightmap-report.json','project':'.heightmap-project.json','instructions':'.import.txt','attribution':'.attribution.txt'}
  targets.update({key:destination['details']/(output.stem+suffix) for key,suffix in suffixes.items()})
  if options['biomes']:
   targets.update({key:(destination['biomes'] if key=='biomes' else destination['details'])/(output.stem+suffix) for key,suffix in {'biomes':'.biomes.png','biomePreview':'.biomes.preview.png','biomeGeoTiff':'.biomes.tif'}.items()})
+  targets.update({key:destination['biomes']/f'{output.stem}.{key}.png' for key in layer_keys})
  protected={Path(context['osmPath']).resolve(),Path(context['report']['reportPath']).resolve(),*[Path(p).resolve() for p in result['sourceFiles']],*[Path(p).resolve() for p in result.get('sampledSourceFiles',[])]}
  if context.get('convertedLua'):protected.add(Path(context['convertedLua']['file']).resolve())
  if options['biome_source']:protected.add(Path(options['biome_source']).resolve())
@@ -357,6 +395,15 @@ def export(result,output,progress=None,cancel=None,game_paths=None):
    with rasterio.open(staging/targets['biomeGeoTiff'].name,'w',driver='GTiff',width=nx,height=ny,count=1,dtype='uint8',crs='EPSG:3857',transform=result['geoTransform'],compress='deflate',tiled=True) as dst:
     for row in range(0,ny,128):job.check();dst.write(grid[row:row+128],1,window=rasterio.windows.Window(0,row,nx,min(128,ny-row)))
     dst.update_tags(BIOME_IDS='0,1,2,3,4',TF3_CLIMATE=options['biome_climate'],CONVERTER_DATASET=context['report']['dataset'])
+   biome_report['layers']={}
+   for key in layer_keys:
+    label=biomes.LAYER_LABELS[key]
+    job.update(77,f'Writing {label} mask')
+    mask=biome_layer_mask(key,terrain,context,options,job)
+    biome_report['layers'][key]={'label':label,'pixels':[nx,ny],'encoding':'8-bit grayscale: 0 or 255',
+                                'markedPixels':int(np.count_nonzero(mask))}
+    Image.fromarray(mask.astype(np.uint8)*255).save(staging/targets[key].name,format='PNG')
+    del mask
   report={'format':'TF3-Heightmap-Studio-report','version':1,'createdUtc':datetime.now(timezone.utc).isoformat(),
           'converterDataset':context['report']['dataset'],'osmSha256':context['osmSha256'],'bounds':context['bounds'],'mapSize':context['size'],
           'convertedLua':context.get('convertedLua'),'biomes':biome_report,'roadRailGeometrySource':'converted Lua' if context.get('convertedLua') else 'original OSM fallback',
@@ -382,10 +429,11 @@ def export(result,output,progress=None,cancel=None,game_paths=None):
      'Export writes the import files into the selected TF3 user folders; it does not create or change a game save.')
    instructions+='\nProject, GeoTIFF, preview, report and attribution: '+str(destination['details'])+'\n'
   if biome_report:
-   instructions+=f'''\nVANILLA BIOMES\nCreate the map with the {options['biome_climate']} climate.\nBiome PNG: {targets['biomes'].name} ({nx} x {ny}, 8-bit grayscale)\nCodes: Biome 0=0, Biome 1=63, Biome 2=127, Biome 3=191, Biome 4=255.\n1. Copy the biome PNG to TF3 userdata/<Steam user>/3493540/local/biomes.\n2. After importing the heightmap, open the map editor's Biomes tab.\n3. Choose the matching {options['biome_climate']} (Import) generator and biome PNG.\n4. Inspect the game preview, then Apply. The vanilla generator supplies\n   climate-specific terrain materials and vegetation; no extra mods needed.\nLeave additional layer selectors empty; no extra terrain-shape layers are exported.\nBiome IDs are regions within one climate; their colors in the preview are\neditor labels, not final terrain textures. Water is determined by game heights.\nThe .biomes.tif stores IDs 0-4 for GIS, not native PNG grayscale codes.\nNative biome import remains to be verified in the game.\n'''
-  if destination['native'] and biome_report:
-   instructions=instructions.replace('1. Copy the biome PNG to TF3 userdata/<Steam user>/3493540/local/biomes.',
-     '1. The biome PNG is already exported into TF3: '+str(targets['biomes']))
+   copy_step=(f'The biome PNGs are already exported into TF3: {destination["biomes"]}.' if destination['native']
+              else 'Copy the biome PNGs to TF3 userdata/<Steam user>/3493540/local/biomes.')
+   selectors=[('Biomes',targets['biomes'].name)]+[(biomes.LAYER_LABELS[key],targets[key].name) for key in layer_keys]
+   selection='\n'.join(f'   {label}: {name}' for label,name in selectors)
+   instructions+=f'''\nVANILLA BIOMES\nCreate the map with the {options['biome_climate']} climate.\nAll PNGs below are {nx} x {ny} pixels, 8-bit grayscale.\n1. {copy_step}\n2. After importing the heightmap, open the map editor's Biomes tab.\n3. Choose the matching {options['biome_climate']} (Import) generator and assign:\n{selection}\n   Leave selectors that are not listed above empty.\n4. Inspect the game preview, then Apply.\nBiome codes: 0, 63, 127, 191, 255. Additional layers use 0 and 255.\nThe .biomes.tif stores IDs 0-4 for GIS. Water is determined by game heights.\n'''
   (staging/targets['instructions'].name).write_text(instructions,encoding='utf-8')
   attribution='OSM geometry: © OpenStreetMap contributors, ODbL. https://www.openstreetmap.org/copyright\n'
   if result['public']:
@@ -412,8 +460,9 @@ def export(result,output,progress=None,cancel=None,game_paths=None):
   with (staging/targets['png'].name).open('rb') as image_file:header=image_file.read(26)
   if header[24]!=16 or header[25]!=0:raise ValueError('The exported PNG is not 16-bit grayscale.')
   if biome_report:
-   with Image.open(staging/targets['biomes'].name) as check:
-    if check.mode!='L' or check.size!=(nx,ny):raise ValueError('The exported biome PNG format or dimensions are incorrect.')
+   for key in ('biomes',*layer_keys):
+    with Image.open(staging/targets[key].name) as check:
+     if check.mode!='L' or check.size!=(nx,ny):raise ValueError(f'The exported {key} PNG format or dimensions are incorrect.')
   for key,target in targets.items():
    target.parent.mkdir(parents=True,exist_ok=True)
    if target.exists():

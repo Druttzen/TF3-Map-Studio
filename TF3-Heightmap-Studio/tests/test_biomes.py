@@ -10,7 +10,8 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools'))
 import biomes
 from height_settings import normalize
-from terrain import prepare,export,load_project,project_dict,apply_stroke
+from terrain import prepare,export,load_project,project_dict,apply_stroke,biome_layer_mask
+from game_paths import GamePaths
 from job import Job,Cancelled
 from test_terrain import source
 
@@ -37,6 +38,51 @@ def test_vanilla_climates_export_native_codes_exactly_and_keep_heights(source,tm
  np.testing.assert_array_equal(r['terrain'],before)
  assert len(report['files'])==10;assert all(Path(p).is_file() for p in report['files'].values())
  assert '3493540/local/biomes' in Path(report['files']['instructions']).read_text()
+
+@pytest.mark.parametrize('climate,expected',[
+ ('Temperate',{'mountains','rivers'}),('Dry',{'mountains','rivers'}),
+ ('Tropical',{'mountains'}),('Subarctic',{'mountains'}),
+])
+def test_optional_native_masks_route_by_climate(source,tmp_path,climate,expected):
+ local=tmp_path/'tf3'
+ result=run(source,biome_climate=climate,biome_layers=True,biome_highland_m=0)
+ before=result['terrain'].copy()
+ report=export(result,local/'heightmaps'/'map.png',game_paths=GamePaths(local=local))
+ assert set(report['biomes']['layers'])==expected
+ instructions=Path(report['files']['instructions']).read_text()
+ for key in expected:
+  mask=local/'biomes'/f'map.{key}.png'
+  assert Path(report['files'][key])==mask
+  with Image.open(mask) as image:
+   assert image.mode=='L' and image.size==(65,65)
+   pixels=np.asarray(image)
+   assert set(np.unique(pixels))<={0,255}
+   assert np.count_nonzero(pixels)==report['biomes']['layers'][key]['markedPixels']
+  assert f'{key.title()}: {mask.name}' in instructions
+ assert ('Rivers:' in instructions)==('rivers' in expected)
+ assert load_project(report['files']['project'])['options']['biome_layers']
+ np.testing.assert_array_equal(result['terrain'],before)
+
+def test_layers_follow_north_up_elevation_and_surface_rivers():
+ terrain=np.full((65,65),20.)
+ terrain[:10]=120
+ terrain[-10:]=-20
+ context={'size':[256,256],'lines':[
+  {'kind':'river','waterway':'river','points':[(-80,40),(80,40)],'bridge':False,'tunnel':False},
+  {'kind':'river','waterway':'river','points':[(-80,-40),(80,-40)],'bridge':False,'tunnel':True},
+  {'kind':'river','waterway':'ditch','points':[(-80,-56),(80,-56)],'bridge':False,'tunnel':False},
+ ],'lakes':[
+  {'outer':[[(-40,-100),(40,-100),(40,-72),(-40,-72)]],
+   'inner':[[(-8,-92),(8,-92),(8,-80),(-8,-80)]],'riverArea':True},
+  {'outer':[[(-40,-20),(40,-20),(40,20),(-40,20)]],'inner':[],'riverArea':False},
+ ]}
+ options=normalize({'biome_highland_m':100,'biome_rock_slope':90,'river_width':16})
+ mountains=biome_layer_mask('mountains',terrain,context,options,Job())
+ rivers=biome_layer_mask('rivers',terrain,context,options,Job())
+ assert mountains[:10].all() and not mountains[10:].any()
+ assert rivers[20,32] and rivers[24,32] and not rivers[25,32]
+ assert not rivers[32,32] and not rivers[42,32] and not rivers[46,32]
+ assert rivers[53,27] and not rivers[53,32]
 
 def test_height_slope_water_and_osm_precedence():
  z=np.zeros((65,65));z[:16]=1600;z[16:32]=700;z[48:]=-10
