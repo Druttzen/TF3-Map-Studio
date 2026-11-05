@@ -33,6 +33,8 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
     if not entity then return nil end
     local gameScript=api.engine.getComponent(entity,api.type.ComponentType.GAME_SCRIPT)
     if not gameScript then return nil end
+    local ok,native=pcall(function() return gameScript.state_native end)
+    if ok and native then return uiSnapshot.fromNative(native,api.engine.terrain.getBoundingBox()) end
     return uiSnapshot.fromState(gameScript.state,api.engine.terrain.getBoundingBox())
   end,0.25):old()
   if type(snapshot)~="table" or not snapshot.options then

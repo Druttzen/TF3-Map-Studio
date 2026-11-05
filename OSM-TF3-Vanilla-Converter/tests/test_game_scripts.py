@@ -11,6 +11,9 @@ from lupa import LuaRuntime
 ROOT = Path(__file__).resolve().parents[1]
 CONTENT = ROOT/'mod/tf3_osm_importer_mod/content/osm'
 
+def model_positions(lua,record):
+    return lua.globals().modules['druttzen_osm_vanilla::/osm/controls.lua'].modelPositions(record)
+
 def install_map_modules(lua):
     for name in ('map_data','map_loader'):
         lua.globals().modules['druttzen_osm_vanilla::/osm/'+name+'.lua']=lua.execute(
@@ -270,10 +273,10 @@ class GameScriptTests(unittest.TestCase):
     def test_model_xyz_journal_survives_naming_failure(self):
         self.event('start');self.lua.globals().failNameNext=True;self.step()
         record=self.state.value.sceneryRecords[1]
-        self.assertEqual(record.modelJournalSchema,1)
-        self.assertIsNotNone(record.modelPositions[1][3])
-        before=record.modelPositions[1][3];self.event('retry');self.finish()
-        self.assertEqual(self.state.value.sceneryRecords[1].modelPositions[1][3],before)
+        self.assertEqual(record.modelJournalSchema,2)
+        self.assertIsNotNone(model_positions(self.lua,record)[1][3])
+        before=model_positions(self.lua,record)[1][3];self.event('retry');self.finish()
+        self.assertEqual(model_positions(self.lua,self.state.value.sceneryRecords[1])[1][3],before)
 
     def test_ownership_retry_does_not_duplicate_accepted_geometry(self):
         self.event('configure',{'vegetation':False,'surfaces':False,'objects':False,'places':False})

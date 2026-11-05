@@ -35,6 +35,42 @@ class LargeDetailsPanelTests(unittest.TestCase):
           state.value.datasetInfo.unavailableObjects=dataset.unavailableObjects
         """, count)
 
+    def test_native_component_snapshot_never_copies_build_journals_or_full_check_state(self):
+        self.fill_details(10000)
+        self.lua.execute('''
+          nativeReads=0
+          local function native(value,path)
+            return {
+              find=function(_,key)
+                nativeReads=nativeReads+1
+                assert(key~="matches" and key~="sceneryRecords" and key~="nodes", "Heavy journal read")
+                local item=value[key]
+                return type(item)=="table" and native(item,path.."/"..tostring(key)) or item
+              end,
+              size=function() return #value end,
+              asTable=function()
+                assert(not path:find("/check",1,true) and path~="root", "Full state materialization")
+                assert(path~="root/datasetInfo" and path~="root/datasetInfo/warnings"
+                  and path~="root/datasetInfo/unavailableObjects", "Unbounded report materialization")
+                return value
+              end,
+            }
+          end
+          state.value.check={matches={large="not copied"}}
+          state.value.phase="checking"
+          api.engine.getComponent=function(id,kind)
+            assert(id==900 and kind==api.type.ComponentType.GAME_SCRIPT)
+            return setmetatable({state_native=native(state.value,"root")},{__index=function(_,key)
+              if key=="state" then error("The panel must use the bounded native view") end
+            end})
+          end
+        ''')
+        self.h.tree()
+        self.assertFalse(self.h.node('command-start').params.meta.enabled)
+        self.assertTrue(self.h.node('command-pause').params.meta.enabled)
+        self.assertEqual(len(self.lua.globals().commands),0)
+        self.assertLess(self.lua.globals().nativeReads,500)
+
     def test_retry_and_pace_precede_map_selection_and_long_information(self):
         self.fill_details(10000)
         self.lua.execute("""

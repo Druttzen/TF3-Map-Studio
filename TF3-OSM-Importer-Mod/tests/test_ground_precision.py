@@ -38,7 +38,7 @@ class GroundPrecisionTests(unittest.TestCase):
         self.assertIsNotNone(value.sceneryOmissions[2]); self.assertEqual(value.skipped, 0)
         items = self.lua.globals().commands[1].constructionsToAdd[1].params['items']
         self.assertEqual(len(items), 2); self.assertEqual(items[2].sourceIndex, 3)
-        self.assertEqual(value.sceneryRecords[1].modelPositions[3][1], -10235)
+        self.assertEqual(self.controls.modelPositions(value.sceneryRecords[1])[3][1], -10235)
         self.assertEqual(len(self.lua.globals().dataset.scenery[2].face), 3)
 
     def test_rejected_batch_retry_does_not_count_omission_twice(self):

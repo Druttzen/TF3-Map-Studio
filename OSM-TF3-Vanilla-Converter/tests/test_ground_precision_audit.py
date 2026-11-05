@@ -114,7 +114,7 @@ class GroundPrecisionPreparationTests(unittest.TestCase):
         self.assertEqual(h.state.value.omittedScenery, 1)
         self.assertEqual(h.state.value.builtScenery, 1)
         self.assertEqual(len(h.lua.globals().commands), 1)
-        self.assertEqual(h.state.value.sceneryRecords[1].modelPositions[2][1], -10235)
+        self.assertEqual(game.model_positions(h.lua,h.state.value.sceneryRecords[1])[2][1], -10235)
 
 
 if __name__ == "__main__":

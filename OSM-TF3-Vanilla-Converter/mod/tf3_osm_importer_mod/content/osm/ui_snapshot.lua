@@ -44,4 +44,40 @@ function snapshot.fromState(value,box)
   }
 end
 
+-- Component.state_native is implemented in TF3 40425. The similarly named
+-- GameScriptState.get_native/set_native methods are fatal stubs in that build;
+-- use only the read-only component API here and retain ordinary engine saves.
+function snapshot.fromNative(native,box)
+  local infoNative=native:find("datasetInfo")
+  if not infoNative then return nil end
+  local function materialize(value)
+    if type(value)=="userdata" or type(value)=="table" and value.asTable then return value:asTable() end
+    return value
+  end
+  local function prefix(value)
+    if not value then return {} end
+    return setmetatable({},{__len=function() return value:size() end,
+      __index=function(_,index) return materialize(value:find(index)) end})
+  end
+  local info={}
+  for _,key in ipairs({"id","size","inventory","hasMappedObjectMetadata","mappedWaterCount","mappedLakeCount"}) do
+    info[key]=materialize(infoNative:find(key))
+  end
+  info.warnings=prefix(infoNative:find("warnings"))
+  info.unavailableObjects=prefix(infoNative:find("unavailableObjects"))
+  local value={datasetInfo=info}
+  for _,key in ipairs({"datasetId","phase","mapSource","mapReady","builtEdges","builtScenery","labels","skipped",
+    "omittedScenery","error","notice","errorKind","acceptedUnjournalled","runSteps","builtTowns"}) do
+    value[key]=native:find(key)
+  end
+  for _,key in ipairs({"check","waterJob","pendingOwnership","pendingScenery","pendingTown"}) do
+    if native:find(key)~=nil then value[key]=true end
+  end
+  for _,key in ipairs({"options","waterSettings","matchSummary"}) do value[key]=materialize(native:find(key)) end
+  local record=native:find("waterRecord")
+  if record then value.waterRecord={complete=record:find("complete")} end
+  value.waterRecords=prefix(native:find("waterRecords"))
+  return snapshot.fromState(value,box)
+end
+
 return snapshot

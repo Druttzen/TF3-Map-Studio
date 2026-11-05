@@ -271,9 +271,11 @@ function audit.inspect(dataset,value)
   local schemas={scenery={},labels={}}
   for _,record in ipairs(value.sceneryRecords or {}) do
     if savedPositions[record.phase] then
+      local ok,positions=pcall(controls.modelPositions,record)
+      if not ok then problem("wrongScenery","Invalid accepted model position journal: "..tostring(positions)); positions={} end
       for index=record.first or 1,record.last or record.first or 0 do
         schemas[record.phase][index]=record.modelJournalSchema
-        local saved=record.modelPositions and record.modelPositions[index]
+        local saved=positions[index]
         if saved then
           if savedPositions[record.phase][index] then problem("wrongScenery","Duplicate saved model position in importer journal.") end
           savedPositions[record.phase][index]=saved
@@ -294,7 +296,7 @@ function audit.inspect(dataset,value)
     else
       savedPositions[phase][index]=nil
       report.partial=true; report.missingModelHeights=report.missingModelHeights+1
-      if schemas[phase][index]==1 then problem("wrongScenery","New importer journal is missing a finite accepted model position.") end
+      if schemas[phase][index]==1 or schemas[phase][index]==2 then problem("wrongScenery","New importer journal is missing a finite accepted model position.") end
     end
   end
   local function savedPositionMatches(key,pos)

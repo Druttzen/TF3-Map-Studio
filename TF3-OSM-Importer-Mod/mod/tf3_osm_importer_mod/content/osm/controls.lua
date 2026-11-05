@@ -199,6 +199,60 @@ function controls.finiteHeight(z)
   return type(z)=="number" and z==z and math.abs(z)<math.huge
 end
 
+-- The accepted XYZ evidence can contain hundreds of thousands of vectors.
+-- Hexadecimal float text round-trips every bit without executing saved text,
+-- and keeps each batch in one ordinary, savegame-safe ASCII string.
+function controls.packPositions(positions)
+  local indices,rows={},{}
+  for index,p in pairs(positions) do
+    assert(type(index)=="number" and index>=1 and index==math.floor(index),"Invalid saved model source index")
+    assert(type(p)=="table" and controls.finiteHeight(p[1]) and controls.finiteHeight(p[2]) and controls.finiteHeight(p[3]),"Invalid accepted model position")
+    indices[#indices+1]=index
+  end
+  table.sort(indices)
+  for _,index in ipairs(indices) do
+    local p=positions[index]
+    rows[#rows+1]=string.format("%d|%a|%a|%a\n",index,p[1],p[2],p[3]):gsub(",",".")
+  end
+  return table.concat(rows)
+end
+
+local positionCache=setmetatable({},{__mode="k"})
+function controls.modelPositions(record)
+  if record.modelJournalSchema~=2 then
+    assert(record.modelPositions==nil or type(record.modelPositions)=="table","Invalid legacy accepted model positions")
+    return record.modelPositions or {}
+  end
+  local payload=record.modelPositions
+  assert(type(payload)=="string","Missing packed accepted model positions")
+  local cached=positionCache[record]
+  if cached and cached.payload==payload then return cached.positions end
+  assert(payload=="" or payload:sub(-1)=="\n","Truncated accepted model positions")
+  local positions={}
+  for row in payload:gmatch("(.-)\n") do
+    local index,x,y,z=row:match("^(%d+)|([^|]+)|([^|]+)|([^|]+)$")
+    index,x,y,z=tonumber(index),tonumber(x),tonumber(y),tonumber(z)
+    assert(index and index>=1 and index==math.floor(index)
+      and controls.finiteHeight(x) and controls.finiteHeight(y) and controls.finiteHeight(z),"Invalid packed accepted model position")
+    assert(index>=(record.first or 1) and index<=(record.last or record.first or 0),"Accepted model position is outside its source range")
+    assert(not positions[index],"Duplicate packed accepted model position")
+    positions[index]={x,y,z}
+  end
+  positionCache[record]={payload=payload,positions=positions}
+  return positions
+end
+
+function controls.compactModelPositions(value)
+  local function compact(record)
+    if record and record.modelJournalSchema==1 and type(record.modelPositions)=="table" then
+      record.modelPositions=controls.packPositions(record.modelPositions)
+      record.modelJournalSchema=2
+    end
+  end
+  for _,record in ipairs(value.sceneryRecords or {}) do compact(record) end
+  compact(value.pendingScenery)
+end
+
 -- Ground fill uses native float coordinates. Thin clipped polygons can have
 -- positive double-precision area but collapse at Huge-map world coordinates.
 -- Retain source coordinates/heights, removing only native duplicate vertices.

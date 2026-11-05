@@ -201,7 +201,7 @@ class MatchedImportTests(unittest.TestCase):
         self.assertEqual(self.state.value.phase, 'paused')
         self.event('resume'); self.finish()
         self.assertEqual(self.state.value.builtScenery, 1)
-        self.assertEqual(self.state.value.sceneryRecords[1].modelPositions[1][1], 20)
+        self.assertEqual(_game.model_positions(self.lua,self.state.value.sceneryRecords[1])[1][1], 20)
 
     def test_legacy_partial_check_keeps_catalog_and_summary_after_reload(self):
         self.lua.execute('''
@@ -225,7 +225,7 @@ class MatchedImportTests(unittest.TestCase):
         self.assertEqual(self.state.value.matchSummary.vanilla, 2001)
         self.assertEqual(self.state.value.builtScenery, 2001)
         self.assertEqual(len(self.state.value.matchCatalog), 1)
-        self.assertEqual(self.state.value.sceneryRecords[1].modelPositions[1][1], 0.1)
+        self.assertEqual(_game.model_positions(self.lua,self.state.value.sceneryRecords[1])[1][1], 0.1)
 
     def test_matched_model_is_journalled_with_actual_xyz_and_reused_after_reload(self):
         self.event('validate')
@@ -234,7 +234,7 @@ class MatchedImportTests(unittest.TestCase):
         self.event('start'); self.lua.globals().failOwnershipNext=True; self.step()
         self.assertEqual(self.state.value.phase,'error')
         record=self.state.value.sceneryRecords[1]
-        self.assertEqual(record.modelPositions[1][3],10)
+        self.assertEqual(_game.model_positions(self.lua,record)[1][3],10)
         from test_game_scripts import load_script
         self.script=load_script(self.lua,CONTENT/'importer.script.lua')
         self.event('retry'); self.finish()

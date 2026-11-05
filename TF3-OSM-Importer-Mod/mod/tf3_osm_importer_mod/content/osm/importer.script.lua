@@ -54,6 +54,9 @@ local function initialState(state)
     value.settingsRevision=10
   end
   value.waterRecords=value.waterRecords or {}
+  if value.positionStorageRevision~=1 then
+    controls.compactModelPositions(value); value.positionStorageRevision=1
+  end
   if value.matchStorageRevision~=2 and (not value.datasetId or value.datasetId==dataset.id)
     and (not value.mapSource or loadedSource==value.mapSource) then
     -- Exact configured substitutions already live in the immutable source.
@@ -482,7 +485,7 @@ local function proposedModelPositions(value,phase,last,proposal)
       if item.model then save(item.sourceIndex,item) end
     end
   end
-  return positions
+  return controls.packPositions(positions)
 end
 
 local function waterOwnership(value)
@@ -545,7 +548,7 @@ end
 
 function script.update(_userParams, state, _dt)
   local previous=state:get()
-  local dirty=not dataset or attemptedSource~=(previous and previous.mapSource or false) or not previous or not previous.phase or previous.settingsRevision~=10 or previous.matchStorageRevision~=2
+  local dirty=not dataset or attemptedSource~=(previous and previous.mapSource or false) or not previous or not previous.phase or previous.settingsRevision~=10 or previous.matchStorageRevision~=2 or previous.positionStorageRevision~=1
   local value=initialState(state)
   if checkGroundRecovery(value) then dirty=true end
   if not state:hasEventSubscriptions() then
@@ -885,7 +888,7 @@ function script.postUpdate(_userParams, state, _dt, _result)
           finishOwnership(value)
         else
           local record={entities={},name=proposal.constructionsToAdd[1].name,phase=phase,first=value.cursor,last=last,
-            modelJournalSchema=1,modelPositions=modelPositions}
+            modelJournalSchema=2,modelPositions=modelPositions}
           for _,entry in ipairs(resultEntities or res.resultEntities or {}) do
             local entity=entry[1]
             if api.engine.entityExists(entity) and

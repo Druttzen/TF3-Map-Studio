@@ -113,6 +113,16 @@ class WorldAuditTests(unittest.TestCase):
     def inspect(self):
         return self.audit.inspect(self.lua.globals().dataset, self.lua.globals().value)
 
+    def test_compact_position_journal_verifies_world_and_corruption_is_not_partial_success(self):
+        controls=self.lua.globals().modules['druttzen_osm_vanilla::/osm/controls.lua']
+        controls.compactModelPositions(self.lua.globals().value)
+        self.assertTrue(self.inspect().ok)
+        self.lua.execute('value.sceneryRecords[1].modelPositions="corrupt"')
+        report=self.inspect()
+        self.assertFalse(report.ok)
+        self.assertGreater(report.problemCounts.wrongScenery,0)
+        self.assertEqual(self.lua.globals().commandCalls,0)
+
     def test_saved_network_heights_detect_later_vertical_changes_without_commands(self):
         self.lua.execute('value.heightPolicy="base-v1"; value.nodeHeights={a=10,b=10,c=10,x=10,y=10}')
         self.assertTrue(self.inspect().ok)
