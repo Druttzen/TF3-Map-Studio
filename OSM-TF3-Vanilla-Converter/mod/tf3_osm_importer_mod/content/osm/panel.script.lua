@@ -75,12 +75,12 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
   rows[#rows+1]=text("These settings can be changed while the import is running or paused.")
   rows[#rows+1]=text("Scenery items per step")
   local batches={}
-  for _,size in ipairs({1,10,25,50,100}) do
+  for _,size in ipairs({1,10,25,50,100,250,500,1000}) do
     batches[#batches+1]=builtin.ComboBoxItem{value=size,content=text(tostring(size))}
   end
   -- A console-set valid size outside the presets is still displayed accurately.
   local preset=false
-  for _,size in ipairs({1,10,25,50,100}) do if size==snapshot.options.batchSize then preset=true end end
+  for _,size in ipairs({1,10,25,50,100,250,500,1000}) do if size==snapshot.options.batchSize then preset=true end end
   if not preset then batches[#batches+1]=builtin.ComboBoxItem{value=snapshot.options.batchSize,content=text(tostring(snapshot.options.batchSize))} end
   rows[#rows+1]=builtin.ComboBox{
     meta={id="druttzen-osm-batch",class="osm-import-choice"},value=snapshot.options.batchSize,items=batches,

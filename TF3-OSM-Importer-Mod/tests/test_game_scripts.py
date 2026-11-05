@@ -278,6 +278,46 @@ class GameScriptTests(unittest.TestCase):
         before=model_positions(self.lua,record)[1][3];self.event('retry');self.finish()
         self.assertEqual(model_positions(self.lua,self.state.value.sceneryRecords[1])[1][3],before)
 
+    def test_large_scenery_batches_keep_pause_and_resume_source_ranges(self):
+        self.lua.execute('''
+          dataset.edges={}; dataset.labels={}; dataset.scenery={}
+          for i=1,2500 do dataset.scenery[i]={category="vegetation",model="::/tree.mdl",pos={i/100,10}} end
+        ''')
+        self.event('configure',{'batchSize':500,'stepLimit':2}); self.event('start')
+        for _ in range(100):
+            self.step()
+            if self.state.value.phase in ('paused','error'): break
+        self.assertEqual(self.state.value.phase,'paused',self.state.value.error)
+        self.assertEqual(self.state.value.builtScenery,1000)
+        self.assertEqual(self.state.value.cursor,1001)
+        self.assertEqual(len(self.lua.globals().commands),2)
+        self.event('configure',{'batchSize':1000,'stepLimit':0})
+        self.script=load_script(self.lua,CONTENT/'importer.script.lua')
+        self.event('resume'); self.finish()
+        self.assertEqual(self.state.value.builtScenery,2500)
+        self.assertEqual(len(self.lua.globals().commands),4)
+        records=self.state.value.sceneryRecords
+        self.assertEqual([(records[i].first,records[i].last) for i in range(1,5)],
+                         [(1,500),(501,1000),(1001,2000),(2001,2500)])
+        self.assertEqual(model_positions(self.lua,records[3])[1001][1],10.01)
+
+    def test_rejected_large_batch_skip_retains_original_range_after_size_change(self):
+        self.lua.execute('''
+          dataset.edges={}; dataset.labels={}; dataset.scenery={}
+          for i=1,1500 do dataset.scenery[i]={category="vegetation",model="::/tree.mdl",pos={i/100,10}} end
+        ''')
+        self.event('configure',{'batchSize':1000}); self.event('start')
+        self.lua.globals().failNext=True
+        for _ in range(100):
+            self.step()
+            if self.state.value.phase=='error': break
+        self.assertEqual(self.state.value.errorKind,'proposal_rejected')
+        self.assertEqual((self.state.value.failedFirst,self.state.value.failedLast),(1,1000))
+        self.event('configure',{'batchSize':500}); self.event('skip'); self.finish()
+        self.assertEqual(self.state.value.skipped,1)
+        self.assertEqual(self.state.value.builtScenery,500)
+        self.assertEqual(self.state.value.sceneryRecords[1].first,1001)
+
     def test_ownership_retry_does_not_duplicate_accepted_geometry(self):
         self.event('configure',{'vegetation':False,'surfaces':False,'objects':False,'places':False})
         self.event('start')
@@ -553,7 +593,7 @@ class GameScriptTests(unittest.TestCase):
         self.assertIn('locked',self.state.value.notice)
 
     def test_invalid_settings_are_atomic(self):
-        for patch in [dict(batchSize=0),dict(batchSize=101),dict(batchSize=2.5),dict(interval=float('nan')),
+        for patch in [dict(batchSize=0),dict(batchSize=1001),dict(batchSize=2.5),dict(interval=float('nan')),
                       dict(interval=-1),dict(interval=3),dict(roads='false'),dict(unknown=True)]:
             self.event('configure',patch)
             self.assertEqual(self.state.value.options.batchSize,100)

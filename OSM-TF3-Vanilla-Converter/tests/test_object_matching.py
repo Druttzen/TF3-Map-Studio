@@ -156,6 +156,31 @@ class MatchingTests(unittest.TestCase):
         with self.assertRaisesRegex(Exception,'Missing saved match catalog'):
             controls.resolvedItem(item,1,value)
 
+    def test_legacy_compact_arrays_upgrade_to_lossless_strings_in_both_readers(self):
+        controls=self.lua.execute((CONTENT/'controls.lua').read_text())
+        catalog=self.lua.eval('{{model="::/assets/bench.mdl",kind="bench",origin="vanilla",method="semantic class"}}')
+        legacy=self.lua.eval('{1,8123.456789012345,-7890.123456789012,-0.0,10.000000000000002}')
+        packed=self.matcher.pack(legacy,catalog)
+        self.assertIsInstance(packed,str)
+        decoded=self.matcher.unpack(packed,catalog)
+        value=self.lua.table_from({'matches':self.lua.table_from({1:packed}),'matchCatalog':catalog})
+        item=self.lua.eval('{match={kind="bench"},pos={0,0}}')
+        resolved=controls.resolvedItem(item,1,value)
+        for actual in (decoded,resolved):
+            self.assertEqual((actual.pos[1],actual.pos[2],actual.pos[3]),(legacy[2],legacy[3],legacy[5]))
+            self.assertEqual(actual.rotation,legacy[4])
+            self.assertEqual(self.lua.eval('function(v) return 1/v end')(actual.rotation),float('-inf'))
+
+    def test_invalid_string_match_never_becomes_a_buildable_source_fallback(self):
+        controls=self.lua.execute((CONTENT/'controls.lua').read_text())
+        item=self.lua.eval('{match={kind="bench"},model="::/assets/bench.mdl",pos={0,0}}')
+        catalog=self.lua.eval('{{model="::/assets/bench.mdl",kind="bench",origin="vanilla"}}')
+        for packed in ('1|nan|0|0','1|0|inf|0','1|0|0','100|0|0|0','1|0|0|0|invalid'):
+            with self.subTest(packed=packed):
+                value=self.lua.table_from({'matches':self.lua.table_from({1:packed}),'matchCatalog':catalog})
+                with self.assertRaises(Exception): self.matcher.unpack(packed,catalog)
+                with self.assertRaises(Exception): controls.resolvedItem(item,1,value)
+
 
 class MatchedImportTests(unittest.TestCase):
     event=_game.GameScriptTests.event

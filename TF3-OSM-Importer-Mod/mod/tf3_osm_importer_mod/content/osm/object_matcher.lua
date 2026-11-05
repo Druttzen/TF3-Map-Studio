@@ -207,8 +207,17 @@ local function catalogKey(match)
   return table.concat(parts)
 end
 
+local function packedPosition(id,x,y,rotation,z)
+  assert(finite(x) and finite(y) and finite(rotation) and (z==nil or finite(z)),"Invalid saved fitted model position")
+  local result=string.format("%d|%a|%a|%a",id,x,y,rotation)
+  if z~=nil then result=result.."|"..string.format("%a",z) end
+  result=result:gsub(",",".")
+  return result
+end
+
 function matcher.pack(match,catalog)
-  if type(match)~="table" or match[1] then return match end
+  if type(match)~="table" then return match end
+  if match[1] then return packedPosition(match[1],match[2],match[3],match[4],match[5]) end
   if not match.unmatched and type(match.pos)~="table" then return match end
   local lookup=catalogLookups[catalog]
   if not lookup then
@@ -224,10 +233,17 @@ function matcher.pack(match,catalog)
   if match.unmatched then return id end
   -- Absolute doubles retain the exact fitted origin, including offsets at
   -- concave building footprints. Never reconstruct them by adding deltas.
-  return {id,match.pos[1],match.pos[2],match.rotation,match.pos[3]}
+  return packedPosition(id,match.pos[1],match.pos[2],match.rotation,match.pos[3])
 end
 
 function matcher.unpack(match,catalog)
+  if type(match)=="string" then
+    local id,x,y,rotation,z=match:match("^(%d+)|([^|]+)|([^|]+)|([^|]+)|?(.*)$")
+    assert(id,"Invalid saved fitted model position")
+    local extra=z~="" and tonumber(z) or nil
+    match={tonumber(id),tonumber(x),tonumber(y),tonumber(rotation),extra}
+    assert(finite(match[2]) and finite(match[3]) and finite(match[4]) and (z=="" or finite(extra)),"Invalid saved fitted model position")
+  end
   if type(match)=="number" then
     local common=catalog and catalog[match]
     assert(common,"Missing saved match catalog entry"); return common

@@ -63,8 +63,8 @@ function controls.configure(source,patch,locked)
   local result=controls.options(source)
   for key,value in pairs(patch) do
     if key=="batchSize" then
-      assert(type(value)=="number" and value==value and value%1==0 and value>=1 and value<=100,
-        "Scenery batch size must be a whole number from 1 to 100")
+      assert(type(value)=="number" and value==value and value%1==0 and value>=1 and value<=1000,
+        "Scenery batch size must be a whole number from 1 to 1000")
     elseif key=="stepLimit" then
       assert(type(value)=="number" and value==value and value%1==0 and value>=0 and value<=10000,
         "Automatic pause must be a whole number from 0 to 10000 build steps")
@@ -104,6 +104,14 @@ function controls.resolvedItem(item,index,value)
   if not item.match then return item end
   local match=value.matches and value.matches[index]
   if not match then return item.model and item or nil end
+  if type(match)=="string" then
+    local id,x,y,rotation,z=match:match("^(%d+)|([^|]+)|([^|]+)|([^|]+)|?(.*)$")
+    assert(id,"Invalid saved fitted model position")
+    local extra=z~="" and tonumber(z) or nil
+    match={tonumber(id),tonumber(x),tonumber(y),tonumber(rotation),extra}
+    assert(controls.finiteHeight(match[2]) and controls.finiteHeight(match[3]) and controls.finiteHeight(match[4])
+      and (z=="" or controls.finiteHeight(extra)),"Invalid saved fitted model position")
+  end
   -- Compact matches share static model/reason metadata, while fitted origins
   -- remain exact absolute coordinates. Continue reading legacy full records.
   local packed=type(match)=="table" and match[1] and match or nil

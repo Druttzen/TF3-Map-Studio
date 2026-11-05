@@ -57,7 +57,7 @@ local function initialState(state)
   if value.positionStorageRevision~=1 then
     controls.compactModelPositions(value); value.positionStorageRevision=1
   end
-  if value.matchStorageRevision~=2 and (not value.datasetId or value.datasetId==dataset.id)
+  if value.matchStorageRevision~=3 and (not value.datasetId or value.datasetId==dataset.id)
     and (not value.mapSource or loadedSource==value.mapSource) then
     -- Exact configured substitutions already live in the immutable source.
     -- Keep fitted/changed matches and unmatched decisions in the journal.
@@ -70,7 +70,7 @@ local function initialState(state)
       value.check.directExamples=value.check.directExamples or {}
       for label in pairs(examples) do value.check.directExamples[label]=true end
     end
-    value.matchStorageRevision=2
+    value.matchStorageRevision=3
   end
   if not value.datasetInfo or not value.mapSource and value.datasetInfo.id~=dataset.id then value.datasetInfo=maps.describe(dataset) end
   return value
@@ -548,7 +548,7 @@ end
 
 function script.update(_userParams, state, _dt)
   local previous=state:get()
-  local dirty=not dataset or attemptedSource~=(previous and previous.mapSource or false) or not previous or not previous.phase or previous.settingsRevision~=10 or previous.matchStorageRevision~=2 or previous.positionStorageRevision~=1
+  local dirty=not dataset or attemptedSource~=(previous and previous.mapSource or false) or not previous or not previous.phase or previous.settingsRevision~=10 or previous.matchStorageRevision~=3 or previous.positionStorageRevision~=1
   local value=initialState(state)
   if checkGroundRecovery(value) then dirty=true end
   if not state:hasEventSubscriptions() then
