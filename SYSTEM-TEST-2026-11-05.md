@@ -39,6 +39,8 @@ and importer ZIP integrity/source-byte comparison. Source OSM bytes were retaine
 All three Windows executables were built and passed their offline frozen-app
 checks. Each frozen check initializes a hidden Tk window and the actual clam
 theme, so missing Tk scripts cannot be mistaken for a passing dependency check.
+The map/terrain apps also create a real Pillow/Tk preview image in that hidden
+window to check the image bridge against the packaged Tk version.
 Checks include TLS roots, Tcl/Tk, SQLite, PNG, OSM export/template bytes,
 streamed reports, DEM tile seams, LAZ compression/ground filtering, projection,
 biome/native-folder export routing, mod conversion and receipt-based recovery.

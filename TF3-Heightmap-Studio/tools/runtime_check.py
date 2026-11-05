@@ -10,7 +10,12 @@ def check(output):
    import tkinter
    from tkinter import ttk
    window=tkinter.Tk();window.withdraw()
-   try:ttk.Style(window).theme_use('clam');window.update_idletasks()
+   try:
+    from PIL import Image,ImageTk
+    ttk.Style(window).theme_use('clam')
+    photo=ImageTk.PhotoImage(Image.new('RGB',(2,2)),master=window)
+    assert photo.width()==2 and photo.height()==2
+    window.update_idletasks()
    finally:window.destroy()
   context=ssl.create_default_context(cafile=certifi.where())
   assert context.cert_store_stats()['x509_ca']>0

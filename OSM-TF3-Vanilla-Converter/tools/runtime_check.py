@@ -23,7 +23,12 @@ def check(output):
         if getattr(sys,'frozen',False):
             from tkinter import ttk
             window=tkinter.Tk();window.withdraw()
-            try:ttk.Style(window).theme_use('clam');window.update_idletasks()
+            try:
+                from PIL import ImageTk
+                ttk.Style(window).theme_use('clam')
+                photo=ImageTk.PhotoImage(Image.new('RGB',(2,2)),master=window)
+                assert photo.width()==2 and photo.height()==2
+                window.update_idletasks()
             finally:window.destroy()
         with closing(sqlite3.connect(':memory:')) as database:
             assert database.execute('SELECT 1').fetchone()==(1,)
