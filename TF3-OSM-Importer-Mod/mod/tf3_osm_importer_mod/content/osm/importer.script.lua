@@ -54,6 +54,19 @@ local function initialState(state)
     value.settingsRevision=10
   end
   value.waterRecords=value.waterRecords or {}
+  if value.matchStorageRevision~=1 and (not value.datasetId or value.datasetId==dataset.id)
+    and (not value.mapSource or loadedSource==value.mapSource) then
+    -- Exact configured substitutions already live in the immutable source.
+    -- Keep fitted/changed matches and unmatched decisions in the journal.
+    matcher.compact(value.matches,dataset.scenery)
+    if value.check then
+      local count,examples=matcher.compact(value.check.matches,dataset.scenery)
+      value.check.directMatches=(value.check.directMatches or 0)+count
+      value.check.directExamples=value.check.directExamples or {}
+      for label in pairs(examples) do value.check.directExamples[label]=true end
+    end
+    value.matchStorageRevision=1
+  end
   if not value.datasetInfo or not value.mapSource and value.datasetInfo.id~=dataset.id then value.datasetInfo=maps.describe(dataset) end
   return value
 end
@@ -115,7 +128,7 @@ local function newCheck(value,starting)
     string.format("Prepared area %.0f x %.0f m is larger than this map (%.0f x %.0f m). Reconvert OSM and heightmap with matching dimensions; do not scale only one file.",
       dataset.size[1],dataset.size[2],width,height))
   return {datasetId=dataset.id,starting=starting,returnPhase=value.phase,section=1,cursor=1,checked=0,
-    total=#dataset.edges+#dataset.scenery+#dataset.labels,resources={},matches={},townNames={}}
+    total=#dataset.edges+#dataset.scenery+#dataset.labels,resources={},matches={},directMatches=0,directExamples={},townNames={}}
 end
 
 local function advanceCheck(value,job,budget)
@@ -157,7 +170,12 @@ local function advanceCheck(value,job,budget)
     if controls.selectedScenery(item,value.options) then
       if item.match then
         checkPosition(item.pos)
-        local match=matcher.resolve(item,value.options); job.matches[job.cursor]=match
+        local match=matcher.resolve(item,value.options)
+        if matcher.isSourceMatch(item,match) then
+          job.directMatches=(job.directMatches or 0)+1
+          job.directExamples=job.directExamples or {}
+          job.directExamples[match.kind..": "..match.model]=true
+        else job.matches[job.cursor]=match end
         if match.unmatched then return end
         item=controls.resolvedItem(item,job.cursor,{matches=job.matches})
       end
@@ -215,7 +233,7 @@ end
 
 local function finishCheck(value,job)
   value.check=nil; value.phase=job.returnPhase
-  value.matches=job.matches; value.matchSummary=matcher.summary(job.matches)
+  value.matches=job.matches; value.matchSummary=matcher.summary(job.matches,job.directMatches,job.directExamples)
   if job.starting then beginImport(value)
   else value.notice=string.format("Map/resource checks passed. Object matches: %d vanilla, %d active mod, %d without a safe match (left unbuilt).",
     value.matchSummary.vanilla,value.matchSummary.mods,value.matchSummary.unmatched) end
@@ -524,7 +542,7 @@ end
 
 function script.update(_userParams, state, _dt)
   local previous=state:get()
-  local dirty=not dataset or attemptedSource~=(previous and previous.mapSource or false) or not previous or not previous.phase or previous.settingsRevision~=10
+  local dirty=not dataset or attemptedSource~=(previous and previous.mapSource or false) or not previous or not previous.phase or previous.settingsRevision~=10 or previous.matchStorageRevision~=1
   local value=initialState(state)
   if checkGroundRecovery(value) then dirty=true end
   if not state:hasEventSubscriptions() then

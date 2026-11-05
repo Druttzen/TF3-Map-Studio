@@ -102,6 +102,29 @@ class MatchingTests(unittest.TestCase):
         self.lua.execute('modelNames={[1]="custom::/assets/benchpress.mdl"}; modelData[1].metadata={} ')
         self.assertTrue(self.match('{match={kind="bench"},pos={0,0}}').unmatched)
 
+    def test_compaction_keeps_fitted_changed_and_unmatched_decisions(self):
+        self.lua.globals().matcher = self.matcher
+        self.lua.execute('''
+          source={match={kind="bench"},model="::/assets/bench.mdl",pos={12,13},rotation=0.2}
+          scenery={source,source,source,source}
+          matches={}
+          for i=1,3 do matches[i]=matcher.resolve(source,{useActiveMods=true}) end
+          matches[2].pos[1]=12.5
+          matches[3].rotation=0.4
+          matches[4]={unmatched=true,kind="bicycle_parking",reason="No safe model"}
+          count,examples=matcher.compact(matches,scenery)
+        ''')
+        g = self.lua.globals()
+        self.assertEqual(g.count, 1)
+        self.assertIsNone(g.matches[1])
+        self.assertEqual(g.matches[2].pos[1], 12.5)
+        self.assertEqual(g.matches[3].rotation, 0.4)
+        self.assertTrue(g.matches[4].unmatched)
+        summary = self.matcher.summary(g.matches, g.count, g.examples)
+        self.assertEqual(summary.vanilla, 3)
+        self.assertEqual(summary.unmatched, 1)
+        self.assertEqual(len(summary.examples), 2)
+
 
 class MatchedImportTests(unittest.TestCase):
     event=_game.GameScriptTests.event
@@ -112,6 +135,42 @@ class MatchedImportTests(unittest.TestCase):
         _game.GameScriptTests.setUp(self)
         self.lua.execute(MODELS)
         self.lua.execute('dataset.edges={}; dataset.labels={}; dataset.scenery={{category="mappedObjects",match={kind="bench"},pos={20,30},rotation=0}}')
+
+    def test_unchanged_configured_objects_do_not_duplicate_source_in_saved_matches(self):
+        self.lua.execute('''
+          dataset.scenery={}
+          for i=1,2000 do dataset.scenery[i]={category="mappedObjects",match={kind="bench"},
+            model="::/assets/bench.mdl",pos={i/10,30},rotation=0.2} end
+        ''')
+        self.event('start'); self.finish()
+        self.assertEqual(self.state.value.phase, 'finished', self.state.value.error)
+        self.assertEqual(self.state.value.builtScenery, 2000)
+        self.assertEqual(self.state.value.matchSummary.vanilla, 2000)
+        self.assertEqual(len(self.state.value.matches), 0)
+        self.assertEqual(len(self.state.value.matchSummary.examples), 1)
+        item = self.lua.globals().commands[1].constructionsToAdd[1].params['items'][1]
+        self.assertEqual(item.model, '::/assets/bench.mdl')
+        self.assertEqual((item.pos[1],item.pos[2],item.rotation), (0.1,30,0.2))
+
+    def test_existing_save_compaction_preserves_summary_progress_and_live_transforms(self):
+        self.lua.execute('dataset.scenery[1].model="::/assets/bench.mdl"')
+        self.event('start'); self.event('pause')
+        # Simulate the equivalent full match stored by revision 11/early 12.
+        self.lua.execute('''
+          state.value.matches[1]={model="::/assets/bench.mdl",pos={20,30},rotation=0,
+            origin="vanilla",kind="bench",method="configured vanilla substitution"}
+          state.value.matchStorageRevision=nil
+        ''')
+        saved_cursor = self.state.value.cursor
+        self.script = _game.load_script(self.lua, CONTENT/'importer.script.lua')
+        self.script.update(None, self.state, 1)
+        self.assertIsNone(self.state.value.matches[1])
+        self.assertEqual(self.state.value.matchSummary.vanilla, 1)
+        self.assertEqual(self.state.value.cursor, saved_cursor)
+        self.assertEqual(self.state.value.phase, 'paused')
+        self.event('resume'); self.finish()
+        self.assertEqual(self.state.value.builtScenery, 1)
+        self.assertEqual(self.state.value.sceneryRecords[1].modelPositions[1][1], 20)
 
     def test_matched_model_is_journalled_with_actual_xyz_and_reused_after_reload(self):
         self.event('validate')

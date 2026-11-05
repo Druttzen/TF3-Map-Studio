@@ -188,8 +188,27 @@ function matcher.resolve(item,options)
   return {unmatched=true,kind=kind,reason=catalogWarning or ("No safe class/footprint match in vanilla"..(options.useActiveMods and " or loaded active mods" or " resources"))}
 end
 
-function matcher.summary(matches)
-  local result={vanilla=0,mods=0,unmatched=0,examples={}}
+function matcher.isSourceMatch(item,match)
+  return item and type(match)=="table" and not match.unmatched
+    and match.method=="configured vanilla substitution" and match.origin=="vanilla"
+    and match.model==item.model and type(item.pos)=="table" and type(match.pos)=="table"
+    and match.pos[1]==item.pos[1] and match.pos[2]==item.pos[2]
+    and match.rotation==(item.rotation or 0)
+end
+
+function matcher.compact(matches,scenery)
+  local count,examples=0,{}
+  for index,match in pairs(matches or {}) do
+    if matcher.isSourceMatch(scenery[index],match) then
+      count=count+1; examples[match.kind..": "..match.model]=true
+      matches[index]=nil
+    end
+  end
+  return count,examples
+end
+
+function matcher.summary(matches,directCount,directExamples)
+  local result={vanilla=directCount or 0,mods=0,unmatched=0,examples={}}
   for _,match in pairs(matches or {}) do
     if match.unmatched then result.unmatched=result.unmatched+1
     elseif match.origin=="vanilla" then result.vanilla=result.vanilla+1
@@ -197,6 +216,7 @@ function matcher.summary(matches)
   end
   local seen={}
   local examples={}
+  for label in pairs(directExamples or {}) do seen[label]=true; examples[#examples+1]=label end
   for _,match in pairs(matches or {}) do
     local label=match.kind..": "..(match.model or match.reason)
     if not seen[label] then seen[label]=true; examples[#examples+1]=label end
