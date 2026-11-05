@@ -73,6 +73,13 @@ try {
     Invoke-Checked "$Apps/unins000.exe" ($Quiet + ('/LOG="{0}/uninstall-apps-only.log"' -f $TestRoot))
     Write-Host "Windows installer smoke test passed. Logs: $TestRoot"
 }
+catch {
+    Get-ChildItem -LiteralPath $TestRoot -Filter '*.log' | ForEach-Object {
+        Write-Host "----- $($_.Name) -----"
+        Get-Content -LiteralPath $_.FullName -Tail 45 | Write-Host
+    }
+    throw
+}
 finally {
     $env:TEMP = $OldTemp
     $env:TMP = $OldTmp
