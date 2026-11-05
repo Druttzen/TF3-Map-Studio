@@ -292,18 +292,50 @@ local function nodePosition(edge, nodeId, ending,value)
 end
 
 local function existingNode(value, id, position)
+  if value.proposedNodes and value.proposedNodes[id] then return value.proposedNodes[id] end
   local entity = value.nodes[id]
   if entity and api.engine.entityExists(entity) then return entity end
   -- Only re-use nodes created by this import. Existing map nodes remain independent.
   return nil
 end
 
+local function railTangent(node,chord,planned)
+  if not node then return chord end
+  local length=math.sqrt(chord.x^2+chord.y^2+chord.z^2)
+  local best,score=nil,0.7
+  -- TF3 requires a continuous tangent at a shared rail node. Independent
+  -- straight OSM chords otherwise create InvalidTransition, even for a slight
+  -- bend on a short segment. Keep the accepted node and rail untouched.
+  local candidates={}
+  if planned then candidates[1]=planned
+  else
+    for _,entity in ipairs(api.engine.system.streetSystem.getNodeTrackSegments(node)) do
+      local edge=api.engine.getComponent(entity,compType.BASE_EDGE)
+      if edge then candidates[#candidates+1]=edge.node0==node and edge.tangent0 or edge.tangent1 end
+    end
+  end
+  for _,tangent in ipairs(candidates) do
+    if tangent then
+      local norm=math.sqrt(tangent.x^2+tangent.y^2+tangent.z^2)
+      if norm>0 then
+        local dot=(tangent.x*chord.x+tangent.y*chord.y+tangent.z*chord.z)/(norm*length)
+        if math.abs(dot)>score then
+          local scale=(dot<0 and -1 or 1)*length/norm
+          best=api.type.Vec3f.new(tangent.x*scale,tangent.y*scale,tangent.z*scale)
+          score=math.abs(dot)
+        end
+      end
+    end
+  end
+  return best or chord
+end
+
 local function edgeProposal(edge, value)
   local proposal = api.type.SimpleProposal.new()
   local p0, p1 = nodePosition(edge,edge.node0,false,value), nodePosition(edge,edge.node1,true,value)
   local id0, id1 = existingNode(value,edge.node0,p0), existingNode(value,edge.node1,p1)
-  if id0 then p0=api.engine.getComponent(id0,compType.BASE_NODE).position end
-  if id1 then p1=api.engine.getComponent(id1,compType.BASE_NODE).position end
+  if id0 then p0=value.proposedPositions and value.proposedPositions[edge.node0] or api.engine.getComponent(id0,compType.BASE_NODE).position end
+  if id1 then p1=value.proposedPositions and value.proposedPositions[edge.node1] or api.engine.getComponent(id1,compType.BASE_NODE).position end
   assert(controls.finiteHeight(p0.z) and controls.finiteHeight(p1.z),"Invalid road/rail height")
   assert(math.abs(p1.x-p0.x)+math.abs(p1.y-p0.y)>0.000001,"Road/rail segment has coincident endpoints")
   assert(not id0 or id0~=id1, "Both endpoints resolve to the same node")
@@ -320,7 +352,8 @@ local function edgeProposal(edge, value)
   e.comp.node0=id0 or -3; e.comp.node1=id1 or -4
   e.comp.position0=p0; e.comp.position1=p1
   local tangent=api.type.Vec3f.new(p1.x-p0.x,p1.y-p0.y,p1.z-p0.z)
-  e.comp.tangent0=tangent; e.comp.tangent1=tangent
+  e.comp.tangent0=edge.kind=="TRACK" and railTangent(id0,tangent,value.proposedTangents and value.proposedTangents[edge.node0]) or tangent
+  e.comp.tangent1=edge.kind=="TRACK" and railTangent(id1,tangent,value.proposedTangents and value.proposedTangents[edge.node1]) or tangent
   e.comp.type=enums.BaseEdgeType.NORMAL
   if edge.bridge then
     e.comp.type=enums.BaseEdgeType.BRIDGE
@@ -341,11 +374,46 @@ local function edgeProposal(edge, value)
   return proposal
 end
 
+local function networkProposal(value)
+  local limit=value.options.networkBatchSize or 1
+  if limit==1 then return edgeProposal(dataset.edges[value.cursor],value),value.cursor end
+  local proposal=api.type.SimpleProposal.new()
+  local nodes,segments={},{}
+  -- Preparation shares only provisional nodes, never the durable node map.
+  -- The native command accepts or rejects the entire batch atomically.
+  local shadow=setmetatable({proposedNodes={},proposedPositions={},proposedTangents={}},{__index=value})
+  local nextNode=-1001
+  local last=value.cursor-1
+  for index=value.cursor,math.min(#dataset.edges,value.cursor+limit-1) do
+    local source=dataset.edges[index]
+    if not value.options[source.kind=="TRACK" and "railways" or "roads"] then break end
+    last=index; value.failedLast=last
+    local part=edgeProposal(source,shadow)
+    local remap={}
+    for _,node in ipairs(part.streetProposal.nodesToAdd) do
+      local id=node.entity==-3 and source.node0 or source.node1
+      remap[node.entity]=nextNode; node.entity=nextNode; nextNode=nextNode-1
+      shadow.proposedNodes[id]=node.entity; shadow.proposedPositions[id]=node.comp.position
+      nodes[#nodes+1]=node
+    end
+    local segment=part.streetProposal.edgesToAdd[1]
+    segment.entity=-(#segments+1)
+    segment.comp.node0=remap[segment.comp.node0] or segment.comp.node0
+    segment.comp.node1=remap[segment.comp.node1] or segment.comp.node1
+    segments[#segments+1]=segment
+    if source.kind=="TRACK" then
+      shadow.proposedTangents[source.node0]=segment.comp.tangent0
+      shadow.proposedTangents[source.node1]=segment.comp.tangent1
+    end
+  end
+  proposal.streetProposal.nodesToAdd=nodes; proposal.streetProposal.edgesToAdd=segments
+  return proposal,last
+end
+
 local function finishOwnership(value)
-  local entity=value.pendingOwnership
-  if not entity then return end
-  local edge=api.engine.getComponent(entity,compType.BASE_EDGE)
-  assert(edge,"The built edge is missing; ownership cannot be completed.")
+  local pending=value.pendingOwnership
+  if not pending then return end
+  local entities=type(pending)=="table" and pending or {pending}
   if value.pendingHeightNodes then
     value.nodeHeights=value.nodeHeights or {}
     for _,id in ipairs(value.pendingHeightNodes) do
@@ -361,8 +429,12 @@ local function finishOwnership(value)
     local owner=api.engine.getComponent(id,compType.PLAYER_OWNED)
     assert(owner and owner.player==player,"The built edge awaits ownership. Retry this step.")
   end
-  for _,object in ipairs(edge.objects or {}) do assign(object[1]) end
-  assign(entity)
+  for _,entity in ipairs(entities) do
+    local edge=api.engine.getComponent(entity,compType.BASE_EDGE)
+    assert(edge,"The built edge is missing; ownership cannot be completed.")
+    for _,object in ipairs(edge.objects or {}) do assign(object[1]) end
+    assign(entity)
+  end
   value.pendingOwnership=nil
 end
 
@@ -848,7 +920,7 @@ function script.postUpdate(_userParams, state, _dt, _result)
     local proposal,last,included
     local edge
     if phase=="edges" then
-      edge=dataset.edges[value.cursor]; proposal=edgeProposal(edge,value); last=value.cursor
+      edge=dataset.edges[value.cursor]; proposal,last=networkProposal(value)
     elseif phase=="labels" then proposal,last=labelProposal(value)
     else proposal,last,included=sceneryProposal(value) end
     if not proposal then value.cursor=last+1; value.failedFirst=nil; value.failedLast=nil; state:set(value); return end
@@ -873,16 +945,36 @@ function script.postUpdate(_userParams, state, _dt, _result)
         value.acceptedUnjournalled=true; state:set(value)
         value.runSteps=(value.runSteps or 0)+1
         if phase=="edges" then
-          local built=res.proposal.proposal.addedSegments[1]
-          value.nodes[edge.node0]=built.comp.node0; value.nodes[edge.node1]=built.comp.node1
-          if value.heightPolicy=="base-v1" then
-            value.pendingHeightNodes={edge.node0,edge.node1}
+          local builtSegments=res.proposal.proposal.addedSegments
+          local count=last-value.cursor+1
+          assert(#builtSegments==count,"Accepted network batch returned an unexpected segment count; do not rebuild it")
+          local entities,heightNodes,seen={},{},{}
+          for offset=1,count do
+            local built=builtSegments[offset]
+            local source=dataset.edges[value.cursor+offset-1]
+            for endpoint=0,1 do
+              local id=source[endpoint==0 and "node0" or "node1"]
+              local entity=built.comp[endpoint==0 and "node0" or "node1"]
+              assert(not value.nodes[id] or value.nodes[id]==entity,"Accepted network batch changed a shared node; do not rebuild it")
+              if count>1 then
+                local actual=api.engine.getComponent(entity,compType.BASE_NODE)
+                local expected=proposal.streetProposal.edgesToAdd[offset].comp[endpoint==0 and "position0" or "position1"]
+                assert(actual and math.abs(actual.position.x-expected.x)<0.02 and math.abs(actual.position.y-expected.y)<0.02
+                  and math.abs(actual.position.z-expected.z)<0.02,"Accepted network batch returned unexpected geometry; do not rebuild it")
+              end
+              value.nodes[id]=entity
+              if not seen[id] then heightNodes[#heightNodes+1]=id; seen[id]=true end
+            end
+            entities[#entities+1]=built.entity
           end
-          value.builtEdges=value.builtEdges+1
+          if value.heightPolicy=="base-v1" then
+            value.pendingHeightNodes=heightNodes
+          end
+          value.builtEdges=value.builtEdges+count
           -- Commit the accepted geometry before assigning ownership. If that
           -- separate command fails, Retry completes it without building twice.
           value.cursor=last+1; value.failedFirst=nil; value.failedLast=nil
-          value.pendingOwnership=built.entity
+          value.pendingOwnership=count==1 and entities[1] or entities
           value.acceptedUnjournalled=nil
           state:set(value)
           finishOwnership(value)
@@ -911,7 +1003,15 @@ function script.postUpdate(_userParams, state, _dt, _result)
         value.resumePhase=phase; value.phase="error"
         value.errorKind="proposal_rejected"
         local errors=res and res.resultProposalData and res.resultProposalData.errorState
-        value.error=errors and table.concat(errors.messages or {},"; ") or "Game rejected the build proposal"
+        local details={}
+        if errors then
+          for _,key in ipairs({"messages","warnings","infos"}) do
+            for _,detail in ipairs(errors[key] or {}) do
+              if type(detail)=="string" and detail~="" then details[#details+1]=detail end
+            end
+          end
+        end
+        value.error=#details>0 and table.concat(details,"; ") or "Game rejected the build proposal; inspect the game log for native geometry details"
         status(value)
       end
       state:set(value)

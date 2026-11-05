@@ -60,7 +60,7 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
   for _,row in ipairs(commandRows) do rows[#rows+1]=row end
   rows[#rows+1]=text("Adjust import pace","font-scale-headline")
   rows[#rows+1]=text("Automatically pause after successful build steps")
-  rows[#rows+1]=text("One step builds one road/rail segment, one scenery batch or one marker. Resume starts another run.")
+  rows[#rows+1]=text("One step builds one road/rail batch, one scenery batch or one marker. Resume starts another run.")
   local limits={}
   local limitPreset=false
   for _,limit in ipairs({0,10,100,1000,10000}) do
@@ -73,6 +73,18 @@ result.OsmImportPanel=react.RegisterWrapperRecipe("OsmImportPanel",builtin.Windo
     onValueChange=function(value) send("configure",{stepLimit=tonumber(value)}) end,
   }
   rows[#rows+1]=text("These settings can be changed while the import is running or paused.")
+  rows[#rows+1]=text("Road/rail segments per step")
+  local networkBatches={}
+  local networkPreset=false
+  for _,size in ipairs({1,10,25,50,100}) do
+    networkBatches[#networkBatches+1]=builtin.ComboBoxItem{value=size,content=text(tostring(size))}
+    if size==snapshot.options.networkBatchSize then networkPreset=true end
+  end
+  if not networkPreset then networkBatches[#networkBatches+1]=builtin.ComboBoxItem{value=snapshot.options.networkBatchSize,content=text(tostring(snapshot.options.networkBatchSize))} end
+  rows[#rows+1]=builtin.ComboBox{
+    meta={id="druttzen-osm-network-batch",class="osm-import-choice"},value=snapshot.options.networkBatchSize,items=networkBatches,
+    onValueChange=function(value) send("configure",{networkBatchSize=tonumber(value)}) end,
+  }
   rows[#rows+1]=text("Scenery items per step")
   local batches={}
   for _,size in ipairs({1,10,25,50,100,250,500,1000}) do

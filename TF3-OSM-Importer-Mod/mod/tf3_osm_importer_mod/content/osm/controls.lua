@@ -46,7 +46,7 @@ controls.commands={
 }
 
 function controls.options(source)
-  local result={batchSize=100,interval=0,stepLimit=0}
+  local result={batchSize=100,networkBatchSize=1,interval=0,stepLimit=0}
   for _,category in ipairs(controls.categories) do result[category.key]=true end
   -- Native depth/paint validation is pending; select this experiment explicitly.
   result.waterways=false; result.buildings=false; result.towns=false
@@ -65,6 +65,9 @@ function controls.configure(source,patch,locked)
     if key=="batchSize" then
       assert(type(value)=="number" and value==value and value%1==0 and value>=1 and value<=1000,
         "Scenery batch size must be a whole number from 1 to 1000")
+    elseif key=="networkBatchSize" then
+      assert(type(value)=="number" and value==value and value%1==0 and value>=1 and value<=100,
+        "Road/rail batch size must be a whole number from 1 to 100")
     elseif key=="stepLimit" then
       assert(type(value)=="number" and value==value and value%1==0 and value>=0 and value<=10000,
         "Automatic pause must be a whole number from 0 to 10000 build steps")

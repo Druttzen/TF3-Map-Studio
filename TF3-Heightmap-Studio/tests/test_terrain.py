@@ -84,6 +84,20 @@ def test_feet_scale_offset(source):
 def test_invalid_settings(settings):
  with pytest.raises(ValueError):normalize(settings)
 
+def test_authored_transport_clearance_round_trips_and_is_reported(source,tmp_path):
+ result=prepare(source['report'],source['xml'],[source['dem']],
+                {'roads':True,'railways':True,'transport_water_clearance':2,'water_level':30})
+ assert any('AUTHORED TERRAIN' in warning and '32.00 m' in warning for warning in result['warnings'])
+ project=tmp_path/'clearance.heightmap-project.json'
+ project.write_text(json.dumps(project_dict(result)))
+ assert load_project(project)['options']['transport_water_clearance']==2
+
+def test_clearance_without_enabled_transport_refinements_changes_no_terrain(source):
+ baseline=prepare(source['report'],source['xml'],[source['dem']])
+ unchanged=prepare(source['report'],source['xml'],[source['dem']],{'transport_water_clearance':10})
+ np.testing.assert_array_equal(unchanged['terrain'],baseline['terrain'])
+ assert not any('AUTHORED TERRAIN' in warning for warning in unchanged['warnings'])
+
 def test_large_grid_rejected():
  with pytest.raises(ValueError):dimensions([65536,65536],normalize())
  with pytest.raises(ValueError,match='53 million'):dimensions([30000,30000],normalize())

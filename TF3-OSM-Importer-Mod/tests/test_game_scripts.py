@@ -41,7 +41,7 @@ local rep={find=function(name) if name==missing then return -1 end return 1 end,
 api={type={ComponentType={BASE_NODE=1,PLAYER_OWNED=2,BASE_EDGE=3,CONSTRUCTION=4,ASSET_GROUP=5,NAME=6},["enum"]={BaseEdgeType={NORMAL=0,BRIDGE=1,TUNNEL=2},RoadType={TRACK=1,STREET=0}}},
  res={streetTemplateRep=rep,bridgeTypeRep=rep,tunnelTypeRep=rep,modelRep=rep,
   groundTextureRep={find=function(name) if name==missing then return -1 end return name end},constructionRep=rep},
- engine={util={getPlayer=function() return 42 end},terrain={
+ engine={system={streetSystem={getNodeTrackSegments=function(_) return {} end}},util={getPlayer=function() return 42 end},terrain={
   isValidCoordinate=function(_) return not outside end,
   getBoundingBox=function() return {min={x=-500,y=-500},max={x=500,y=500}} end,
   getHeightAt=function(_) return 10 end,getBaseHeightAt=function(_) return 10 end},

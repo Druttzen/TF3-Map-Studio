@@ -70,11 +70,12 @@ def limit_grade(heights,points,percent):
  return result
 
 
-def corridor(terrain,original,line,size,width,blend,smoothing,grade,job,river_depth=None):
+def corridor(terrain,original,line,size,width,blend,smoothing,grade,job,river_depth=None,minimum_height=None):
  ny,nx=terrain.shape;dx=size[0]/(nx-1);dy=size[1]/(ny-1)
  step=max(.1,min(dx,dy,width/2,10));points=densify(line['points'],step)
  heights=sample_world(original,points,size)
  if smoothing>0:heights=gaussian_filter1d(heights,smoothing/step,mode='nearest')
+ if minimum_height is not None:heights=np.maximum(heights,minimum_height)
  heights=limit_grade(heights,points,grade)
  if river_depth is not None:heights-=river_depth
  radius=width/2+blend
@@ -158,7 +159,8 @@ def prepare(report_path,osm_path,source_files,options=None,strokes=None,cache=No
   job.update(72+15*i/max(1,len(chosen)),'Refining OSM terrain',f'{line["kind"].capitalize()} way {line["way"]}; {i+1}/{len(chosen)}')
   key={'road':'road','rail':'rail','river':'river'}[line['kind']]
   corridor(terrain,baseline,line,size,options[key+'_width'],options.get(key+'_blend',options[key+'_width']/2),
-           options[key+'_smoothing'],options.get(key+'_grade',0),job,options['river_depth'] if key=='river' else None)
+           options[key+'_smoothing'],options.get(key+'_grade',0),job,options['river_depth'] if key=='river' else None,
+           options['water_level']+options['transport_water_clearance'] if key in {'road','rail'} and options['transport_water_clearance']>0 else None)
  for i,stroke in enumerate(strokes or []):
   job.update(87+7*i/max(1,len(strokes)),'Applying saved terrain edits',f'{i+1}/{len(strokes)}');apply_stroke(terrain,size,stroke)
  warnings=list(context['warnings'])
@@ -173,6 +175,8 @@ def prepare(report_path,osm_path,source_files,options=None,strokes=None,cache=No
  if options['grid'] in {'Fine grid (2 m)','Fine grid (1 m)','Custom pixels'}:warnings.append('TF3 map creation uses 4-metre terrain spacing. Finer exported grids can help editing, but the game may resample them.')
  if options['rivers']:warnings.append('River channels are terrain cuts following local elevation. TF3 has one water level; higher channels do not create flowing water.')
  if chosen:warnings.append('Road/rail terrain refinements alter the DEM for construction. Bridge and tunnel interiors are excluded; inspect junctions and grades in the game.')
+ if options['transport_water_clearance']>0 and any(line['kind'] in {'road','rail'} for line in chosen):
+  warnings.append(f"AUTHORED TERRAIN: enabled ground-road/rail corridor profiles have a minimum height of {options['water_level']+options['transport_water_clearance']:.2f} m ({options['transport_water_clearance']:g} m above global water). This forms local embankments, not measured elevation or navigable bridges; inspect coastlines and corridor widths in TF3.")
  if options['roads'] or options['railways']:
   skipped=sum(1 for line in context['lines'] if line['kind'] in {'road','rail'} and (line['bridge'] or line['tunnel']))
   if skipped:warnings.append(f'{skipped} bridge/tunnel polylines were excluded from terrain corridor editing.')

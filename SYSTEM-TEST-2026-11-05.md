@@ -83,6 +83,48 @@ the earlier test save and the user's large dataset were not replaced.
 A full game restart in a new process restored the selected native Lua resource
 and all progress. A fresh live-world audit then passed the same counts again.
 
+## Additional native Partille scenario
+
+The actual OSM download tool acquired the 16,384 × 16,384 m extent centred on
+Partille (57.73906 N, 12.10218 E). The downloader retained 1,608,804 nodes,
+247,165 ways and 3,913 relations. Its OSM SHA-256 is
+`15e3ed03add994e01bd2ad11a22ae3ca5bfdd8eee2650447829a7c74fa42af8a`;
+the converted Lua SHA-256 is
+`5025472ffb17b5ba8f93e505b6d8ff91c9374254d545b1d9f089d407b8bfb6ef`.
+Dataset `690679e8c96265c38d047ba3` contains 328,727 road/rail segments,
+895,895 scenery items and 135 place markers. A full native preflight checked
+all 1,224,757 source items.
+
+Heightmap Studio downloaded Copernicus GLO-30 elevation and exported a
+4,097 × 4,097 16-bit heightmap with Temperate biomes. Native TF3 imported the
+height range −21 to 169 m and water level 0 m. Nine base-height samples across
+the map matched the PNG within 0.02010 m; north–south orientation, biome import,
+save and full-process reload were checked. The 4 m output grid interpolates
+the approximately 30 m source DSM; it does not add measured terrain detail.
+
+The native scenery phase accepted 817,613 selected items, with no skipped
+build steps. One clipped ground polygon collapsed at native float precision
+and was explicitly recorded as an omission. Model matching can leave source
+objects unmatched; those objects are not silently replaced with arbitrary
+models. Batches of 1,000 objects and automatic pause after exactly ten accepted
+batches passed in the native game. Saved accepted XYZ evidence decoded in
+native Lua after a complete restart.
+
+The subsequent network phase exposed `StreetGeometry::InvalidTransition` at
+source segment 8, a short rail continuation. Aligning new rail tangents with
+accepted neighbouring rails passed that exact native failure and continued to
+68 accepted segments. Source segment 69 then exposed a coastal DSM pixel at
+approximately −1.47 m beneath an OSM E20 ground road. Native TF3 requires dry
+terrain, so raising only the road node did not resolve `Place on Land`; that
+insufficient candidate was removed. The panel now displays native warning/info
+messages instead of an empty error. Heightmap Studio gained optional, explicitly
+authored transport-corridor clearance, disabled for existing projects by default.
+The refined Partille export and native network/vehicle tests are still running.
+The large-map scenery acceptance is not a passing vehicle-route test.
+All native testing uses separately named `MapStudio-Partille-*` saves, backed
+up under `F:\project-backups\TF3-Map-Studio-Partille-20261105`. The user's
+original dataset and saves were retained.
+
 ## Limits
 
 This is broad regression, integration, packaging, ownership and native importer

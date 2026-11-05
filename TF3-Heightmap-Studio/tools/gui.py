@@ -423,7 +423,8 @@ class App(tk.Tk):
   for flag,label,keys in [('lakes','Lower lake / reservoir beds',['lake_depth','lake_feather']),('rivers','Carve river / stream channels',['river_width','river_depth','river_smoothing']),('roads','Refine road terrain corridors',['road_width','road_blend','road_smoothing','road_grade']),('railways','Refine railway terrain corridors',['rail_width','rail_blend','rail_smoothing','rail_grade'])]:
    ttk.Checkbutton(f,text=label,variable=self.values[flag]).grid(row=row,column=0,columnspan=3,sticky='w',pady=(12,5));row+=1
    for key in keys:self.field(f,row,key);row+=1
-  self.note(f,row,'Lake islands and holes are preserved. River channels follow local elevation; TF3 has one water level. Grade limits apply to prepared corridor profiles; inspect actual junctions and connections in the game.')
+  self.field(f,row,'Ground-road/rail clearance above global water (m; 0 disables)',self.values['transport_water_clearance']);row+=1
+  self.note(f,row,'Lake islands and holes are preserved. River channels follow local elevation; TF3 has one water level. Positive transport clearance raises enabled ground-road/rail corridor profiles to form authored embankments. Choose a corridor width covering the whole road/track; bridges and tunnels stay excluded. Grade limits apply to prepared profiles; inspect actual junctions and connections in the game.')
 
  def build_brush(self):
   f=self.pages['Brush'];self.note(f,0,'After building terrain, enable the brush and click or drag on the preview to stamp edits in game metres. Turn off Before OSM / brush edits to edit the final terrain.')
