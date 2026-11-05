@@ -1,11 +1,17 @@
 """Headless packaged-runtime check using only a tiny fictional point fixture."""
-import json,tempfile
+import json,tempfile,sys
 from pathlib import Path
 
 def check(output):
  result={'ok':False}
  try:
   import certifi,ssl,laspy,numpy as np,rasterio
+  if getattr(sys,'frozen',False):
+   import tkinter
+   from tkinter import ttk
+   window=tkinter.Tk();window.withdraw()
+   try:ttk.Style(window).theme_use('clam');window.update_idletasks()
+   finally:window.destroy()
   context=ssl.create_default_context(cafile=certifi.where())
   assert context.cert_store_stats()['x509_ca']>0
   from pyproj import CRS
@@ -64,7 +70,7 @@ def check(output):
    assert len(list((local/'heightmaps').iterdir()))==1 and len(list((local/'biomes').iterdir()))==1
    assert Path(exported['files']['project']).parent==local/'heightmap_studio/fictional'
    installed=detect()
-   result={'ok':True,'certificateBundle':'packaged CA roots loaded for HTTPS verification','laspy':laspy.__version__,'lazCompression':'round-trip passed','projection':'EPSG:3857 verified','groundFiltering':'building excluded','geotiff':'written and read','geotiffDetail':'priority, nodata fallback and OSM bounds passed',
+   result={'ok':True,'frozenGui':'hidden Tk window and clam theme initialized' if getattr(sys,'frozen',False) else 'source-mode check','certificateBundle':'packaged CA roots loaded for HTTPS verification','laspy':laspy.__version__,'lazCompression':'round-trip passed','projection':'EPSG:3857 verified','groundFiltering':'building excluded','geotiff':'written and read','geotiffDetail':'priority, nodata fallback and OSM bounds passed',
            'nativeExportRouting':'heightmap, biomes and companions separated; fictional temporary folders only',
            'seamlessElevation':'split and whole source interpolation matched; one continuous 16-bit heightmap',
            'streamingConverterReport':'ijson parser and report contract passed',

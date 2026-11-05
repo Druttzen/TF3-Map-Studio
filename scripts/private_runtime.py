@@ -8,11 +8,12 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
 import sys
 import uuid
+import zipfile
 
 TOOLS = {'OSM-TF3-Vanilla-Converter', 'TF3-Heightmap-Studio',
          'TRF3-Mod-Converter', 'TF3-OSM-Importer-Mod'}
@@ -31,6 +32,30 @@ def file_sha(path):
         while chunk := stream.read(1024 * 1024):
             value.update(chunk)
     return value.hexdigest()
+
+
+def prepare_tk_archives(runtime):
+    """Expose Tcl/Tk 9 zipfs script data as private directories for freezing.
+
+    Retain the original archives too. Select the script-library root by its
+    initialization file, rather than assuming the archive's internal prefix.
+    """
+    base = Path(runtime)/'tcl'
+    for pattern, marker in [('libtcl*.zip','init.tcl'),('libtk*.zip','tk.tcl')]:
+        for archive in base.glob(pattern):
+            with zipfile.ZipFile(archive) as bundle:
+                entries = [(item,PurePosixPath(item.filename)) for item in bundle.infolist()]
+                for item,path in entries:
+                    if path.is_absolute() or '..' in path.parts or '\\' in item.filename or (item.external_attr>>16)&0o170000==0o120000:
+                        raise ValueError('Unsafe Tcl/Tk library archive: ' + str(archive))
+                roots = [path.parent for item,path in entries if not item.is_dir() and path.name==marker]
+                if len(roots)!=1:raise ValueError('Missing or ambiguous library root in '+str(archive))
+                prefix=roots[0];destination=base/archive.stem.removeprefix('lib')
+                for item,path in entries:
+                    if item.is_dir() or not path.is_relative_to(prefix):continue
+                    target=destination.joinpath(*path.relative_to(prefix).parts)
+                    target.parent.mkdir(parents=True,exist_ok=True)
+                    target.write_bytes(bundle.read(item))
 
 
 def child_environment(root, runtime=None):
@@ -155,6 +180,7 @@ def provision(root, source, seed=None, backup=None):
         seed = Path(seed).resolve()
         shutil.copytree(seed, stage / 'Lib/site-packages',
                         ignore=shutil.ignore_patterns('__pycache__', '*.pth'))
+    prepare_tk_archives(stage)
     inventory(root, stage)
     if target.exists():
         backup.parent.mkdir(parents=True, exist_ok=True)

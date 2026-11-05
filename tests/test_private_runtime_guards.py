@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import os
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 import pytest
@@ -58,3 +59,27 @@ def test_missing_private_tk_is_reported_without_using_a_global_library(tmp_path)
     (library/'init.tcl').write_text('fixture')
     with pytest.raises(ValueError,match='Private Tcl/Tk libraries are missing'):
         runtime.child_environment(root)
+
+
+def test_tcl_tk_nine_zipfs_libraries_are_materialized_inside_the_owned_runtime(tmp_path):
+    root=tool(tmp_path);private=root/'.runtime';base=private/'tcl';base.mkdir(parents=True)
+    for kind,marker in [('tcl','init.tcl'),('tk','tk.tcl')]:
+        with zipfile.ZipFile(base/f'lib{kind}9.0.4.zip','w') as archive:
+            archive.writestr(f'{kind}_library/{marker}','package data')
+            archive.writestr(f'{kind}_library/subdir/child.tcl','nested data')
+    runtime.prepare_tk_archives(private)
+    env=runtime.child_environment(root)
+    assert Path(env['TCL_LIBRARY'])==base/'tcl9.0.4'
+    assert Path(env['TK_LIBRARY'])==base/'tk9.0.4'
+    assert (base/'tk9.0.4/subdir/child.tcl').read_text()=='nested data'
+    assert (base/'libtcl9.0.4.zip').is_file()
+
+
+def test_tcl_archive_cannot_write_outside_its_owned_library(tmp_path):
+    root=tool(tmp_path);private=root/'.runtime';base=private/'tcl';base.mkdir(parents=True)
+    with zipfile.ZipFile(base/'libtcl9.0.4.zip','w') as archive:
+        archive.writestr('tcl_library/init.tcl','fixture')
+        archive.writestr('../outside.txt','must not be written')
+    with pytest.raises(ValueError,match='Unsafe Tcl/Tk library archive'):
+        runtime.prepare_tk_archives(private)
+    assert not (private/'outside.txt').exists()

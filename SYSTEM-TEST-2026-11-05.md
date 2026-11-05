@@ -21,9 +21,9 @@ remains cancellable and refuses a competing destination on every attempt.
   cannot create those links. Includes GUI save/reload and rebuild regressions.
 - Mod converter: 1,586 passed; 3 symbolic-link tests skipped for the same reason.
 - In-game importer: 225 passed, plus 487 subtests.
-- Repository release/runtime guards: 7 passed.
+- Repository release/runtime guards: 9 passed.
 
-The suite total is 2,472 passed, excluding the separately reported subtests.
+The suite total is 2,474 passed, excluding the separately reported subtests.
 Affine deprecation warnings and deliberately duplicated archive-fixture entries
 remain warnings, not application failures. Linux CI covers link behavior where
 supported; no Windows security setting was changed to bypass the skips.
@@ -37,7 +37,9 @@ project reload, CLI rebuild with identical PNG bytes, actual Lua evaluation,
 and importer ZIP integrity/source-byte comparison. Source OSM bytes were retained.
 
 All three Windows executables were built and passed their offline frozen-app
-checks. Checks include TLS roots, Tcl/Tk, SQLite, PNG, OSM export/template bytes,
+checks. Each frozen check initializes a hidden Tk window and the actual clam
+theme, so missing Tk scripts cannot be mistaken for a passing dependency check.
+Checks include TLS roots, Tcl/Tk, SQLite, PNG, OSM export/template bytes,
 streamed reports, DEM tile seams, LAZ compression/ground filtering, projection,
 biome/native-folder export routing, mod conversion and receipt-based recovery.
 Release verification compares embedded code with source for 11 OSM, 19 Heightmap
@@ -53,6 +55,10 @@ independent complete copies from its explicitly selected CPython distribution.
 Private Tcl/Tk script directories are discovered from their actual library
 files, rather than assuming version 8.6; missing or ambiguous private libraries
 stop provisioning/building instead of falling back to another installation.
+Newer Windows Python distributions ship Tcl/Tk 9 script data in zipfs archives.
+Provisioning retains those archives and materializes their initialization-root
+trees inside the owning runtime for PyInstaller collection. Archive paths and
+library roots are validated; no external Tcl/Tk installation is used.
 
 `scripts/test_runtime_coexistence.py` installed two independent fixture apps with
 Python 3.10.11 and 3.14.4, rejected a deliberately damaged interpreter, repaired

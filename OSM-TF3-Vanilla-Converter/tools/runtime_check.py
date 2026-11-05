@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import sqlite3
 import ssl
+import sys
 import tempfile
 
 
@@ -19,6 +20,11 @@ def check(output):
         tls=ssl.create_default_context()
         assert tls.cert_store_stats()['x509_ca']>0
         tcl=tkinter.Tcl().call('info','patchlevel')
+        if getattr(sys,'frozen',False):
+            from tkinter import ttk
+            window=tkinter.Tk();window.withdraw()
+            try:ttk.Style(window).theme_use('clam');window.update_idletasks()
+            finally:window.destroy()
         with closing(sqlite3.connect(':memory:')) as database:
             assert database.execute('SELECT 1').fetchone()==(1,)
         with tempfile.TemporaryDirectory(prefix='osm-tf3-runtime-') as folder:
@@ -42,7 +48,7 @@ def check(output):
             assert len(downloaded['downloadParts'])==2 and downloaded['counts']['nodes']==2
             image=folder/'fictional.png';Image.new('RGB',(8,8)).save(image)
             with Image.open(image) as png:assert png.size==(8,8)
-        result={'ok':True,'tclVersion':tcl,'tlsRoots':'loaded','sqlite':'query and offline multipart merge passed',
+        result={'ok':True,'frozenGui':'hidden Tk window and clam theme initialized' if getattr(sys,'frozen',False) else 'source-mode check','tclVersion':tcl,'tlsRoots':'loaded','sqlite':'query and offline multipart merge passed',
                 'luaExport':'source and output hashes verified','standaloneMod':'frozen template bytes verified',
                 'installedModUpdate':'fictional local folder only','png':'saved and reopened','networkUsed':False}
     except Exception as exc:

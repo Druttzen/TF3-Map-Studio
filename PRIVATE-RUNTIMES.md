@@ -49,3 +49,7 @@ The optional `--seed-packages` accepts an explicitly selected, ABI-compatible
 package directory for offline provisioning. Files are copied independently,
 startup `.pth` hooks are excluded, and sources and resulting package versions
 are recorded. No dependency directories are shared or hardlinked.
+
+Tcl/Tk 8 directory layouts and Tcl/Tk 9 zipfs archives are supported. Archived
+script libraries are materialized only within that runtime, retaining their
+original archives. See [Tcl initialization and TCL_LIBRARY](https://www.tcl-lang.org/man/tcl9.0/TclLib/Init.html).

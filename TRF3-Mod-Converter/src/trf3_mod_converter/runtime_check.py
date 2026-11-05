@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import tempfile
+import sys
 
 
 def check(output):
@@ -10,6 +11,11 @@ def check(output):
         import tkinter
         from .batch import scan_mods, convert_queue, file_fingerprint, STATE_NAME
         assert tkinter.Tcl().call('info', 'patchlevel')
+        if getattr(sys,'frozen',False):
+            from tkinter import ttk
+            window=tkinter.Tk();window.withdraw()
+            try:ttk.Style(window).theme_use('clam');window.update_idletasks()
+            finally:window.destroy()
         with tempfile.TemporaryDirectory(prefix='trf3-runtime-') as folder:
             root = Path(folder); collection = root / 'source'
             for name in ('first', 'second'):
@@ -27,6 +33,7 @@ def check(output):
             exported = {item.mod_id: file_fingerprint(destination / item.mod_id) for item in items}
             assert exported
         result = {'ok': True, 'networkUsed': False, 'tcl': 'loaded',
+                  'frozenGui': 'hidden Tk window and clam theme initialized' if getattr(sys,'frozen',False) else 'source-mode check',
                   'batch': 'two fictional mods exported', 'recovery': 'saved receipts and repeated exports verified',
                   'sourcePreservation': 'source fingerprints unchanged'}
     except Exception as exc:
