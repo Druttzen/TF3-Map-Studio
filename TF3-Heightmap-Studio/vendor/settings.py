@@ -27,7 +27,7 @@ FEATURES={
     'footpaths':'Footpaths, cycleways and steps (small vanilla roads)',
     'disused_tracks':'Disused railway tracks','bridges':'Bridges','tunnels':'Tunnels',
     'forests':'Forests','shrubs':'Shrub areas','tree_nodes':'Individually tagged trees',
-    'surfaces':'Ground surfaces','waterways':'Small mapped waters (0.5 m bed, Water Dirty)','fountains':'Fountains','bollards':'Bollards',
+    'surfaces':'Ground surfaces','waterways':'Mapped lakes and waterways (Water Dirty)','fountains':'Fountains','bollards':'Bollards',
     'advertising_columns':'Advertising columns','place_markers':'Named places (markers or optional in-game towns)',
 }
 DEFAULTS={
