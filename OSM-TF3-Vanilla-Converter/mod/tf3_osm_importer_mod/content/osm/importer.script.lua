@@ -41,7 +41,8 @@ local function initialState(state)
     else dataset=ug_require "druttzen_osm_vanilla::/osm/dataset.lua" end
   end
   if not value.phase then
-    value = { phase="ready", cursor=1, builtEdges=0, builtScenery=0, skipped=0, nodes={}, labels=0 }
+    value = { phase="ready", cursor=1, builtEdges=0, builtScenery=0, skipped=0, nodes={}, labels=0,
+      nativeRequests=value.nativeRequests }
     if #dataset.edges+#dataset.scenery+#dataset.labels>1000 and not (dataset.importOptions and dataset.importOptions.stepLimit~=nil) then
       value.options=controls.options(dataset.importOptions); value.options.stepLimit=100
       value.notice="Large dataset: automatic pause is set to 100 successful build steps per run. Inspect and save each run before resuming."
@@ -907,6 +908,48 @@ function script.postUpdate(_userParams, state, _dt, _result)
 end
 
 -- TF3 .script resources expose callbacks through data(), not a module return.
+-- TF3 may instantiate each native callback in a separate Lua environment.
+-- Only the post-update owner resolves map geometry. Update/event callbacks
+-- exchange compact persisted requests, never copies of the million-item map.
+local nativeAwake=false
+function script.wakeUpdate(_userParams,state,_dt)
+  if not state:hasEventSubscriptions() then
+    for _,name in ipairs({"osm.start","osm.pause","osm.resume","osm.retry","osm.skip","osm.status","osm.validate","osm.configure","osm.mapSize"}) do
+      state:subscribeToEvent(name)
+    end
+  end
+  local value=state:get()
+  if not nativeAwake then nativeAwake=true; return {} end
+  if not value or not value.phase or not value.datasetInfo then return {} end
+  if value.nativeRequests and #value.nativeRequests>0 or value.waterJob
+    or value.phase=="checking" or value.phase=="edges" or value.phase=="scenery" or value.phase=="labels" then return {} end
+end
+
+function script.queueEvent(_userParams,state,_src,id,name,param)
+  if id~=eventId or type(name)~="string" then return end
+  local value=state:get() or {}
+  value.nativeRequests=value.nativeRequests or {}
+  if #value.nativeRequests>=64 then
+    value.notice="Import commands are pending. Wait for the current commands before trying again."
+  else
+    value.nativeRequests[#value.nativeRequests+1]={name=name,param=param}
+  end
+  state:set(value)
+end
+
+function script.engineTick(userParams,state,dt,_result)
+  -- Restore and check saved source identity before processing queued commands.
+  local result=script.update(userParams,state,dt)
+  local value=state:get()
+  local requests=value.nativeRequests or {}
+  if #requests>0 then value.nativeRequests=nil; state:set(value) end
+  for _,request in ipairs(requests) do
+    script.handleEvent(userParams,state,nil,eventId,request.name,request.param)
+  end
+  if #requests>0 then result=script.update(userParams,state,dt) end
+  if result~=nil then script.postUpdate(userParams,state,dt,result) end
+end
+
 function data()
   return script
 end
