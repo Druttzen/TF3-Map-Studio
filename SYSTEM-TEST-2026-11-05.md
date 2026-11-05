@@ -161,9 +161,25 @@ were saved and continued moving after the save was reopened. The scenario
 checks vehicle movement and station service; it does not simulate passenger
 demand or claim an exact replica of the real stations.
 
+The native bus completed a round trip on the imported Lexby road from the
+bus 519 extract. Native pathfinding could already traverse the imported road
+in both directions, but the test script's station and depot approaches
+provided no usable lane connections. Two roadside stops placed directly on
+the imported road and a depot connected with TF3's normal road tool resolved
+the test setup. An Irisbus Crossway LE then travelled between the two
+physical stops, roughly 350 m apart. The native log recorded 51 samples
+before reopening the save (44 moving), including departures from the west,
+east and west stops, and 69 samples after reopening (55 moving). Departure
+timestamps advanced after reopening; neither trace contained a path error
+for the running bus. Earlier failed test lines remain in the bus save for
+diagnosis; the passing vehicle is Road Vehicle 2 on Line 2. The bus and train
+were verified in separate saves, without passenger demand.
+
 All native testing uses separately named `MapStudio-Partille-*` saves, backed
 up under `F:\project-backups\TF3-Map-Studio-Partille-20261105`. The user's
-original dataset and saves were retained.
+original dataset and saves were retained. The vehicle proofs use
+`MapStudio-Partille-Bus-Running-20261105.sav` and
+`MapStudio-Partille-Train-Running-20261105.sav`.
 
 ## Limits
 

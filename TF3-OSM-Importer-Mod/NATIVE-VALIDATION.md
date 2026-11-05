@@ -1,5 +1,9 @@
 # Native TF3 sample validation — revision 4
 
+For the revision 12 tests with a downloaded Partille map, including heightmap
+import, actual bus and train trips, and the remaining large-network junction
+failure, see the [Partille system test report](../SYSTEM-TEST-2026-11-05.md).
+
 Test date: 3 October 2026. Host: Windows, Transport Fever 3 build **40408**, Steam build **25533170**. The sample completed in the native map editor on a new flat temperate Small 1:1 map. Active content was this importer and the official Deluxe Upgrade and Pre-Order Pack; other gameplay mods were disabled. Debug mode was not needed.
 
 The fictional 1000 × 1000 metre dataset was preserved byte for byte. SHA-256: `64e4e1e606830b9726910fa96387fe10785f24c66ea8cc2d96ba91d1663a9336`.
